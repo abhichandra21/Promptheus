@@ -1,6 +1,6 @@
 """
 LLM Provider abstraction layer.
-Supports multiple AI providers: Gemini, Anthropic.
+Supports multiple AI providers: Gemini, Anthropic/Claude, OpenAI, Groq, Qwen, and GLM.
 """
 
 from __future__ import annotations
@@ -354,6 +354,344 @@ class AnthropicProvider(LLMProvider):
         return result
 
 
+class OpenAIProvider(LLMProvider):
+    """OpenAI provider (GPT-4, GPT-3.5, etc.)."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "gpt-4-turbo",
+        base_url: Optional[str] = None,
+    ) -> None:
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError(
+                "OpenAI library not installed. Install it with: pip install openai"
+            ) from exc
+
+        client_args = {"api_key": api_key, "timeout": DEFAULT_PROVIDER_TIMEOUT}
+        if base_url:
+            client_args["base_url"] = base_url
+
+        self.client = OpenAI(**client_args)
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        try:
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt},
+            ]
+
+            kwargs = {
+                "model": self.model_name,
+                "messages": messages,
+                "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            }
+
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+
+            response = self.client.chat.completions.create(**kwargs)
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("OpenAI API call failed: %s", sanitized)
+            raise RuntimeError(f"OpenAI API call failed: {sanitized}") from exc
+
+        if not response.choices:
+            raise RuntimeError("OpenAI API returned no choices")
+
+        message = response.choices[0].message
+        if not message.content:
+            raise RuntimeError("OpenAI API returned no content")
+
+        return str(message.content)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        """Generate clarifying questions using OpenAI."""
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning("OpenAI question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            logger.warning("OpenAI returned invalid JSON: %s", sanitize_error_message(str(exc)))
+            return None
+
+        if not isinstance(result, dict) or "task_type" not in result:
+            logger.warning("OpenAI question payload missing task_type; falling back to static questions")
+            return None
+
+        result.setdefault("questions", [])
+        return result
+
+
+class QwenProvider(LLMProvider):
+    """Alibaba Qwen provider using DashScope API."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "qwen-plus",
+    ) -> None:
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError(
+                "OpenAI library not installed (required for Qwen). Install it with: pip install openai"
+            ) from exc
+
+        # Qwen uses OpenAI-compatible API via DashScope
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            timeout=DEFAULT_PROVIDER_TIMEOUT,
+        )
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        try:
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt},
+            ]
+
+            kwargs = {
+                "model": self.model_name,
+                "messages": messages,
+                "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            }
+
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+
+            response = self.client.chat.completions.create(**kwargs)
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("Qwen API call failed: %s", sanitized)
+            raise RuntimeError(f"Qwen API call failed: {sanitized}") from exc
+
+        if not response.choices:
+            raise RuntimeError("Qwen API returned no choices")
+
+        message = response.choices[0].message
+        if not message.content:
+            raise RuntimeError("Qwen API returned no content")
+
+        return str(message.content)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        """Generate clarifying questions using Qwen."""
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning("Qwen question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            logger.warning("Qwen returned invalid JSON: %s", sanitize_error_message(str(exc)))
+            return None
+
+        if not isinstance(result, dict) or "task_type" not in result:
+            logger.warning("Qwen question payload missing task_type; falling back to static questions")
+            return None
+
+        result.setdefault("questions", [])
+        return result
+
+
+class GLMProvider(LLMProvider):
+    """Zhipu AI GLM provider."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "glm-4-flash",
+    ) -> None:
+        try:
+            from zhipuai import ZhipuAI
+        except ImportError as exc:
+            raise RuntimeError(
+                "ZhipuAI library not installed. Install it with: pip install zhipuai"
+            ) from exc
+
+        self.client = ZhipuAI(api_key=api_key)
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,  # noqa: ARG002 - GLM doesn't have native JSON mode
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        try:
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt},
+            ]
+
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            )
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("GLM API call failed: %s", sanitized)
+            raise RuntimeError(f"GLM API call failed: {sanitized}") from exc
+
+        if not response.choices:
+            raise RuntimeError("GLM API returned no choices")
+
+        message = response.choices[0].message
+        if not message.content:
+            raise RuntimeError("GLM API returned no content")
+
+        return str(message.content)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        """Generate clarifying questions using GLM."""
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning("GLM question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+
+        # Try to extract JSON from response
+        cleaned = AnthropicProvider._extract_json_block(response_text)
+        try:
+            result = json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            logger.warning("GLM returned invalid JSON: %s", sanitize_error_message(str(exc)))
+            return None
+
+        if not isinstance(result, dict) or "task_type" not in result:
+            logger.warning("GLM question payload missing task_type; falling back to static questions")
+            return None
+
+        result.setdefault("questions", [])
+        return result
+
+
+class GroqProvider(LLMProvider):
+    """Groq provider (fast inference)."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "llama-3.3-70b-versatile",
+    ) -> None:
+        try:
+            from groq import Groq
+        except ImportError as exc:
+            raise RuntimeError(
+                "Groq library not installed. Install it with: pip install groq"
+            ) from exc
+
+        self.client = Groq(api_key=api_key, timeout=DEFAULT_PROVIDER_TIMEOUT)
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        try:
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt},
+            ]
+
+            kwargs = {
+                "model": self.model_name,
+                "messages": messages,
+                "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            }
+
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+
+            response = self.client.chat.completions.create(**kwargs)
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("Groq API call failed: %s", sanitized)
+            raise RuntimeError(f"Groq API call failed: {sanitized}") from exc
+
+        if not response.choices:
+            raise RuntimeError("Groq API returned no choices")
+
+        message = response.choices[0].message
+        if not message.content:
+            raise RuntimeError("Groq API returned no content")
+
+        return str(message.content)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        """Generate clarifying questions using Groq."""
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning("Groq question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            logger.warning("Groq returned invalid JSON: %s", sanitize_error_message(str(exc)))
+            return None
+
+        if not isinstance(result, dict) or "task_type" not in result:
+            logger.warning("Groq question payload missing task_type; falling back to static questions")
+            return None
+
+        result.setdefault("questions", [])
+        return result
+
+
 def get_provider(provider_name: str, config: Config, model_name: Optional[str] = None) -> LLMProvider:
     """Factory function to get the appropriate provider."""
     provider_config = config.get_provider_config()
@@ -370,6 +708,36 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
             model_name=model_to_use,
             base_url=provider_config.get("base_url"),
         )
+    if provider_name == "openai":
+        return OpenAIProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+            base_url=provider_config.get("base_url"),
+        )
+    if provider_name == "groq":
+        return GroqProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+        )
+    if provider_name == "qwen":
+        return QwenProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+        )
+    if provider_name == "glm":
+        return GLMProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+        )
     raise ValueError(f"Unknown provider: {provider_name}")
 
-__all__ = ["LLMProvider", "get_provider", "GeminiProvider", "AnthropicProvider"]
+__all__ = [
+    "LLMProvider",
+    "get_provider",
+    "GeminiProvider",
+    "AnthropicProvider",
+    "OpenAIProvider",
+    "GroqProvider",
+    "QwenProvider",
+    "GLMProvider",
+]

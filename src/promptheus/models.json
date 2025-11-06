@@ -25,16 +25,55 @@
       "default_model": "gpt-4-turbo",
       "models": [
         "gpt-4-turbo",
+        "gpt-4o",
         "gpt-4",
         "gpt-3.5-turbo"
       ],
       "api_key_env": "OPENAI_API_KEY",
+      "base_url_env": "OPENAI_BASE_URL",
       "api_key_prefixes": ["sk-", "rk-"]
+    },
+    "groq": {
+      "default_model": "llama-3.3-70b-versatile",
+      "models": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+      ],
+      "api_key_env": "GROQ_API_KEY",
+      "api_key_prefixes": ["gsk_"]
+    },
+    "qwen": {
+      "default_model": "qwen-plus",
+      "models": [
+        "qwen-max",
+        "qwen-plus",
+        "qwen-turbo",
+        "qwen-long"
+      ],
+      "api_key_env": "DASHSCOPE_API_KEY",
+      "api_key_prefixes": ["sk-"]
+    },
+    "glm": {
+      "default_model": "glm-4-flash",
+      "models": [
+        "glm-4-flash",
+        "glm-4",
+        "glm-4-air",
+        "glm-3-turbo"
+      ],
+      "api_key_env": "ZHIPUAI_API_KEY",
+      "api_key_prefixes": [""]
     }
   },
   "provider_aliases": {
     "gemini": "Gemini",
     "anthropic": "Claude",
-    "openai": "OpenAI"
+    "openai": "OpenAI",
+    "groq": "Groq",
+    "qwen": "Qwen",
+    "glm": "GLM"
   }
 }

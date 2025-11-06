@@ -6,7 +6,7 @@ Promptheus is the AI wing-person for prompt engineers, analysts, and creative te
 - Adaptive workflow that knows when to quiz you and when to stay quiet.
 - Interactive loop with REPL history, arrow-key recall, and inline tweaks.
 - Single-shot mode that plays nicely with stdin, files, and scripts.
-- Multi-provider setup (Gemini, Claude, Z.ai) plus clipboard and editor helpers.
+- Multi-provider setup supporting 6 AI providers (Gemini, Claude, OpenAI, Groq, Qwen, GLM) plus clipboard and editor helpers.
 - Natural-language tweak loop so you can say “make it spicier” instead of editing Markdown.
 
 ## Quick start
@@ -15,10 +15,12 @@ Promptheus is the AI wing-person for prompt engineers, analysts, and creative te
    pip install -e .
    pip install -r requirements.txt  # optional extras for env_validator
    ```
-2. Configure at least one provider key (Gemini, Claude, or Z.ai):
+2. Configure at least one provider key:
    ```bash
    cp .env.example .env
-   # add GEMINI_API_KEY, ANTHROPIC_API_KEY, or Z.ai token + base URL
+   # Add one or more provider API keys:
+   # GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY,
+   # GROQ_API_KEY, DASHSCOPE_API_KEY, ZHIPUAI_API_KEY
    ```
 3. Sanity check credentials (recommended):
    ```bash
@@ -48,14 +50,29 @@ Promptheus is the AI wing-person for prompt engineers, analysts, and creative te
 See `docs/usage.md` for the deep dive, transcripts, and tweak mechanics.
 
 ## Providers & models
-Promptheus auto-detects whichever provider keys you’ve configured, but you can pin them explicitly:
+Promptheus auto-detects whichever provider keys you've configured, but you can pin them explicitly:
 
 ```bash
 promptheus --provider gemini --model gemini-1.5-pro "Pitch deck outline"
 promptheus --provider anthropic --model claude-3-5-sonnet-20241022 "Security review"
+promptheus --provider openai --model gpt-4-turbo "Code review"
+promptheus --provider groq --model llama-3.3-70b-versatile "Fast inference"
+promptheus --provider qwen --model qwen-max "Chinese language task"
+promptheus --provider glm --model glm-4 "Bilingual generation"
 ```
 
-Supports Gemini, Claude, and Z.ai end-to-end with zero restarts or config edits.
+### Supported Providers
+
+| Provider | Default Model | Notes | API Key |
+|----------|--------------|-------|---------|
+| **Gemini** | gemini-pro | Google's generative AI models | GEMINI_API_KEY |
+| **Claude** | claude-3-5-sonnet-20241022 | Anthropic Claude (also supports Z.ai) | ANTHROPIC_API_KEY |
+| **OpenAI** | gpt-4-turbo | GPT-4, GPT-3.5 models | OPENAI_API_KEY |
+| **Groq** | llama-3.3-70b-versatile | Ultra-fast Llama and Mixtral inference | GROQ_API_KEY |
+| **Qwen** | qwen-plus | Alibaba's Qwen models via DashScope | DASHSCOPE_API_KEY |
+| **GLM** | glm-4-flash | Zhipu AI's ChatGLM models | ZHIPUAI_API_KEY |
+
+All providers support seamless switching with zero restarts or config edits.
 
 ## Docs & helpful links
 - `docs/usage.md` – full command surface, examples, tweak flows.

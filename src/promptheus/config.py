@@ -258,6 +258,21 @@ class Config:
                 "To use OpenAI, add OPENAI_API_KEY to your .env file.\n"
                 "Get your API key at: https://platform.openai.com/"
             )
+        if self.provider == "groq":
+            return (
+                "To use Groq, add GROQ_API_KEY to your .env file.\n"
+                "Get your API key at: https://console.groq.com/keys"
+            )
+        if self.provider == "qwen":
+            return (
+                "To use Qwen, add DASHSCOPE_API_KEY to your .env file.\n"
+                "Get your API key at: https://dashscope.console.aliyun.com/apiKey"
+            )
+        if self.provider == "glm":
+            return (
+                "To use GLM, add ZHIPUAI_API_KEY to your .env file.\n"
+                "Get your API key at: https://open.bigmodel.cn/usercenter/apikeys"
+            )
         return "Set the appropriate API key for the selected provider."
 
 

@@ -1,7 +1,22 @@
-google-generativeai>=0.1.0,<0.8.0
-anthropic>=0.3.0
+# Core dependencies
 questionary>=2.0.0
 pyperclip>=1.8.0
 rich>=13.0.0
 python-dotenv>=1.0.0
 prompt_toolkit>=3.0.0
+
+# AI Provider dependencies (install as needed)
+# Google Gemini
+google-generativeai>=0.1.0,<0.8.0
+
+# Anthropic Claude
+anthropic>=0.3.0
+
+# OpenAI (also used by Qwen)
+openai>=1.0.0
+
+# Groq
+groq>=0.4.0
+
+# Zhipu AI GLM
+zhipuai>=2.0.0

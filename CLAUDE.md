@@ -67,7 +67,13 @@ python test_file_input.py
 
 **Provider Abstraction (`src/promptheus/providers.py`)**
 - Abstract `LLMProvider` base class defining the interface for AI providers
-- `GeminiProvider` and `AnthropicProvider` implementations
+- Multiple provider implementations:
+  - `GeminiProvider` (Google Gemini)
+  - `AnthropicProvider` (Claude, Z.ai)
+  - `OpenAIProvider` (GPT-4, GPT-3.5)
+  - `GroqProvider` (Fast Llama, Mixtral inference)
+  - `QwenProvider` (Alibaba Qwen via DashScope)
+  - `GLMProvider` (Zhipu AI ChatGLM)
 - Provider factory pattern via `get_provider()` function
 - Handles model fallbacks, retries, and error sanitization
 - Each provider implements `_generate_text()` for raw API calls
@@ -101,7 +107,7 @@ The system intelligently detects task types:
 
 **Provider Abstraction**
 - All providers implement the same `LLMProvider` interface
-- Supports multiple AI backends (Gemini, Claude, Z.ai)
+- Supports 6 AI backends (Gemini, Claude, OpenAI, Groq, Qwen, GLM)
 - Automatic fallback between models within each provider
 - Consistent error handling and response formatting
 
@@ -132,3 +138,22 @@ The REPL-style interactive mode persists provider, model, and flag settings acro
 - The application supports both single-shot and interactive modes
 - Error handling is designed to be user-friendly while logging technical details
 - The Rich library provides terminal formatting for a polished CLI experience
+
+## Supported AI Providers
+
+Promptheus supports 6 major AI providers:
+
+1. **Google Gemini** - gemini-pro, gemini-1.5-pro, gemini-1.5-flash
+   - Environment: `GEMINI_API_KEY`
+2. **Anthropic Claude** - claude-3-5-sonnet, claude-3-opus, claude-3-sonnet (also supports Z.ai)
+   - Environment: `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`
+3. **OpenAI** - gpt-4-turbo, gpt-4o, gpt-4, gpt-3.5-turbo
+   - Environment: `OPENAI_API_KEY`
+4. **Groq** - Fast inference for llama-3.3-70b, llama-3.1, mixtral
+   - Environment: `GROQ_API_KEY`
+5. **Qwen** (Alibaba) - qwen-max, qwen-plus, qwen-turbo via DashScope
+   - Environment: `DASHSCOPE_API_KEY`
+6. **GLM** (Zhipu AI) - glm-4, glm-4-flash, glm-3-turbo
+   - Environment: `ZHIPUAI_API_KEY`
+
+Each provider implements the same `LLMProvider` interface for consistent behavior across all backends.
