@@ -1,0 +1,40 @@
+{
+  "providers": {
+    "gemini": {
+      "default_model": "gemini-pro",
+      "models": [
+        "gemini-pro",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash"
+      ],
+      "api_key_env": "GEMINI_API_KEY",
+      "api_key_prefixes": ["AIza"]
+    },
+    "anthropic": {
+      "default_model": "claude-3-5-sonnet-20241022",
+      "models": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229"
+      ],
+      "api_key_env": ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
+      "base_url_env": "ANTHROPIC_BASE_URL",
+      "api_key_prefixes": ["sk-ant-", "anthropic-", "glm-"]
+    },
+    "openai": {
+      "default_model": "gpt-4-turbo",
+      "models": [
+        "gpt-4-turbo",
+        "gpt-4",
+        "gpt-3.5-turbo"
+      ],
+      "api_key_env": "OPENAI_API_KEY",
+      "api_key_prefixes": ["sk-", "rk-"]
+    }
+  },
+  "provider_aliases": {
+    "gemini": "Gemini",
+    "anthropic": "Claude",
+    "openai": "OpenAI"
+  }
+}
