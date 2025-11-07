@@ -50,7 +50,7 @@ def find_and_load_dotenv(filename: str = ".env") -> Optional[Path]:
 _LOADED_ENV_PATH = find_and_load_dotenv()
 
 # Providers with full runtime support (keep in sync with promptheus.providers.get_provider)
-SUPPORTED_PROVIDER_IDS = {"gemini", "vertex-ai", "anthropic"}
+SUPPORTED_PROVIDER_IDS = {"gemini", "anthropic", "openai", "groq", "qwen", "glm"}
 
 
 class Config:
@@ -210,10 +210,34 @@ class Config:
             "models": provider_info["models"],
         }
 
-        if "base_url_env" in provider_info:
-            config["base_url"] = os.getenv(provider_info["base_url_env"])
+        optional_env_fields = {
+            "base_url": provider_info.get("base_url_env"),
+            "organization": provider_info.get("organization_env"),
+            "project": provider_info.get("project_env"),
+        }
+        for key, env_var in optional_env_fields.items():
+            if not env_var:
+                continue
+            value = os.getenv(env_var)
+            if value:
+                config[key] = value
 
         return config
+
+    def get_configured_providers(self) -> List[str]:
+        """Return a list of providers that have an API key configured."""
+        configured_providers = []
+        config_data = self._ensure_model_config()
+        providers = config_data.get("providers", {})
+        for name in SUPPORTED_PROVIDER_IDS:
+            info = providers.get(name, {})
+            env_keys = info.get("api_key_env")
+            if not env_keys:
+                continue
+            keys = env_keys if isinstance(env_keys, list) else [env_keys]
+            if any(key and os.getenv(key) for key in keys):
+                configured_providers.append(name)
+        return configured_providers
 
     # ------------------------------------------------------------------ #
     # Validation
@@ -224,7 +248,9 @@ class Config:
 
         config_data = self._ensure_model_config()
         provider_info = config_data.get("providers", {}).get(provider, {})
-        prefixes = provider_info.get("api_key_prefixes", [])
+        prefixes = provider_info.get("api_key_prefixes")
+        if not prefixes:
+            return True
         return any(api_key.startswith(prefix) for prefix in prefixes)
 
     def validate(self) -> bool:
@@ -271,6 +297,22 @@ class Config:
             return (
                 "To use OpenAI, add OPENAI_API_KEY to your .env file.\n"
                 "Get your API key at: https://platform.openai.com/"
+            )
+        if self.provider == "groq":
+            return (
+                "To use Groq, add GROQ_API_KEY to your .env file.\n"
+                "Get your API key at: https://console.groq.com/keys"
+            )
+        if self.provider == "qwen":
+            return (
+                "To use Qwen (DashScope-compatible), add DASHSCOPE_API_KEY to your .env file.\n"
+                "Optionally set DASHSCOPE_HTTP_BASE_URL if you need the China region endpoint.\n"
+                "Get your API key at: https://dashscope.aliyun.com/apiKey"
+            )
+        if self.provider == "glm":
+            return (
+                "To use GLM (Zhipu), add ZAI_API_KEY to your .env file.\n"
+                "Optionally set ZAI_BASE_URL for self-hosted gateways."
             )
         return "Set the appropriate API key for the selected provider."
 

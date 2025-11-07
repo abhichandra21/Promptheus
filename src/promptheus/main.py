@@ -216,6 +216,7 @@ def determine_question_plan(
     args: Namespace,
     debug_enabled: bool,
     notify: MessageSink,
+    app_config: Config,
 ) -> QuestionPlan:
     """
     Decide whether to ask clarifying questions and prepare them if needed.
@@ -233,11 +234,28 @@ def determine_question_plan(
         result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
 
     if result is None:
-        notify("\n[bold yellow]⚠ Unable to generate AI questions[/bold yellow]")
-        notify("[dim]Reason: AI provider connection failed or returned invalid response[/dim]")
-        notify("[bold]Using static questions (fallback)[/bold]\n")
-        questions, mapping = get_static_questions()
-        return QuestionPlan(skip_questions=False, task_type="generation", questions=questions, mapping=mapping)
+        current_provider = app_config.provider or ""
+        provider_display = current_provider.title() if current_provider else "Provider"
+        provider_label = current_provider or "default"
+        notify(
+            f"\n[bold yellow]⚠ {provider_display} is taking a break![/bold yellow] "
+            f"[dim](set {PROMPTHEUS_DEBUG_ENV}=1 to print debug output)[/dim]"
+        )
+        notify(f"[dim]Reason: Your {provider_display} provider couldn't respond or sent something unexpected.[/dim]")
+        notify("[dim]We need a working AI to generate questions for your prompt.[/dim]")
+
+        available_providers = app_config.get_configured_providers()
+
+        other_providers = [p for p in available_providers if p != current_provider]
+
+        if other_providers:
+            notify(f"[dim]💡 Current provider: '[cyan]{provider_label}[/cyan]'. Perhaps try a different one?[/dim]")
+            for p in other_providers:
+                notify(f"[dim]  - [cyan]promptheus --provider {p} ...[/cyan][/dim]")
+        else:
+            notify("[dim]💡 Double-check your credentials, or use '--static' for offline questions.[/dim]")
+        notify("") # Add an empty line for better readability
+        raise RuntimeError("AI provider unavailable for question generation")
 
     task_type = result.get("task_type", "generation")
     questions_json = result.get("questions", [])
@@ -373,6 +391,7 @@ def process_single_prompt(
     debug_enabled: bool,
     plain_mode: bool,
     notify: MessageSink,
+    app_config: Config,
 ) -> Optional[Tuple[str, str]]:
     """
     Process a single prompt through the refinement pipeline.
@@ -381,7 +400,7 @@ def process_single_prompt(
         Tuple of (final_prompt, task_type) if successful, None otherwise
     """
     try:
-        plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, notify)
+        plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, notify, app_config)
 
         # This is the main logic branching
         is_light_refinement = (
@@ -585,7 +604,7 @@ def interactive_mode(
                 continue
 
             notify("")
-            result = process_single_prompt(provider, user_input, args, debug_enabled, plain_mode, notify)
+            result = process_single_prompt(provider, user_input, args, debug_enabled, plain_mode, notify, app_config)
 
             if result is None:
                 notify("")
@@ -638,26 +657,6 @@ Examples:
 """,
     )
 
-    # Create subparsers for commands
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # History command
-    history_parser = subparsers.add_parser(
-        "history",
-        help="View and manage prompt history"
-    )
-    history_parser.add_argument(
-        "--clear",
-        action="store_true",
-        help="Clear all history"
-    )
-    history_parser.add_argument(
-        "--limit",
-        type=int,
-        default=20,
-        help="Number of history entries to display (default: 20)"
-    )
-
     parser.add_argument(
         "prompt",
         nargs="?",
@@ -673,7 +672,7 @@ Examples:
 
     parser.add_argument(
         "--provider",
-        choices=["gemini", "vertex-ai", "anthropic"],
+        choices=["gemini", "anthropic", "openai", "groq", "qwen", "glm"],
         help="LLM provider to use (overrides config)",
     )
 
@@ -725,7 +724,41 @@ Examples:
         help="Enable verbose debug output",
     )
 
-    args = parser.parse_args()
+    history_parser = argparse.ArgumentParser(
+        prog=f"{parser.prog} history",
+        description="View and manage prompt history",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    history_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear all history",
+    )
+    history_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Number of history entries to display",
+    )
+
+    raw_args = sys.argv[1:]
+    if raw_args and raw_args[0] == "history":
+        history_args = history_parser.parse_args(raw_args[1:])
+        if history_args.clear:
+            confirm = questionary.confirm(
+                "Are you sure you want to clear all history?",
+                default=False,
+            ).ask()
+            if confirm:
+                get_history().clear()
+                console.print("[green]✓[/green] History cleared")
+            else:
+                console.print("[yellow]Cancelled[/yellow]")
+        else:
+            display_history(limit=history_args.limit, notify=console.print)
+        sys.exit(0)
+
+    args = parser.parse_args(raw_args)
 
     if args.verbose:
         os.environ[PROMPTHEUS_DEBUG_ENV] = "1"
@@ -733,22 +766,6 @@ Examples:
 
     notify: MessageSink = console.print
     plain_mode = False
-
-    # Handle history command (doesn't need provider)
-    if args.command == "history":
-        if args.clear:
-            confirm = questionary.confirm(
-                "Are you sure you want to clear all history?",
-                default=False
-            ).ask()
-            if confirm:
-                get_history().clear()
-                notify("[green]✓[/green] History cleared")
-            else:
-                notify("[yellow]Cancelled[/yellow]")
-        else:
-            display_history(limit=args.limit, notify=notify)
-        sys.exit(0)
 
     # Show provider status in a friendly way
     for message in app_config.consume_status_messages():
@@ -824,14 +841,7 @@ Examples:
         notify(f"[red]✗[/red] Couldn't connect to AI provider: {sanitized}\n")
 
         # Provide helpful context for common errors
-        if "Metaclasses" in error_msg or "tp_new" in error_msg:
-            notify("[yellow]Python 3.14 Compatibility Issue:[/yellow]")
-            notify(f"  The {provider_name} provider doesn't fully support Python 3.14 yet")
-            notify("\n[bold]Solutions:[/bold]")
-            notify("  1. Use Anthropic (Claude) instead: [cyan]promptheus --provider anthropic[/cyan]")
-            notify("  2. Downgrade to Python 3.13")
-            notify("  3. Wait for provider library updates\n")
-        elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
+        if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
             notify(f"[yellow]Authentication Failed:[/yellow] Check your API key for {provider_name}\n")
         elif "404" in error_msg:
             notify(f"[yellow]Model Not Found:[/yellow] The model may not exist or be available\n")
@@ -845,7 +855,7 @@ Examples:
         interactive_mode(provider, app_config, args, debug_enabled, plain_mode, notify)
     else:
         notify(f"[dim]Using provider: {provider_name} | Model: {app_config.get_model()}[/dim]\n")
-        process_single_prompt(provider, initial_prompt, args, debug_enabled, plain_mode, notify)
+        process_single_prompt(provider, initial_prompt, args, debug_enabled, plain_mode, notify, app_config)
 
 
 if __name__ == "__main__":
