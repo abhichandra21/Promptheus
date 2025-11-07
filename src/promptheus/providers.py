@@ -6,9 +6,9 @@ Supports Gemini, Anthropic/Claude, OpenAI, Groq, Qwen, and GLM.
 from __future__ import annotations
 
 import importlib
-from http import HTTPStatus
 import json
 import logging
+import os
 import sys
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, cast
@@ -41,6 +41,13 @@ class LLMProvider(ABC):
         """
         Generate clarifying questions based on initial prompt.
         Returns dict with 'task_type' and 'questions' keys.
+        """
+
+    @abstractmethod
+    def get_available_models(self) -> List[str]:
+        """
+        Get list of available models from the provider API.
+        Returns list of model names.
         """
 
     @abstractmethod
@@ -310,6 +317,26 @@ class AnthropicProvider(LLMProvider):
         result.setdefault("questions", [])
         return result
 
+    def get_available_models(self) -> List[str]:
+        """Get available models from Anthropic API."""
+        try:
+            response = self.client.models.list()
+        except Exception as exc:
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("Failed to fetch Anthropic models: %s", sanitized)
+            raise RuntimeError(f"Failed to fetch Anthropic models: {sanitized}") from exc
+
+        data = getattr(response, "data", None) or []
+        models: List[str] = []
+        for entry in data:
+            model_id = getattr(entry, "id", None)
+            if model_id is None and isinstance(entry, dict):
+                model_id = entry.get("id") or entry.get("name")
+            if model_id:
+                models.append(str(model_id))
+
+        return models
+
 
 class GeminiProvider(LLMProvider):
     """Google Gemini provider using the unified google-genai SDK.
@@ -429,6 +456,28 @@ class GeminiProvider(LLMProvider):
         result.setdefault("questions", [])
         return result
 
+    def get_available_models(self) -> List[str]:
+        """Get available models from Gemini API."""
+        try:
+            model_iterable = self.client.models.list()
+            models: List[str] = []
+            for model in model_iterable:
+                name = getattr(model, "name", None)
+                if name is None and isinstance(model, dict):
+                    name = model.get("name")
+                if not name:
+                    continue
+                models.append(name.split("/")[-1])
+
+            return models or list(self._available_models)
+        except Exception as exc:
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("Failed to fetch Gemini models: %s", sanitized)
+            raise RuntimeError(
+                "Gemini model listing via API requires OAuth credentials. "
+                "Refer to https://ai.google.dev/gemini-api/docs/models for the latest list."
+            ) from exc
+
 
 class OpenAIProvider(LLMProvider):
     """OpenAI provider backed by the official openai-python client."""
@@ -506,200 +555,61 @@ class OpenAIProvider(LLMProvider):
             return None
         return _parse_question_payload("OpenAI", response_text)
 
-
-class GroqProvider(LLMProvider):
-    """Groq provider using the groq-python client (OpenAI-compatible API)."""
-
-    def __init__(self, api_key: str, model_name: str = "llama-3.1-70b-versatile") -> None:
-        from groq import Groq
-
-        self.client = Groq(api_key=api_key)
-        self.model_name = model_name
-
-    def _generate_text(
-        self,
-        prompt: str,
-        system_instruction: str,
-        *,
-        json_mode: bool = False,
-        max_tokens: Optional[int] = None,
-    ) -> str:
-        messages = _build_chat_messages(
-            system_instruction,
-            _append_json_instruction(prompt) if json_mode else prompt,
-        )
-        params: Dict[str, Any] = {
-            "model": self.model_name,
-            "messages": messages,
-            "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
-        }
-        if json_mode:
-            params["response_format"] = {"type": "json_object"}
-
+    def get_available_models(self) -> List[str]:
+        """Get available models from OpenAI API."""
         try:
-            response = self.client.chat.completions.create(**params)
-        except Exception as exc:  # pragma: no cover - network failures
-            sanitized = sanitize_error_message(str(exc))
-            logger.warning("Groq API call failed: %s", sanitized)
-            raise RuntimeError(f"Groq API call failed: {sanitized}") from exc
-
-        if not response.choices:
-            raise RuntimeError("Groq API returned no choices")
-
-        choice = response.choices[0]
-        message = getattr(choice, "message", None)
-        text = _coerce_message_content(getattr(message, "content", None))
-        if not text:
-            raise RuntimeError("Groq API response did not include text output")
-        return str(text)
-
-    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                json_mode=True,
-                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
-            )
+            # Use the OpenAI client to list models
+            models_response = self.client.models.list()
+            return [model.id for model in models_response.data]
         except Exception as exc:
-            logger.warning("Groq question generation failed: %s", sanitize_error_message(str(exc)))
-            return None
-        return _parse_question_payload("Groq", response_text)
+            logger.warning("Failed to fetch OpenAI models: %s", sanitize_error_message(str(exc)))
+            raise RuntimeError(f"Failed to fetch OpenAI models: {sanitize_error_message(str(exc))}") from exc
 
 
-class QwenProvider(LLMProvider):
-    """Qwen provider powered by Alibaba's DashScope SDK."""
+class GroqProvider(OpenAIProvider):
+    """Groq provider using the OpenAI-compatible API surface."""
+
+    DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+
+    def __init__(self, api_key: str, model_name: str = "llama-3.1-70b-versatile", base_url: Optional[str] = None) -> None:
+        super().__init__(
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url or self.DEFAULT_BASE_URL,
+        )
+
+
+class QwenProvider(OpenAIProvider):
+    """Qwen provider using DashScope's OpenAI-compatible endpoint."""
+
+    DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 
     def __init__(self, api_key: str, model_name: str = "qwen-turbo") -> None:
-        import dashscope
-        from dashscope import Generation
-
-        dashscope.api_key = api_key
-        self._generation = Generation
-        self.model_name = model_name
-
-    def _generate_text(
-        self,
-        prompt: str,
-        system_instruction: str,
-        *,
-        json_mode: bool = False,
-        max_tokens: Optional[int] = None,
-    ) -> str:
-        prompt_parts: List[str] = []
-        if system_instruction:
-            prompt_parts.append(f"System instruction:\n{system_instruction}")
-        prompt_parts.append(f"User request:\n{prompt}")
-        combined_prompt = "\n\n".join(part for part in prompt_parts if part)
-        if json_mode:
-            combined_prompt = _append_json_instruction(combined_prompt)
-
-        try:
-            response = self._generation.call(
-                model=self.model_name,
-                prompt=combined_prompt,
-                max_tokens=max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
-            )
-        except Exception as exc:  # pragma: no cover - network failures
-            sanitized = sanitize_error_message(str(exc))
-            logger.warning("DashScope API call failed: %s", sanitized)
-            raise RuntimeError(f"DashScope API call failed: {sanitized}") from exc
-
-        status_code = getattr(response, "status_code", None)
-        if status_code != HTTPStatus.OK:
-            message = getattr(response, "message", "") or str(status_code)
-            sanitized = sanitize_error_message(message)
-            raise RuntimeError(f"DashScope API call failed ({status_code}): {sanitized}")
-
-        output = getattr(response, "output", None)
-        text: Optional[str] = None
-        if hasattr(output, "text"):
-            text = getattr(output, "text")
-        elif isinstance(output, dict):
-            if "text" in output:
-                text = str(output["text"])
-            elif "choices" in output and output["choices"]:
-                choice = output["choices"][0]
-                if isinstance(choice, dict):
-                    message = choice.get("message") or choice
-                    content = message.get("content") if isinstance(message, dict) else None
-                    text = _coerce_message_content(content)
-        if not text:
-            raise RuntimeError("DashScope API response did not include text output")
-        return str(text)
-
-    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                json_mode=True,
-                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
-            )
-        except Exception as exc:
-            logger.warning("Qwen question generation failed: %s", sanitize_error_message(str(exc)))
-            return None
-        return _parse_question_payload("Qwen", response_text)
+        base_url = os.getenv("DASHSCOPE_HTTP_BASE_URL", self.DEFAULT_BASE_URL)
+        super().__init__(api_key=api_key, model_name=model_name, base_url=base_url)
 
 
-class GLMProvider(LLMProvider):
-    """Zhipu GLM provider using the official zai SDK."""
+class GLMProvider(OpenAIProvider):
+    """Zhipu GLM provider using the OpenAI-compatible API surface."""
+
+    DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
 
     def __init__(self, api_key: str, model_name: str = "glm-4", base_url: Optional[str] = None) -> None:
-        from zai import ZaiClient
-
-        client_kwargs: Dict[str, Any] = {"api_key": api_key}
-        if base_url:
-            client_kwargs["base_url"] = base_url
-        self.client = ZaiClient(**client_kwargs)
-        self.model_name = model_name
-
-    def _generate_text(
-        self,
-        prompt: str,
-        system_instruction: str,
-        *,
-        json_mode: bool = False,
-        max_tokens: Optional[int] = None,
-    ) -> str:
-        messages = _build_chat_messages(
-            system_instruction,
-            _append_json_instruction(prompt) if json_mode else prompt,
+        super().__init__(
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url or self.DEFAULT_BASE_URL,
         )
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                max_tokens=max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
-            )
-        except Exception as exc:  # pragma: no cover - network failures
-            sanitized = sanitize_error_message(str(exc))
-            logger.warning("GLM API call failed: %s", sanitized)
-            raise RuntimeError(f"GLM API call failed: {sanitized}") from exc
 
-        choices = getattr(response, "choices", None)
-        if not choices:
-            raise RuntimeError("GLM API returned no choices")
-        first_choice = choices[0]
-        message = getattr(first_choice, "message", None) or first_choice
-        content = getattr(message, "content", None)
-        text = _coerce_message_content(content)
-        if not text:
-            raise RuntimeError("GLM API response did not include text output")
-        return str(text)
-
-    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+    def get_available_models(self) -> List[str]:
+        """Get available models from GLM API."""
         try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                json_mode=True,
-                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
-            )
+            # Use the OpenAI client (configured for GLM) to list models
+            models_response = self.client.models.list()
+            return [model.id for model in models_response.data]
         except Exception as exc:
-            logger.warning("GLM question generation failed: %s", sanitize_error_message(str(exc)))
-            return None
-        return _parse_question_payload("GLM", response_text)
+            logger.warning("Failed to fetch GLM models: %s", sanitize_error_message(str(exc)))
+            raise RuntimeError(f"Failed to fetch GLM models: {sanitize_error_message(str(exc))}") from exc
 
 
 def get_provider(provider_name: str, config: Config, model_name: Optional[str] = None) -> LLMProvider:

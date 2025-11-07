@@ -305,7 +305,8 @@ class Config:
             )
         if self.provider == "qwen":
             return (
-                "To use Qwen via DashScope, add DASHSCOPE_API_KEY to your .env file.\n"
+                "To use Qwen (DashScope-compatible), add DASHSCOPE_API_KEY to your .env file.\n"
+                "Optionally set DASHSCOPE_HTTP_BASE_URL if you need the China region endpoint.\n"
                 "Get your API key at: https://dashscope.aliyun.com/apiKey"
             )
         if self.provider == "glm":

@@ -9,7 +9,7 @@
         "gemini-2.0-flash",
         "gemini-2.0-flash-exp"
       ],
-      "api_key_env": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+      "api_key_env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
       "api_key_prefixes": ["AIza", "AQ."]
     },
     "anthropic": {
@@ -51,7 +51,8 @@
         "llama-3.1-8b-instant"
       ],
       "api_key_env": "GROQ_API_KEY",
-      "api_key_prefixes": ["gsk_"]
+      "api_key_prefixes": ["gsk_"],
+      "base_url_env": "GROQ_BASE_URL"
     },
     "qwen": {
       "default_model": "qwen-turbo",

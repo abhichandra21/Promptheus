@@ -234,12 +234,14 @@ def determine_question_plan(
         result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
 
     if result is None:
-        current_provider = app_config.provider
+        current_provider = app_config.provider or ""
+        provider_display = current_provider.title() if current_provider else "Provider"
+        provider_label = current_provider or "default"
         notify(
-            f"\n[bold yellow]⚠ {current_provider.title()} is taking a break![/bold yellow] "
+            f"\n[bold yellow]⚠ {provider_display} is taking a break![/bold yellow] "
             f"[dim](set {PROMPTHEUS_DEBUG_ENV}=1 to print debug output)[/dim]"
         )
-        notify(f"[dim]Reason: Your {current_provider.title()} provider couldn't respond or sent something unexpected.[/dim]")
+        notify(f"[dim]Reason: Your {provider_display} provider couldn't respond or sent something unexpected.[/dim]")
         notify("[dim]We need a working AI to generate questions for your prompt.[/dim]")
 
         available_providers = app_config.get_configured_providers()
@@ -247,7 +249,7 @@ def determine_question_plan(
         other_providers = [p for p in available_providers if p != current_provider]
 
         if other_providers:
-            notify(f"[dim]💡 Current provider: '[cyan]{current_provider}[/cyan]'. Perhaps try a different one?[/dim]")
+            notify(f"[dim]💡 Current provider: '[cyan]{provider_label}[/cyan]'. Perhaps try a different one?[/dim]")
             for p in other_providers:
                 notify(f"[dim]  - [cyan]promptheus --provider {p} ...[/cyan][/dim]")
         else:
@@ -839,14 +841,7 @@ Examples:
         notify(f"[red]✗[/red] Couldn't connect to AI provider: {sanitized}\n")
 
         # Provide helpful context for common errors
-        if "Metaclasses" in error_msg or "tp_new" in error_msg:
-            notify("[yellow]Python 3.14 Compatibility Issue:[/yellow]")
-            notify(f"  The {provider_name} provider doesn't fully support Python 3.14 yet")
-            notify("\n[bold]Solutions:[/bold]")
-            notify("  1. Use Anthropic (Claude) instead: [cyan]promptheus --provider anthropic[/cyan]")
-            notify("  2. Downgrade to Python 3.13")
-            notify("  3. Wait for provider library updates\n")
-        elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
+        if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
             notify(f"[yellow]Authentication Failed:[/yellow] Check your API key for {provider_name}\n")
         elif "404" in error_msg:
             notify(f"[yellow]Model Not Found:[/yellow] The model may not exist or be available\n")
