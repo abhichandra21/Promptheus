@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, cast
 
 from promptheus.constants import (
     DEFAULT_CLARIFICATION_MAX_TOKENS,
@@ -19,6 +20,12 @@ from promptheus.constants import (
 from promptheus.utils import sanitize_error_message
 
 logger = logging.getLogger(__name__)
+
+
+def _print_user_error(message: str) -> None:
+    """Print error message directly to stderr for user visibility."""
+    print(f"  [!] {message}", file=sys.stderr)
+
 
 if TYPE_CHECKING:  # pragma: no cover - typing support only
     from google.generativeai.types.generation_types import GenerationConfigType
@@ -157,7 +164,12 @@ class LLMProvider(ABC):
 class GeminiProvider(LLMProvider):
     """Google Gemini provider."""
 
-    def __init__(self, api_key: str, model_name: str = "gemini-pro") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "gemini-pro",
+        available_models: Optional[Sequence[str]] = None,
+    ) -> None:
         import google.generativeai as genai
         try:
             from google.api_core import exceptions as google_exceptions  # type: ignore[attr-defined]
@@ -173,6 +185,9 @@ class GeminiProvider(LLMProvider):
         self.genai = genai
         self.model_name = model_name
         self._model_cache: Dict[Tuple[str, str, bool], Any] = {}
+        self._available_models = list(available_models or [])
+        if not self._available_models:
+            self._available_models = [self.model_name]
 
     def _get_model(self, model_name: str, system_instruction: str, json_mode: bool) -> Any:
         cache_key = (model_name, system_instruction, json_mode)
@@ -200,16 +215,24 @@ class GeminiProvider(LLMProvider):
         system_instruction: str,
         *,
         json_mode: bool = False,
-        max_tokens: Optional[int] = None,  # noqa: ARG002 - Gemini config handled via generation_config
+        max_tokens: Optional[int] = None,
     ) -> str:
         """Try multiple models until one succeeds, caching model instances."""
-        models_to_try = [self.model_name] + [m for m in config.get_provider_config()["models"] if m != self.model_name]
+        models_to_try = [self.model_name] + [
+            model for model in self._available_models if model != self.model_name
+        ]
         last_error: Optional[Exception] = None
 
         for model_name in models_to_try:
             try:
                 model = self._get_model(model_name, system_instruction, json_mode)
-                response = model.generate_content(prompt)
+                generation_config: Optional[Dict[str, Any]] = None
+                if max_tokens is not None:
+                    generation_config = {"max_output_tokens": max_tokens}
+                response = model.generate_content(
+                    prompt,
+                    generation_config=generation_config,
+                )
                 text = getattr(response, "text", None)
                 if text is None and hasattr(response, "candidates"):
                     candidates = getattr(response, "candidates", [])
@@ -354,6 +377,119 @@ class AnthropicProvider(LLMProvider):
         return result
 
 
+class VertexAIProvider(LLMProvider):
+    """Google Vertex AI provider using the new google-genai SDK."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "gemini-2.5-flash",
+        available_models: Optional[Sequence[str]] = None,
+    ) -> None:
+        from google import genai
+        from google.genai import types
+
+        # Use v1alpha API version for Gemini Developer API
+        self.client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(api_version='v1alpha')
+        )
+        self.model_name = model_name
+        self._available_models = list(available_models or [])
+        if not self._available_models:
+            self._available_models = [self.model_name]
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        """Generate text using the new google-genai SDK."""
+        from google.genai import types
+
+        models_to_try = [self.model_name] + [
+            model for model in self._available_models if model != self.model_name
+        ]
+        last_error: Optional[Exception] = None
+
+        for model_name in models_to_try:
+            try:
+                config_params: Dict[str, Any] = {
+                    "system_instruction": system_instruction,
+                }
+                if max_tokens is not None:
+                    config_params["max_output_tokens"] = max_tokens
+                if json_mode:
+                    config_params["response_mime_type"] = "application/json"
+
+                config = types.GenerateContentConfig(**config_params)
+
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=config,
+                )
+
+                if hasattr(response, 'text') and response.text:
+                    return str(response.text)
+                raise RuntimeError("Vertex AI response did not include text content")
+
+            except Exception as exc:
+                last_error = exc
+                sanitized = sanitize_error_message(str(exc))
+                logger.warning("Vertex AI model %s failed: %s", model_name, sanitized)
+
+                # Check for fatal errors
+                if "401" in str(exc) or "403" in str(exc):
+                    break
+                if model_name != models_to_try[-1]:
+                    continue
+
+        if last_error:
+            sanitized = sanitize_error_message(str(last_error))
+            raise RuntimeError(f"Vertex AI API call failed: {sanitized}") from last_error
+        raise RuntimeError("Vertex AI API call failed: unknown error")
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        """Generate clarifying questions using Vertex AI."""
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            sanitized = sanitize_error_message(error_msg)
+            logger.warning("Vertex AI question generation failed: %s", sanitized)
+
+            # Provide helpful context for common errors
+            if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "UNAUTHENTICATED" in error_msg:
+                _print_user_error("Authentication failed: Vertex AI requires OAuth2 authentication")
+                _print_user_error("Your API key may be for Gemini Developer API, not Vertex AI")
+                _print_user_error("Solution: Use --provider gemini for simple API key authentication")
+            elif "404" in error_msg:
+                _print_user_error(f"Model not found: The model '{self.model_name}' may not exist or be available")
+
+            return None
+
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            logger.warning("Vertex AI returned invalid JSON: %s", sanitize_error_message(str(exc)))
+            return None
+
+        if not isinstance(result, dict) or "task_type" not in result:
+            logger.warning("Vertex AI question payload missing task_type; falling back to static questions")
+            return None
+
+        result.setdefault("questions", [])
+        return result
+
+
 def get_provider(provider_name: str, config: Config, model_name: Optional[str] = None) -> LLMProvider:
     """Factory function to get the appropriate provider."""
     provider_config = config.get_provider_config()
@@ -363,6 +499,13 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
         return GeminiProvider(
             api_key=provider_config["api_key"],
             model_name=model_to_use,
+            available_models=provider_config.get("models"),
+        )
+    if provider_name == "vertex-ai":
+        return VertexAIProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+            available_models=provider_config.get("models"),
         )
     if provider_name == "anthropic":
         return AnthropicProvider(
@@ -372,4 +515,4 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
         )
     raise ValueError(f"Unknown provider: {provider_name}")
 
-__all__ = ["LLMProvider", "get_provider", "GeminiProvider", "AnthropicProvider"]
+__all__ = ["LLMProvider", "get_provider", "GeminiProvider", "VertexAIProvider", "AnthropicProvider"]

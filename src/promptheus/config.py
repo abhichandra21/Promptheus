@@ -49,6 +49,9 @@ def find_and_load_dotenv(filename: str = ".env") -> Optional[Path]:
 
 _LOADED_ENV_PATH = find_and_load_dotenv()
 
+# Providers with full runtime support (keep in sync with promptheus.providers.get_provider)
+SUPPORTED_PROVIDER_IDS = {"gemini", "vertex-ai", "anthropic"}
+
 
 class Config:
     """Configuration manager for Promptheus."""
@@ -114,6 +117,8 @@ class Config:
         lowered = provider.lower()
         if lowered not in config_data.get("providers", {}):
             raise ValueError(f"Unknown provider: {provider}")
+        if lowered not in SUPPORTED_PROVIDER_IDS:
+            raise ValueError(f"Provider '{provider}' is not supported yet.")
         self._provider = lowered
         friendly = config_data.get("provider_aliases", {}).get(lowered, lowered.title())
         self._record_status(f"Switched to {friendly}")
@@ -133,17 +138,26 @@ class Config:
             lowered = explicit_provider.lower()
             if lowered not in config_data.get("providers", {}):
                 self._record_error(f"Unknown provider '{explicit_provider}' in PROMPTHEUS_PROVIDER")
-            else:
+            elif lowered in SUPPORTED_PROVIDER_IDS:
                 self._provider = lowered
                 friendly = config_data.get("provider_aliases", {}).get(lowered, lowered.title())
                 self._record_status(f"Using {friendly}")
                 return
+            else:
+                supported = ", ".join(sorted(SUPPORTED_PROVIDER_IDS))
+                self._record_status(
+                    f"Ignoring unsupported provider '{explicit_provider}'. Supported providers: {supported}"
+                )
 
         providers = config_data.get("providers", {})
-        priority = list(providers.keys()) or ["gemini"]
+        priority = [name for name in providers.keys() if name in SUPPORTED_PROVIDER_IDS]
+        if not priority:
+            priority = ["gemini"] if "gemini" in providers else list(providers.keys()) or ["gemini"]
 
         for name in priority:
             info = providers.get(name, {})
+            if name not in SUPPORTED_PROVIDER_IDS:
+                continue
             env_keys = info.get("api_key_env")
             keys = env_keys if isinstance(env_keys, list) else [env_keys]
             if any(key and os.getenv(key) for key in keys):
