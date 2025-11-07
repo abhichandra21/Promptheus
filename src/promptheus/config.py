@@ -61,18 +61,18 @@ class Config:
         self.model: Optional[str] = None
         self._status_messages: List[str] = []
         self._error_messages: List[str] = []
-        self._model_config: Optional[Dict[str, Any]] = None
+        self._provider_config: Optional[Dict[str, Any]] = None
 
-    def load_model_config(self) -> Dict[str, Any]:
-        """Load the model configuration from the JSON file."""
-        config_path = Path(__file__).parent / "models.json"
+    def load_provider_config(self) -> Dict[str, Any]:
+        """Load the provider configuration from the JSON file."""
+        config_path = Path(__file__).parent / "providers.json"
         with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def _ensure_model_config(self) -> Dict[str, Any]:
-        if self._model_config is None:
-            self._model_config = self.load_model_config()
-        return self._model_config
+    def _ensure_provider_config(self) -> Dict[str, Any]:
+        if self._provider_config is None:
+            self._provider_config = self.load_provider_config()
+        return self._provider_config
 
     def reset(self) -> None:
         """Reset provider/model selections and clear messages."""
@@ -80,7 +80,7 @@ class Config:
         self.model = None
         self._status_messages.clear()
         self._error_messages.clear()
-        self._model_config = None
+        self._provider_config = None
 
     # ------------------------------------------------------------------ #
     # Message helpers
@@ -113,7 +113,7 @@ class Config:
 
     def set_provider(self, provider: str) -> None:
         """Manually set the provider (e.g., from CLI flag)."""
-        config_data = self._ensure_model_config()
+        config_data = self._ensure_provider_config()
         lowered = provider.lower()
         if lowered not in config_data.get("providers", {}):
             raise ValueError(f"Unknown provider: {provider}")
@@ -131,7 +131,7 @@ class Config:
         if self._provider is not None:
             return
 
-        config_data = self._ensure_model_config()
+        config_data = self._ensure_provider_config()
 
         explicit_provider = os.getenv("PROMPTHEUS_PROVIDER")
         if explicit_provider:
@@ -178,38 +178,52 @@ class Config:
         self._record_status(f"Using model: {self.model}")
 
     def get_model(self) -> str:
-        """Get the model to use, with fallbacks."""
+        """
+        Get the model to use, following a specific override hierarchy.
+        Hierarchy: CLI flag > Provider-specific Env Var > Global Env Var > Default
+        """
+        # 1. CLI flag (--model)
         if self.model:
             return self.model
 
-        env_model = os.getenv("PROMPTHEUS_MODEL")
-        if env_model:
-            return env_model
+        config_data = self._ensure_provider_config()
+        provider_id = self.provider or "gemini"
+        provider_info = config_data.get("providers", {}).get(provider_id, {})
 
-        config_data = self._ensure_model_config()
-        provider = self.provider or "gemini"
-        return config_data["providers"][provider]["default_model"]
+        # 2. Provider-specific environment variable (e.g., OPENAI_MODEL)
+        model_env_var = provider_info.get("model_env")
+        if model_env_var:
+            env_model = os.getenv(model_env_var)
+            if env_model:
+                return env_model
+
+        # 3. Global environment variable (PROMPTHEUS_MODEL)
+        global_env_model = os.getenv("PROMPTHEUS_MODEL")
+        if global_env_model:
+            return global_env_model
+
+        # 4. Default model from providers.json
+        return provider_info.get("default_model", "")
 
     def get_provider_config(self) -> Dict[str, Any]:
         """Get provider-specific configuration."""
-        config_data = self._ensure_model_config()
+        config_data = self._ensure_provider_config()
         provider = self.provider or "gemini"
         provider_info = config_data["providers"][provider]
 
         api_key = None
-        if isinstance(provider_info["api_key_env"], list):
-            for key_env in provider_info["api_key_env"]:
+        api_key_env = provider_info.get("api_key_env")
+        if isinstance(api_key_env, list):
+            for key_env in api_key_env:
                 if os.getenv(key_env):
                     api_key = os.getenv(key_env)
                     break
-        else:
-            api_key = os.getenv(provider_info["api_key_env"])
+        elif api_key_env:
+            api_key = os.getenv(api_key_env)
 
-        config = {
-            "api_key": api_key,
-            "models": provider_info["models"],
-        }
+        config = {"api_key": api_key}
 
+        # Add other optional env-based fields
         optional_env_fields = {
             "base_url": provider_info.get("base_url_env"),
             "organization": provider_info.get("organization_env"),
@@ -227,7 +241,7 @@ class Config:
     def get_configured_providers(self) -> List[str]:
         """Return a list of providers that have an API key configured."""
         configured_providers = []
-        config_data = self._ensure_model_config()
+        config_data = self._ensure_provider_config()
         providers = config_data.get("providers", {})
         for name in SUPPORTED_PROVIDER_IDS:
             info = providers.get(name, {})
@@ -246,7 +260,7 @@ class Config:
         if not api_key:
             return False
 
-        config_data = self._ensure_model_config()
+        config_data = self._ensure_provider_config()
         provider_info = config_data.get("providers", {}).get(provider, {})
         prefixes = provider_info.get("api_key_prefixes")
         if not prefixes:
@@ -255,7 +269,7 @@ class Config:
 
     def validate(self) -> bool:
         """Validate that required credentials are available and well-formed."""
-        config_data = self._ensure_model_config()
+        config_data = self._ensure_provider_config()
         provider_config = self.get_provider_config()
         api_key = provider_config.get("api_key")
 
