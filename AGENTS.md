@@ -1,29 +1,32 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Promptheus's core logic lives in `src/promptheus/`. `main.py` drives the CLI entry point exposed as `promptheus`, `providers.py` wraps the Gemini, Claude, and Z.ai clients, and `config.py` centralizes runtime settings. Support tools such as `env_validator.py` (for API key checks) and sample prompt assets sit at the repository root. Place new modules under `src/promptheus/` and group provider-specific helpers alongside existing integrations to keep discovery simple.
+Runtime code lives under `src/promptheus/`. `main.py` owns the CLI entry point, `providers.py` wraps the Gemini, Claude, and Z.ai adapters, `config.py` manages environment-driven settings, and `history.py` persists prompt sessions. Shared assets (e.g., `models.json`, `logging_config.py`, `utils.py`) sit alongside. Tests mirror this layout in `tests/`, while helper tools such as `env_validator.py` and `sample_prompts.txt` remain at the repository root. Add new runtime modules inside `src/promptheus/` and keep provider-specific helpers beside existing integrations to simplify discovery.
 
 ## Build, Test, and Development Commands
-Install dependencies in editable mode before hacking:
+Install dependencies in editable mode before contributing:
 ```bash
-pip install -e .
-pip install -r requirements.txt  # optional extras used by env_validator
+pip install -e .[dev]
+pip install -r requirements.txt  # extras for env_validator
 ```
-Run the CLI locally with either the console binary or the module:
+Run the CLI locally with either binary or module syntax:
 ```bash
 promptheus "Draft an onboarding email"
-python -m promptheus.main --static "Test prompt"
+python -m promptheus.main --static "Smoke test"
 ```
-Use `python env_validator.py --provider gemini` to confirm credentials before exercising networked flows.
+Validate credentials before hitting remote APIs:
+```bash
+python env_validator.py --provider gemini
+```
 
 ## Coding Style & Naming Conventions
-Follow standard Python 3.8+ conventions: four-space indentation, descriptive snake_case for functions and variables, CapWords for classes, and explicit type hints where practical (mirroring existing signatures in `main.py`). Keep modules under 300 lines by extracting helpers into focused files inside `promptheus/`. Format contributions with `black .` and ensure imports remain sorted; align console output with `rich` styling already in use.
+Target Python 3.8+ with four-space indentation, `snake_case` for functions/variables, and `CapWords` for classes. Mirror existing type hints (see `main.py`) and keep modules under ~300 lines by extracting helpers where needed. Format with `black .`, keep imports sorted, and align terminal output with the `rich` styles already used in the CLI panels/table helpers.
 
 ## Testing Guidelines
-Automated coverage is still light; new functionality should arrive with `pytest` suites under a top-level `tests/` package (mirror the runtime structure). Name files `test_<module>.py`, use fixtures to stub provider calls, and prefer offline unit tests over live API calls. Run the suite with `pytest -q` and supplement with manual smoke checks via `promptheus --static "Smoke test"` for interactive flows.
+Tests live in `tests/` and follow the `test_<module>.py` naming pattern. Prefer fast, offline unit tests that stub provider calls rather than exercising live APIs. Run `pytest -q` before sending a PR, and supplement with a manual CLI smoke test (`promptheus --static "Smoke test"`) when you touch interactive flows or history features.
 
 ## Commit & Pull Request Guidelines
-Adopt the existing concise, imperative commit style (e.g., `Fix --refine flag logic`, `Integrate iterative refinement feature`). Each PR should include a brief summary of behavior changes, testing notes, and linked issues. Provide screenshots or terminal transcripts when altering CLI output. Keep PRs focused; split refactors and feature work into separate changesets to ease review.
+Use concise, imperative commit messages (e.g., `Add OpenAI provider guard`, `Tighten question validation`). PRs should summarize behavioral changes, reference related issues, list tests run, and include CLI transcripts or screenshots whenever user-facing output changes. Keep changes focused—split feature work and refactors into separate PRs for easier review.
 
 ## Security & Configuration Tips
-Store provider secrets in `.env` (see `.env.example`) and never commit them. Run `env_validator.py` before submitting to confirm required keys resolve. Respect the default timeouts and avoid logging full credential values; mask tokens in debug prints just as the validator does.
+Store provider secrets in `.env` (bootstrap from `.env.example`) and never log raw tokens. Run `env_validator.py` after updating credentials to ensure required keys are present. Honor the default timeout settings in `constants.py`, and mask sensitive values when printing exceptions (use `sanitize_error_message` to stay consistent).

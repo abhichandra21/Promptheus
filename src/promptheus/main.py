@@ -25,7 +25,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 
-from promptheus.config import config
+from promptheus.config import Config
 from promptheus.constants import PROMPTHEUS_DEBUG_ENV
 from promptheus.history import get_history
 from promptheus.prompts import (
@@ -233,7 +233,9 @@ def determine_question_plan(
         result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
 
     if result is None:
-        notify("\n[bold]Using static questions (fallback)[/bold]\n")
+        notify("\n[bold yellow]⚠ Unable to generate AI questions[/bold yellow]")
+        notify("[dim]Reason: AI provider connection failed or returned invalid response[/dim]")
+        notify("[bold]Using static questions (fallback)[/bold]\n")
         questions, mapping = get_static_questions()
         return QuestionPlan(skip_questions=False, task_type="generation", questions=questions, mapping=mapping)
 
@@ -295,34 +297,47 @@ def ask_clarifying_questions(
         options = question.get("options") or []
         default = question.get("default", "")
 
-        try:
-            if qtype == "radio" and options:
-                answer = questionary.select(message, choices=options).ask()
-            elif qtype == "checkbox" and options:
-                answer = questionary.checkbox(message, choices=options).ask()
-            elif qtype == "confirm":
-                default_bool = bool(default) if isinstance(default, bool) else True
-                answer = questionary.confirm(message, default=default_bool).ask()
-            else:
-                answer = questionary.text(message, default=str(default)).ask()
-        except KeyboardInterrupt:
-            notify("[yellow]Cancelled.[/yellow]")
-            return None
+        while True:
+            try:
+                if qtype == "radio" and options:
+                    answer = questionary.select(message, choices=options).ask()
+                elif qtype == "checkbox" and options:
+                    answer = questionary.checkbox(message, choices=options).ask()
+                elif qtype == "confirm":
+                    default_bool = bool(default) if isinstance(default, bool) else True
+                    answer = questionary.confirm(message, default=default_bool).ask()
+                else:
+                    answer = questionary.text(message, default=str(default)).ask()
+            except KeyboardInterrupt:
+                notify("[yellow]Cancelled.[/yellow]")
+                return None
 
-        if answer is None:
-            notify("[yellow]Cancelled.[/yellow]")
-            return None
+            if answer is None:
+                notify("[yellow]Cancelled.[/yellow]")
+                return None
 
-        if isinstance(answer, str):
-            answer = answer.strip()
+            normalized = answer
+            if isinstance(normalized, str):
+                normalized = normalized.strip()
 
-        if not answer:
             if qtype == "checkbox":
-                answer = []
-            elif not required:
-                answer = ""
+                normalized = normalized or []
 
-        answers[key] = answer
+            missing_response = False
+            if isinstance(normalized, str):
+                missing_response = normalized == ""
+            elif isinstance(normalized, list):
+                missing_response = len(normalized) == 0
+
+            if required and missing_response and qtype != "confirm":
+                notify("[yellow]This answer is required. Please provide a response.[/yellow]")
+                continue
+
+            if not required and missing_response:
+                normalized = [] if qtype == "checkbox" else ""
+
+            answers[key] = normalized
+            break
 
     return answers
 
@@ -481,6 +496,7 @@ def display_history(limit: int = 20, notify: MessageSink = console.print) -> Non
 
 def interactive_mode(
     provider: LLMProvider,
+    app_config: Config,
     args: Namespace,
     debug_enabled: bool,
     plain_mode: bool,
@@ -488,7 +504,7 @@ def interactive_mode(
 ) -> None:
     """Interactive REPL mode - continuously process prompts until user types exit/quit."""
     notify("[bold cyan]Welcome to Promptheus Interactive Mode![/bold cyan]")
-    notify(f"[dim]Using provider: {config.provider} | Model: {config.get_model()}[/dim]")
+    notify(f"[dim]Using provider: {app_config.provider} | Model: {app_config.get_model()}[/dim]")
     notify("[dim]Type 'exit' or 'quit' to exit, ':history' to view history[/dim]\n")
 
     prompt_count = 1
@@ -597,6 +613,7 @@ def interactive_mode(
 def main() -> None:
     """Main entry point for Promptheus."""
     configure_logging()
+    app_config = Config()
 
     parser = argparse.ArgumentParser(
         description="Promptheus - AI-powered prompt engineering CLI tool",
@@ -656,7 +673,7 @@ Examples:
 
     parser.add_argument(
         "--provider",
-        choices=["gemini", "anthropic"],
+        choices=["gemini", "vertex-ai", "anthropic"],
         help="LLM provider to use (overrides config)",
     )
 
@@ -734,21 +751,21 @@ Examples:
         sys.exit(0)
 
     # Show provider status in a friendly way
-    for message in config.consume_status_messages():
+    for message in app_config.consume_status_messages():
         notify(f"[cyan]●[/cyan] {message}")
 
     if args.provider:
-        config.set_provider(args.provider)
+        app_config.set_provider(args.provider)
     if args.model:
-        config.set_model(args.model)
+        app_config.set_model(args.model)
 
-    for message in config.consume_status_messages():
+    for message in app_config.consume_status_messages():
         notify(f"[cyan]●[/cyan] {message}")
 
     # Friendly error handling
-    if not config.validate():
+    if not app_config.validate():
         notify("")
-        for message in config.consume_error_messages():
+        for message in app_config.consume_error_messages():
             # Split multi-line messages and format nicely
             lines = message.split('\n')
             if len(lines) == 1:
@@ -798,21 +815,36 @@ Examples:
     else:
         initial_prompt = args.prompt
 
-    provider_name = config.provider or "gemini"
+    provider_name = app_config.provider or "gemini"
     try:
-        provider = get_provider(provider_name, config, config.get_model())
+        provider = get_provider(provider_name, app_config, app_config.get_model())
     except Exception as exc:
-        sanitized = sanitize_error_message(str(exc))
-        notify(f"[red]✗[/red] Couldn't connect to AI provider: {sanitized}")
+        error_msg = str(exc)
+        sanitized = sanitize_error_message(error_msg)
+        notify(f"[red]✗[/red] Couldn't connect to AI provider: {sanitized}\n")
+
+        # Provide helpful context for common errors
+        if "Metaclasses" in error_msg or "tp_new" in error_msg:
+            notify("[yellow]Python 3.14 Compatibility Issue:[/yellow]")
+            notify(f"  The {provider_name} provider doesn't fully support Python 3.14 yet")
+            notify("\n[bold]Solutions:[/bold]")
+            notify("  1. Use Anthropic (Claude) instead: [cyan]promptheus --provider anthropic[/cyan]")
+            notify("  2. Downgrade to Python 3.13")
+            notify("  3. Wait for provider library updates\n")
+        elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
+            notify(f"[yellow]Authentication Failed:[/yellow] Check your API key for {provider_name}\n")
+        elif "404" in error_msg:
+            notify(f"[yellow]Model Not Found:[/yellow] The model may not exist or be available\n")
+
         logger.exception("Provider initialization failure")
         sys.exit(1)
 
     debug_enabled = args.verbose or os.getenv(PROMPTHEUS_DEBUG_ENV, "").lower() in {"1", "true", "yes", "on"}
 
     if initial_prompt is None or not initial_prompt:
-        interactive_mode(provider, args, debug_enabled, plain_mode, notify)
+        interactive_mode(provider, app_config, args, debug_enabled, plain_mode, notify)
     else:
-        notify(f"[dim]Using provider: {provider_name} | Model: {config.get_model()}[/dim]\n")
+        notify(f"[dim]Using provider: {provider_name} | Model: {app_config.get_model()}[/dim]\n")
         process_single_prompt(provider, initial_prompt, args, debug_enabled, plain_mode, notify)
 
 
