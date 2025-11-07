@@ -18,6 +18,12 @@ MODELS_JSON_CONTENT = {
             "api_key_env": ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
             "base_url_env": "ANTHROPIC_BASE_URL",
             "api_key_prefixes": ["sk-ant-", "anthropic-"]
+        },
+        "qwen": {
+            "default_model": "qwen-turbo",
+            "models": ["qwen-turbo"],
+            "api_key_env": "DASHSCOPE_API_KEY",
+            "api_key_prefixes": []
         }
     },
     "provider_aliases": {
@@ -58,6 +64,13 @@ def test_get_provider_config(mock_load_config, config):
     config.set_provider("anthropic")
     anthropic_config = config.get_provider_config()
     assert anthropic_config["models"] == ["claude-3-opus", "claude-3-sonnet"]
+
+
+@patch.dict(os.environ, {"DASHSCOPE_API_KEY": "dash-key"}, clear=True)
+@patch("promptheus.config.Config.load_model_config", return_value=MODELS_JSON_CONTENT)
+def test_validate_accepts_provider_without_prefixes(mock_load_config, config):
+    config.set_provider("qwen")
+    assert config.validate() is True
 
 import pytest
 

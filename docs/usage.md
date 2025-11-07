@@ -18,7 +18,7 @@ Promptheus keeps the fun parts of prompt crafting while the AI handles the house
 
 ## Input Methods
 - `-f path/to/prompt.txt` – flag-based file input.
-- `@path/to/prompt.txt` – shortcut syntax.
+- `@path/to/prompt.txt` – shortcut syntax (alternative to `-f`).
 - Standard input piping for scripted flows.
 
 ## Interaction Styles
@@ -34,8 +34,10 @@ Mix and match with providers, models, and file input as needed, e.g. `promptheus
 
 ## Provider & Model Selection
 - Auto-detects which provider to use based on the API keys you have configured.
-- Force a provider: `promptheus --provider gemini "Idea"`, `promptheus --provider anthropic "Idea"`.
-- Pin a model: `promptheus --model gemini-1.5-pro "Idea"`, `promptheus --model claude-3-5-sonnet-20241022 "Idea"`.
+- Force a provider: `promptheus --provider gemini "Idea"`, `promptheus --provider anthropic "Idea"`, `promptheus --provider openai "Idea"`, `promptheus --provider groq "Idea"`, `promptheus --provider qwen "Idea"`, `promptheus --provider glm "Idea"`.
+- Pin a model: `promptheus --model gemini-1.5-pro "Idea"`, `promptheus --model claude-3-5-sonnet-20241022 "Idea"`, `promptheus --model gpt-4o "Idea"`, `promptheus --model llama-3.1-70b-versatile "Idea"`, etc.
+- Available providers: gemini, anthropic, openai, groq, qwen, glm
+- List available models: `python get-models.py providers` or `python get-models.py models`
 
 ## Output Helpers
 - `-c` / `--copy` – copy the refined prompt to the clipboard.
@@ -46,6 +48,7 @@ Mix and match with providers, models, and file input as needed, e.g. `promptheus
 - CLI commands: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`.
 - Interactive shortcuts: `:history`, `:load <n>`, `:clear-history`, plus ↑/↓ navigation.
 - Every refined prompt is saved automatically so you never lose that one perfect phrasing.
+- History includes timestamps, task types, and both original and refined prompts for reference.
 
 ## Iterative Tweaks
 After the main refinement, Promptheus will ask if you want to tweak anything:
@@ -87,5 +90,13 @@ Promptheus opens editors via the `EDITOR` environment variable. Set it once and 
 ```bash
 export EDITOR="code --wait"  # or nano, vim, emacs, etc.
 ```
+
+## Python 3.14 Compatibility
+
+The `gemini` provider supports Python 3.14 with the unified `google-genai` SDK.
+For other providers that may have compatibility issues:
+1. Wait for updates as newer provider SDKs support Python 3.14
+2. Use Python 3.13 or earlier if compatibility issues arise
+3. Consider using virtual environments to manage different Python versions
 
 Happy prompting! 🚀

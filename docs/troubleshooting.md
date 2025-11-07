@@ -8,12 +8,16 @@ Need a quick fix? Start here before diving into a rabbit hole.
 ```bash
 promptheus --provider gemini "Prompt"
 promptheus --provider anthropic "Prompt"
+promptheus --provider openai "Prompt"
+promptheus --provider groq "Prompt"
+promptheus --provider qwen "Prompt"
+promptheus --provider glm "Prompt"
 ```
 
 **Wrong provider keeps showing up**
 ```bash
 cat .env
-env | grep -E '(GEMINI|ANTHROPIC|PROMPTHEUS)'
+env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI|PROMPTHEUS)'
 export PROMPTHEUS_PROVIDER=gemini
 ```
 
@@ -21,6 +25,11 @@ export PROMPTHEUS_PROVIDER=gemini
 ```bash
 python env_validator.py --provider gemini
 python env_validator.py --provider anthropic
+python env_validator.py --provider openai
+python env_validator.py --provider groq
+python env_validator.py --provider qwen
+python env_validator.py --provider glm
+python env_validator.py --test-connection  # to test actual API connectivity
 ```
 
 ## Installation & Runtime
