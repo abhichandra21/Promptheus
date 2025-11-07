@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from promptheus.utils import sanitize_error_message
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,8 +82,17 @@ class PromptHistory:
         """Create history directory if it doesn't exist."""
         try:
             self.history_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            logger.error(f"Failed to create history directory: {exc}")
+        except PermissionError:
+            logger.error(
+                "Permission denied when creating history directory at %s",
+                self.history_dir,
+            )
+        except OSError as exc:
+            logger.error(
+                "Failed to create history directory (%s): %s",
+                self.history_dir,
+                sanitize_error_message(str(exc)),
+            )
 
     def save_entry(
         self,
@@ -120,7 +131,7 @@ class PromptHistory:
             logger.debug(f"Saved history entry: {entry.timestamp}")
 
         except Exception as exc:
-            logger.error(f"Failed to save history entry: {exc}")
+            logger.error("Failed to save history entry: %s", sanitize_error_message(str(exc)))
 
     def _load_history(self) -> List[HistoryEntry]:
         """Load history from file."""
@@ -131,8 +142,19 @@ class PromptHistory:
             with open(self.history_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return [HistoryEntry.from_dict(entry) for entry in data]
-        except Exception as exc:
-            logger.error(f"Failed to load history: {exc}")
+        except json.JSONDecodeError as exc:
+            logger.error(
+                "History file is corrupted (%s): %s",
+                self.history_file,
+                sanitize_error_message(str(exc)),
+            )
+            return []
+        except OSError as exc:
+            logger.error(
+                "Failed to read history file (%s): %s",
+                self.history_file,
+                sanitize_error_message(str(exc)),
+            )
             return []
 
     def _save_history(self, history: List[HistoryEntry]) -> None:
@@ -140,8 +162,12 @@ class PromptHistory:
         try:
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump([entry.to_dict() for entry in history], f, indent=2)
-        except Exception as exc:
-            logger.error(f"Failed to save history: {exc}")
+        except OSError as exc:
+            logger.error(
+                "Failed to save history file (%s): %s",
+                self.history_file,
+                sanitize_error_message(str(exc)),
+            )
 
     def _append_to_prompt_history(self, prompt: str) -> None:
         """Append a prompt to the prompt history file for arrow key navigation."""
@@ -150,8 +176,12 @@ class PromptHistory:
                 # Write prompt on a single line, escaping newlines
                 sanitized = prompt.replace('\n', '\\n')
                 f.write(f"{sanitized}\n")
-        except Exception as exc:
-            logger.error(f"Failed to append to prompt history: {exc}")
+        except OSError as exc:
+            logger.error(
+                "Failed to append to prompt history file (%s): %s",
+                self.prompt_history_file,
+                sanitize_error_message(str(exc)),
+            )
 
     def get_recent(self, limit: int = 20) -> List[HistoryEntry]:
         """
@@ -194,8 +224,11 @@ class PromptHistory:
             if self.prompt_history_file.exists():
                 self.prompt_history_file.unlink()
             logger.info("History cleared")
-        except Exception as exc:
-            logger.error(f"Failed to clear history: {exc}")
+        except OSError as exc:
+            logger.error(
+                "Failed to clear history files: %s",
+                sanitize_error_message(str(exc)),
+            )
 
     def get_prompt_history_file(self) -> Path:
         """Get the path to the prompt history file for arrow key navigation."""

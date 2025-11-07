@@ -33,25 +33,32 @@ promptheus -r "Your prompt"
 
 ### Testing
 ```bash
-# Test with static mode
+# Run automated tests
+pytest -q
+
+# Manual smoke tests
 promptheus --static "Test prompt"
+python -m promptheus.main --static "Smoke test"
 
 # Test different input methods
 promptheus -f test_prompt.txt
 cat test_prompt.txt | promptheus
+
+# Environment validation
+python env_validator.py --provider gemini
+python env_validator.py --test-connection
 ```
 
 ### Development Utilities
 ```bash
+# Code formatting
+black .
+
 # Check for linting issues (if available)
 python -m flake8 src/promptheus/ --ignore=E501,W503
 
 # Type checking (if available)
 python -m mypy src/promptheus/
-
-# Run specific test modules
-python test_modes.py
-python test_file_input.py
 ```
 
 ## Architecture Overview
@@ -67,10 +74,12 @@ python test_file_input.py
 
 **Provider Abstraction (`src/promptheus/providers.py`)**
 - Abstract `LLMProvider` base class defining the interface for AI providers
-- `GeminiProvider` and `AnthropicProvider` implementations
+- Multiple provider implementations: `GeminiProvider`, `AnthropicProvider`, `OpenAIProvider`, `GroqProvider`, `QwenProvider`, `GLMProvider`
 - Provider factory pattern via `get_provider()` function
 - Handles model fallbacks, retries, and error sanitization
 - Each provider implements `_generate_text()` for raw API calls
+- JSON mode support where available (OpenAI, Groq, Qwen, Gemini)
+- Consistent `generate_questions()` method across all providers
 
 **Configuration System (`src/promptheus/config.py`)**
 - Auto-detects available providers based on API keys in environment
@@ -83,6 +92,14 @@ python test_file_input.py
 - `src/promptheus/constants.py`: Shared configuration values (timeouts, token limits)
 - `src/promptheus/utils.py`: Common utilities including error sanitization
 - `src/promptheus/logging_config.py`: Structured logging configuration
+- `src/promptheus/history.py`: Session history management with file persistence
+- `src/promptheus/models.json`: Provider configurations and model definitions
+
+**Environment Validator (`env_validator.py`)**
+- Standalone utility for testing provider configurations
+- Validates API keys and tests provider connections
+- Generates environment file templates for each provider
+- Supports connection testing with actual API calls
 
 ### Key Architectural Patterns
 
@@ -101,9 +118,10 @@ The system intelligently detects task types:
 
 **Provider Abstraction**
 - All providers implement the same `LLMProvider` interface
-- Supports multiple AI backends (Gemini, Claude, Z.ai)
+- Supports 6 AI backends (Gemini, Claude, OpenAI, Groq, Qwen, GLM)
 - Automatic fallback between models within each provider
 - Consistent error handling and response formatting
+- Provider-specific capabilities (JSON mode, custom endpoints, etc.)
 
 **Configuration Hierarchy**
 1. Explicit CLI arguments (`--provider`, `--model`)
@@ -132,3 +150,42 @@ The REPL-style interactive mode persists provider, model, and flag settings acro
 - The application supports both single-shot and interactive modes
 - Error handling is designed to be user-friendly while logging technical details
 - The Rich library provides terminal formatting for a polished CLI experience
+- Provider libraries are imported lazily to allow optional dependencies
+- History is persisted to platform-specific directories (`~/.promptheus` or `%APPDATA%/promptheus`)
+
+## Common Development Patterns
+
+### Adding New Providers
+1. Implement `LLMProvider` interface in `providers.py`
+2. Add provider configuration to `models.json`
+3. Update `config.py` with API key instructions
+4. Add provider to factory function in `get_provider()`
+5. Update `__all__` exports
+
+### Error Handling Pattern
+```python
+try:
+    # API call
+    response = client.generate_content(prompt)
+except Exception as exc:
+    sanitized = sanitize_error_message(str(exc))
+    logger.warning("Provider call failed: %s", sanitized)
+    raise RuntimeError(f"Provider API call failed: {sanitized}") from exc
+```
+
+### Question Generation Pattern
+All providers must implement `generate_questions()` that returns:
+```python
+{
+    "task_type": "analysis|generation",
+    "questions": [
+        {
+            "question": "Question text",
+            "type": "text|radio|checkbox",
+            "options": ["option1", "option2"],  # for radio/checkbox
+            "required": True|False,
+            "default": "default_value"
+        }
+    ]
+}
+```
