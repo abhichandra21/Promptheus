@@ -27,17 +27,24 @@ classifiers = [
 ]
 
 dependencies = [
-    "google-generativeai>=0.1.0",
-    "anthropic>=0.3.0",
-    "questionary>=2.0.0",
-    "pyperclip>=1.8.0",
-    "rich>=13.0.0",
-    "python-dotenv>=1.0.0",
+    "google-generativeai>=0.8.0",
+    "google-genai>=1.49.0",
+    "anthropic>=0.70.0",
+    "questionary>=2.1.0",
+    "pyperclip>=1.11.0",
+    "rich>=14.0.0",
+    "python-dotenv>=1.2.0",
+    "prompt_toolkit>=3.0.52",
 ]
 
 [project.urls]
 Homepage = "https://github.com/abhichandra21/Promptheus"
 Repository = "https://github.com/abhichandra21/Promptheus"
+
+[project.optional-dependencies]
+dev = [
+    "pytest~=8.4.0",
+]
 
 [project.scripts]
 promptheus = "promptheus.main:main"

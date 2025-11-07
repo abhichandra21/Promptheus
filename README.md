@@ -2,6 +2,37 @@
 
 Promptheus is the AI wing-person for prompt engineers, analysts, and creative teams. Drop in a rough prompt and it will adapt to your task, ask smart questions when they add value, lightly polish analysis prompts, and keep every iteration close at hand.
 
+## Known Issues
+
+### Python 3.14 + Gemini Provider
+The `gemini` provider currently has compatibility issues with Python 3.14 due to a Metaclasses error in the `google-generativeai` library.
+
+**Workarounds:**
+1. **Use Anthropic/Claude** (recommended):
+   ```bash
+   # In .env
+   ANTHROPIC_API_KEY=sk-ant-...
+   PROMPTHEUS_PROVIDER=anthropic
+
+   # Or via CLI
+   promptheus --provider anthropic "Your prompt"
+   ```
+
+2. **Downgrade to Python 3.13**:
+   ```bash
+   pyenv install 3.13
+   pyenv local 3.13
+   pip install -e .
+   ```
+
+3. **Use Vertex AI provider** (experimental):
+   ```bash
+   # May require different authentication
+   promptheus --provider vertex-ai "Your prompt"
+   ```
+
+See `PROVIDER_MIGRATION_SUMMARY.md` for detailed information.
+
 ## Why you'll enjoy it
 - Adaptive workflow that knows when to quiz you and when to stay quiet.
 - Interactive loop with REPL history, arrow-key recall, and inline tweaks.
@@ -12,7 +43,7 @@ Promptheus is the AI wing-person for prompt engineers, analysts, and creative te
 ## Quick start
 1. Install:
    ```bash
-   pip install -e .
+   pip install -e .[dev]
    pip install -r requirements.txt  # optional extras for env_validator
    ```
 2. Configure at least one provider key (Gemini, Claude, or Z.ai):
