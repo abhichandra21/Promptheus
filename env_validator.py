@@ -84,11 +84,8 @@ class EnvironmentValidator:
                     }
                 },
                 'optional_vars': {
-                    'DASHSCOPE_API_KEY_FILE_PATH': {
-                        'description': 'Path to file containing DashScope API key'
-                    },
-                    'DASHSCOPE_LOGGING_LEVEL': {
-                        'description': 'DashScope logging level (e.g., info)'
+                    'DASHSCOPE_HTTP_BASE_URL': {
+                        'description': 'Override DashScope base URL (optional)'
                     }
                 },
                 'default_model_env': 'QWEN_DEFAULT_MODEL',
@@ -273,55 +270,75 @@ class EnvironmentValidator:
 
             if resolved == 'groq':
                 try:
-                    from groq import Groq
-                    client = Groq(api_key=env_vars.get('GROQ_API_KEY'))
+                    from openai import OpenAI
+                except ImportError:
+                    console.print("[yellow]Warning: openai package not installed. Install with: pip install openai[/yellow]")
+                    return False
+
+                api_key = env_vars.get('GROQ_API_KEY')
+                if not api_key:
+                    console.print("[red]Connection test failed: Missing GROQ_API_KEY[/red]")
+                    return False
+
+                base_url = env_vars.get('GROQ_BASE_URL', 'https://api.groq.com/openai/v1')
+                client = OpenAI(api_key=api_key, base_url=base_url)
+                try:
                     client.chat.completions.create(
                         model=self._get_test_model(resolved, env_vars) or 'llama-3.1-8b-instant',
                         messages=[{'role': 'user', 'content': 'Ping'}],
                         max_tokens=8,
                     )
                     return True
-                except ImportError:
-                    console.print("[yellow]Warning: groq package not installed. Install with: pip install groq[/yellow]")
-                    return False
                 except Exception as e:
                     console.print(f"[red]Connection test failed: {sanitize_error_message(str(e))}[/red]")
                     return False
 
             if resolved == 'qwen':
                 try:
-                    import dashscope
-                    from dashscope import Generation
-                    dashscope.api_key = env_vars.get('DASHSCOPE_API_KEY')
-                    Generation.call(
+                    from openai import OpenAI
+                except ImportError:
+                    console.print("[yellow]Warning: openai package not installed. Install with: pip install openai[/yellow]")
+                    return False
+
+                api_key = env_vars.get('DASHSCOPE_API_KEY')
+                if not api_key:
+                    console.print("[red]Connection test failed: Missing DASHSCOPE_API_KEY[/red]")
+                    return False
+
+                base_url = env_vars.get('DASHSCOPE_HTTP_BASE_URL', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1')
+                client = OpenAI(api_key=api_key, base_url=base_url)
+                try:
+                    client.chat.completions.create(
                         model=self._get_test_model(resolved, env_vars) or 'qwen-turbo',
-                        prompt='Ping',
+                        messages=[{'role': 'user', 'content': 'Ping'}],
                         max_tokens=16,
                     )
                     return True
-                except ImportError:
-                    console.print("[yellow]Warning: dashscope package not installed. Install with: pip install dashscope[/yellow]")
-                    return False
                 except Exception as e:
                     console.print(f"[red]Connection test failed: {sanitize_error_message(str(e))}[/red]")
                     return False
 
             if resolved == 'glm':
                 try:
-                    from zai import ZaiClient
-                    client = ZaiClient(
-                        api_key=env_vars.get('ZAI_API_KEY'),
-                        base_url=env_vars.get('ZAI_BASE_URL') or None,
-                    )
+                    from openai import OpenAI
+                except ImportError:
+                    console.print("[yellow]Warning: openai package not installed. Install with: pip install openai[/yellow]")
+                    return False
+
+                api_key = env_vars.get('ZAI_API_KEY')
+                if not api_key:
+                    console.print("[red]Connection test failed: Missing ZAI_API_KEY[/red]")
+                    return False
+
+                base_url = env_vars.get('ZAI_BASE_URL') or "https://api.z.ai/api/paas/v4"
+                client = OpenAI(api_key=api_key, base_url=base_url)
+                try:
                     client.chat.completions.create(
                         model=self._get_test_model(resolved, env_vars) or 'glm-4',
                         messages=[{'role': 'user', 'content': 'Ping'}],
                         max_tokens=16,
                     )
                     return True
-                except ImportError:
-                    console.print("[yellow]Warning: zai package not installed. Install with: pip install zai[/yellow]")
-                    return False
                 except Exception as e:
                     console.print(f"[red]Connection test failed: {sanitize_error_message(str(e))}[/red]")
                     return False

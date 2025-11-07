@@ -1,5 +1,4 @@
 import json
-from http import HTTPStatus
 from types import SimpleNamespace
 
 from promptheus.config import Config
@@ -175,47 +174,38 @@ def test_openai_provider_sets_json_mode(monkeypatch):
     assert params["messages"][1]["content"].endswith(_JSON_ONLY_SUFFIX)
 
 
-def test_groq_provider_returns_plain_text():
-    """Groq provider should return message content without forcing response_format."""
-    provider = GroqProvider.__new__(GroqProvider)
-    provider.model_name = "llama-3.1"
+def test_groq_provider_uses_openai_base(monkeypatch):
+    """Groq provider should configure the OpenAI client with Groq's base URL."""
     captured = {}
 
-    class DummyCompletions:
-        def create(self, **kwargs):
-            captured["kwargs"] = kwargs
-            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="Hello"))])
+    def fake_init(self, api_key=None, model_name=None, base_url=None, **kwargs):
+        captured.update({"api_key": api_key, "model_name": model_name, "base_url": base_url})
 
-    provider.client = SimpleNamespace(chat=SimpleNamespace(completions=DummyCompletions()))
+    monkeypatch.setattr("promptheus.providers.OpenAIProvider.__init__", fake_init, raising=False)
+    monkeypatch.delenv("GROQ_BASE_URL", raising=False)
 
-    text = provider._generate_text("Explain latency", "", json_mode=False, max_tokens=12)
-
-    assert text == "Hello"
-    params = captured["kwargs"]
-    assert params["messages"] == [{"role": "user", "content": "Explain latency"}]
-    assert "response_format" not in params
+    provider = GroqProvider("gsk-test", model_name="llama-3.3-70b-versatile")
+    assert isinstance(provider, GroqProvider)
+    assert captured["api_key"] == "gsk-test"
+    assert captured["model_name"] == "llama-3.3-70b-versatile"
+    assert captured["base_url"] == GroqProvider.DEFAULT_BASE_URL
 
 
-def test_qwen_provider_combines_prompts():
-    """Qwen provider should merge system instruction and prompt text and obey HTTP status."""
-    provider = QwenProvider.__new__(QwenProvider)
-    provider.model_name = "qwen-turbo"
+def test_qwen_provider_uses_dashscope_base(monkeypatch):
+    """Qwen provider should pass the DashScope base URL into the OpenAI client."""
     captured = {}
 
-    def fake_call(**kwargs):
-        captured.update(kwargs)
-        return SimpleNamespace(status_code=HTTPStatus.OK, output={"text": "Done"})
+    def fake_init(self, api_key=None, model_name=None, base_url=None, **kwargs):
+        captured.update({"api_key": api_key, "model_name": model_name, "base_url": base_url})
 
-    provider._generation = SimpleNamespace(call=fake_call)
+    monkeypatch.setattr("promptheus.providers.OpenAIProvider.__init__", fake_init, raising=False)
+    monkeypatch.delenv("DASHSCOPE_HTTP_BASE_URL", raising=False)
 
-    text = provider._generate_text("Summarize logs", "Stay concise", json_mode=True, max_tokens=64)
-
-    assert text == "Done"
-    assert "Stay concise" in captured["prompt"]
-    assert "Summarize logs" in captured["prompt"]
-    assert captured["max_tokens"] == 64
-    assert captured["model"] == "qwen-turbo"
-    assert captured["prompt"].count(_JSON_ONLY_SUFFIX) == 1
+    provider = QwenProvider("sk-dashscope", model_name="qwen-plus")
+    assert isinstance(provider, QwenProvider)
+    assert captured["api_key"] == "sk-dashscope"
+    assert captured["model_name"] == "qwen-plus"
+    assert captured["base_url"] == QwenProvider.DEFAULT_BASE_URL
 
 
 def test_glm_provider_builds_messages():
@@ -243,3 +233,19 @@ def test_glm_provider_builds_messages():
     assert msgs[0] == {"role": "system", "content": "Follow company tone"}
     assert msgs[1]["role"] == "user"
     assert "Draft email" in msgs[1]["content"]
+
+
+def test_glm_provider_uses_default_base_url(monkeypatch):
+    """GLM provider should pass the Zhipu base URL into the OpenAI client."""
+    captured = {}
+
+    def fake_init(self, api_key=None, model_name=None, base_url=None, **kwargs):
+        captured.update({"api_key": api_key, "model_name": model_name, "base_url": base_url})
+
+    monkeypatch.setattr("promptheus.providers.OpenAIProvider.__init__", fake_init, raising=False)
+
+    provider = GLMProvider("zai-key", model_name="glm-4-air")
+    assert isinstance(provider, GLMProvider)
+    assert captured["api_key"] == "zai-key"
+    assert captured["model_name"] == "glm-4-air"
+    assert captured["base_url"] == GLMProvider.DEFAULT_BASE_URL

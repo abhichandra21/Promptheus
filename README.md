@@ -39,27 +39,12 @@ promptheus history --<TAB>
 
 📖 See [COMPLETION.md](COMPLETION.md) for detailed documentation.
 
-## Known Issues
-
-### Python 3.14 Compatibility
-The `gemini` provider now supports Python 3.14 with the unified `google-genai` SDK and automatic API key type detection.
-For other providers that may have compatibility issues:
-
-1. **Wait for updates** - newer provider SDKs will eventually support Python 3.14
-2. **Downgrade to Python 3.13**:
-   ```bash
-   pyenv install 3.13
-   pyenv local 3.13
-   pip install -e .
-   ```
-3. **Use Python virtual environments** to manage different Python versions for different projects
-
 ## Why you'll enjoy it
 - Adaptive workflow that knows when to quiz you and when to stay quiet.
 - Interactive loop with REPL history, arrow-key recall, and inline tweaks.
 - Single-shot mode that plays nicely with stdin, files, and scripts.
 - Multi-provider setup (Gemini, Claude, OpenAI, Groq, Qwen, GLM) plus clipboard and editor helpers.
-- Natural-language tweak loop so you can say “make it spicier” instead of editing Markdown.
+- Natural-language tweak loop so you can say "make it spicier" instead of editing Markdown.
 
 ## Quick start
 1. Install:
@@ -85,7 +70,7 @@ For other providers that may have compatibility issues:
 
 ## Pick your flow
 - **Interactive loop** – run `promptheus`, stay in one colorful session, reuse providers/models/flags, and cruise through prompts. Use `:history`, `:load <n>`, `:clear-history`, or ↑/↓ to revisit earlier ideas.
-- **Single shot** – `promptheus "Write a README intro"`, `promptheus -f idea.txt`, or `cat idea.txt | promptheus` when scripting.
+- **Single shot** – `promptheus "Write a README intro"`, `promptheus -f idea.txt`, `promptheus @idea.txt`, or `cat idea.txt | promptheus` when scripting.
 - Promptheus detects creative vs analysis work and either asks clarifying questions or performs a light refinement. Override with flags any time.
 
 ## Favorite flags
@@ -103,11 +88,15 @@ For other providers that may have compatibility issues:
 See `docs/usage.md` for the deep dive, transcripts, and tweak mechanics.
 
 ## Providers & models
-Promptheus auto-detects whichever provider keys you’ve configured, but you can pin them explicitly:
+Promptheus auto-detects whichever provider keys you've configured, but you can pin them explicitly:
 
 ```bash
-promptheus --provider gemini --model gemini-1.5-pro "Pitch deck outline"
-promptheus --provider anthropic --model claude-3-5-sonnet-20241022 "Security review"
+promptheus --provider gemini --model gemini-2.5-flash "Pitch deck outline"
+promptheus --provider anthropic --model claude-sonnet-4-5-20250929 "Security review"
+promptheus --provider openai --model gpt-4o "Code review"
+promptheus --provider groq --model llama-3.3-70b-versatile "Technical explanation"
+promptheus --provider qwen --model qwen-max "Research summary"
+promptheus --provider glm --model glm-4.5 "Content generation"
 ```
 
 Supports Gemini, Claude, OpenAI, Groq, Qwen, and GLM end-to-end with zero restarts or config edits.
