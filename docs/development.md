@@ -37,5 +37,6 @@ When developing for multiple Python versions:
 2. Use short, imperative commit messages (`Add static mode docs`).
 3. Include behavior notes and testing details when raising a PR.
 4. Never log raw API keys; stick to masked output like the validator.
+5. Adding new providers? If they expose an OpenAI-compatible endpoint, prefer extending the shared `OpenAICompatibleProvider` in `src/promptheus/providers.py` (as we do for OpenAI, Groq, Qwen, and GLM). Otherwise, follow the Gemini/Anthropic pattern with a provider-specific adapter under `providers.py`, and update the CLI/env validator/docs accordingly.
 
 Questions? Open an issue with repro steps or drop a PR draft for early feedback. 🎯
