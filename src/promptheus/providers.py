@@ -1,12 +1,14 @@
 """
 LLM Provider abstraction layer.
-Supports multiple AI providers: Gemini, Anthropic.
+Supports Gemini, Anthropic/Claude, OpenAI, Groq, Qwen, and GLM.
 """
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
+import os
 import sys
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, cast
@@ -28,11 +30,7 @@ def _print_user_error(message: str) -> None:
 
 
 if TYPE_CHECKING:  # pragma: no cover - typing support only
-    from google.generativeai.types.generation_types import GenerationConfigType
-
     from promptheus.config import Config
-else:
-    GenerationConfigType = Any  # type: ignore[misc,assignment]
 
 
 class LLMProvider(ABC):
@@ -43,6 +41,13 @@ class LLMProvider(ABC):
         """
         Generate clarifying questions based on initial prompt.
         Returns dict with 'task_type' and 'questions' keys.
+        """
+
+    @abstractmethod
+    def get_available_models(self) -> List[str]:
+        """
+        Get list of available models from the provider API.
+        Returns list of model names.
         """
 
     @abstractmethod
@@ -161,130 +166,66 @@ class LLMProvider(ABC):
         )
 
 
-class GeminiProvider(LLMProvider):
-    """Google Gemini provider."""
 
-    def __init__(
-        self,
-        api_key: str,
-        model_name: str = "gemini-pro",
-        available_models: Optional[Sequence[str]] = None,
-    ) -> None:
-        import google.generativeai as genai
-        try:
-            from google.api_core import exceptions as google_exceptions  # type: ignore[attr-defined]
-            self._fatal_exceptions: Tuple[type[Exception], ...] = (
-                google_exceptions.PermissionDenied,
-                google_exceptions.InvalidArgument,
-                google_exceptions.ResourceExhausted,
-            )
-        except Exception:  # pragma: no cover - optional dependency
-            self._fatal_exceptions = ()
 
-        genai.configure(api_key=api_key)
-        self.genai = genai
-        self.model_name = model_name
-        self._model_cache: Dict[Tuple[str, str, bool], Any] = {}
-        self._available_models = list(available_models or [])
-        if not self._available_models:
-            self._available_models = [self.model_name]
+_JSON_ONLY_SUFFIX = (
+    "Respond ONLY with a valid JSON object using double-quoted keys. "
+    "Include the fields specified in the instructions (for example, task_type and questions). "
+    "Do not wrap the JSON in markdown code fences or add commentary."
+)
 
-    def _get_model(self, model_name: str, system_instruction: str, json_mode: bool) -> Any:
-        cache_key = (model_name, system_instruction, json_mode)
-        if cache_key in self._model_cache:
-            return self._model_cache[cache_key]
 
-        generation_config: Optional[GenerationConfigType] = None
-        if json_mode:
-            generation_config = cast(
-                GenerationConfigType,
-                {"response_mime_type": "application/json"},
-            )
+def _build_chat_messages(system_instruction: str, prompt: str) -> List[Dict[str, str]]:
+    messages: List[Dict[str, str]] = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    messages.append({"role": "user", "content": prompt})
+    return messages
 
-        model = self.genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=system_instruction,
-            generation_config=generation_config,
+
+def _coerce_message_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        fragments: List[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                text_value = item.get("text") or item.get("content") or item.get("value")
+                if isinstance(text_value, str):
+                    fragments.append(text_value)
+        return "".join(fragments)
+    if hasattr(content, "text"):
+        value = getattr(content, "text")
+        if isinstance(value, str):
+            return value
+    return str(content or "")
+
+
+def _append_json_instruction(prompt: str) -> str:
+    if not prompt:
+        return _JSON_ONLY_SUFFIX
+    if _JSON_ONLY_SUFFIX in prompt:
+        return prompt
+    suffix = "" if prompt.endswith("\n") else "\n\n"
+    return f"{prompt}{suffix}{_JSON_ONLY_SUFFIX}"
+
+
+def _parse_question_payload(provider_label: str, raw_text: str) -> Optional[Dict[str, Any]]:
+    try:
+        result = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        logger.warning("%s returned invalid JSON: %s", provider_label, sanitize_error_message(str(exc)))
+        return None
+
+    if not isinstance(result, dict) or "task_type" not in result:
+        logger.warning(
+            "%s question payload missing task_type; falling back to static questions",
+            provider_label,
         )
-        self._model_cache[cache_key] = model
-        return model
+        return None
 
-    def _generate_text(
-        self,
-        prompt: str,
-        system_instruction: str,
-        *,
-        json_mode: bool = False,
-        max_tokens: Optional[int] = None,
-    ) -> str:
-        """Try multiple models until one succeeds, caching model instances."""
-        models_to_try = [self.model_name] + [
-            model for model in self._available_models if model != self.model_name
-        ]
-        last_error: Optional[Exception] = None
-
-        for model_name in models_to_try:
-            try:
-                model = self._get_model(model_name, system_instruction, json_mode)
-                generation_config: Optional[Dict[str, Any]] = None
-                if max_tokens is not None:
-                    generation_config = {"max_output_tokens": max_tokens}
-                response = model.generate_content(
-                    prompt,
-                    generation_config=generation_config,
-                )
-                text = getattr(response, "text", None)
-                if text is None and hasattr(response, "candidates"):
-                    candidates = getattr(response, "candidates", [])
-                    if candidates:
-                        first_candidate = candidates[0]
-                        parts = getattr(first_candidate, "content", [])
-                        if parts:
-                            text = getattr(parts[0], "text", None)
-                if text is None and hasattr(response, "result"):
-                    text = getattr(response.result, "text", None)
-                if text is None:
-                    raise RuntimeError("Gemini response did not include text content")
-                return str(text)
-            except Exception as exc:  # pragma: no cover - network failures
-                last_error = exc
-                sanitized = sanitize_error_message(str(exc))
-                logger.warning("Gemini model %s failed: %s", model_name, sanitized)
-                if self._fatal_exceptions and isinstance(exc, self._fatal_exceptions):
-                    # Fatal auth/argument errors – stop immediately
-                    break
-                if "401" in str(exc) and model_name != models_to_try[-1]:
-                    continue
-
-        if last_error:
-            sanitized = sanitize_error_message(str(last_error))
-            raise RuntimeError(f"Gemini API call failed: {sanitized}") from last_error
-        raise RuntimeError("Gemini API call failed: unknown error")
-
-    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        """Generate clarifying questions using Gemini."""
-        try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                json_mode=True,
-            )
-        except Exception as exc:
-            logger.warning("Gemini question generation failed: %s", sanitize_error_message(str(exc)))
-            return None
-
-        try:
-            result = json.loads(response_text)
-        except json.JSONDecodeError as exc:
-            logger.warning("Gemini returned invalid JSON: %s", sanitize_error_message(str(exc)))
-            return None
-
-        if not isinstance(result, dict) or "task_type" not in result:
-            logger.warning("Gemini question payload missing task_type; falling back to static questions")
-            return None
-
-        result.setdefault("questions", [])
-        return result
+    result.setdefault("questions", [])
+    return result
 
 
 class AnthropicProvider(LLMProvider):
@@ -376,9 +317,32 @@ class AnthropicProvider(LLMProvider):
         result.setdefault("questions", [])
         return result
 
+    def get_available_models(self) -> List[str]:
+        """Get available models from Anthropic API."""
+        try:
+            response = self.client.models.list()
+        except Exception as exc:
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("Failed to fetch Anthropic models: %s", sanitized)
+            raise RuntimeError(f"Failed to fetch Anthropic models: {sanitized}") from exc
 
-class VertexAIProvider(LLMProvider):
-    """Google Vertex AI provider using the new google-genai SDK."""
+        data = getattr(response, "data", None) or []
+        models: List[str] = []
+        for entry in data:
+            model_id = getattr(entry, "id", None)
+            if model_id is None and isinstance(entry, dict):
+                model_id = entry.get("id") or entry.get("name")
+            if model_id:
+                models.append(str(model_id))
+
+        return models
+
+
+class GeminiProvider(LLMProvider):
+    """Google Gemini provider using the unified google-genai SDK.
+
+    Supports both Gemini Developer API (AIza... keys) and Vertex AI (AQ... keys).
+    Automatically detects API key type and routes to appropriate endpoint."""
 
     def __init__(
         self,
@@ -389,10 +353,13 @@ class VertexAIProvider(LLMProvider):
         from google import genai
         from google.genai import types
 
-        # Use v1alpha API version for Gemini Developer API
+        # Detect API key type and use appropriate endpoint
+        # AQ.* keys are Vertex AI, AIza.* keys are Gemini Developer API
+        is_vertex_ai_key = api_key.startswith('AQ.')
+
         self.client = genai.Client(
             api_key=api_key,
-            http_options=types.HttpOptions(api_version='v1alpha')
+            vertexai=is_vertex_ai_key,  # Use Vertex AI for AQ.* keys, Gemini API for AIza.* keys
         )
         self.model_name = model_name
         self._available_models = list(available_models or [])
@@ -435,12 +402,12 @@ class VertexAIProvider(LLMProvider):
 
                 if hasattr(response, 'text') and response.text:
                     return str(response.text)
-                raise RuntimeError("Vertex AI response did not include text content")
+                raise RuntimeError("Gemini response did not include text content")
 
             except Exception as exc:
                 last_error = exc
                 sanitized = sanitize_error_message(str(exc))
-                logger.warning("Vertex AI model %s failed: %s", model_name, sanitized)
+                logger.warning("Gemini model %s failed: %s", model_name, sanitized)
 
                 # Check for fatal errors
                 if "401" in str(exc) or "403" in str(exc):
@@ -450,11 +417,11 @@ class VertexAIProvider(LLMProvider):
 
         if last_error:
             sanitized = sanitize_error_message(str(last_error))
-            raise RuntimeError(f"Vertex AI API call failed: {sanitized}") from last_error
-        raise RuntimeError("Vertex AI API call failed: unknown error")
+            raise RuntimeError(f"Gemini API call failed: {sanitized}") from last_error
+        raise RuntimeError("Gemini API call failed: unknown error")
 
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        """Generate clarifying questions using Vertex AI."""
+        """Generate clarifying questions using Gemini."""
         try:
             response_text = self._generate_text(
                 initial_prompt,
@@ -464,13 +431,13 @@ class VertexAIProvider(LLMProvider):
         except Exception as exc:
             error_msg = str(exc)
             sanitized = sanitize_error_message(error_msg)
-            logger.warning("Vertex AI question generation failed: %s", sanitized)
+            logger.warning("Gemini question generation failed: %s", sanitized)
 
             # Provide helpful context for common errors
             if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "UNAUTHENTICATED" in error_msg:
-                _print_user_error("Authentication failed: Vertex AI requires OAuth2 authentication")
-                _print_user_error("Your API key may be for Gemini Developer API, not Vertex AI")
-                _print_user_error("Solution: Use --provider gemini for simple API key authentication")
+                _print_user_error("Authentication failed: Please check your API key")
+                _print_user_error("Ensure your GOOGLE_API_KEY or GEMINI_API_KEY is valid and active")
+                _print_user_error("Get your API key at: https://makersuite.google.com/app/apikey")
             elif "404" in error_msg:
                 _print_user_error(f"Model not found: The model '{self.model_name}' may not exist or be available")
 
@@ -479,15 +446,170 @@ class VertexAIProvider(LLMProvider):
         try:
             result = json.loads(response_text)
         except json.JSONDecodeError as exc:
-            logger.warning("Vertex AI returned invalid JSON: %s", sanitize_error_message(str(exc)))
+            logger.warning("Gemini returned invalid JSON: %s", sanitize_error_message(str(exc)))
             return None
 
         if not isinstance(result, dict) or "task_type" not in result:
-            logger.warning("Vertex AI question payload missing task_type; falling back to static questions")
+            logger.warning("Gemini question payload missing task_type; falling back to static questions")
             return None
 
         result.setdefault("questions", [])
         return result
+
+    def get_available_models(self) -> List[str]:
+        """Get available models from Gemini API."""
+        try:
+            model_iterable = self.client.models.list()
+            models: List[str] = []
+            for model in model_iterable:
+                name = getattr(model, "name", None)
+                if name is None and isinstance(model, dict):
+                    name = model.get("name")
+                if not name:
+                    continue
+                models.append(name.split("/")[-1])
+
+            return models or list(self._available_models)
+        except Exception as exc:
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("Failed to fetch Gemini models: %s", sanitized)
+            raise RuntimeError(
+                "Gemini model listing via API requires OAuth credentials. "
+                "Refer to https://ai.google.dev/gemini-api/docs/models for the latest list."
+            ) from exc
+
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI provider backed by the official openai-python client."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "gpt-4o",
+        *,
+        base_url: Optional[str] = None,
+        organization: Optional[str] = None,
+        project: Optional[str] = None,
+    ) -> None:
+        from openai import OpenAI
+
+        client_kwargs: Dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": DEFAULT_PROVIDER_TIMEOUT,
+        }
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        if organization:
+            client_kwargs["organization"] = organization
+        if project:
+            client_kwargs["project"] = project
+        self.client = OpenAI(**client_kwargs)
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        messages = _build_chat_messages(
+            system_instruction,
+            _append_json_instruction(prompt) if json_mode else prompt,
+        )
+        params: Dict[str, Any] = {
+            "model": self.model_name,
+            "messages": messages,
+            "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+        }
+        if json_mode:
+            params["response_format"] = {"type": "json_object"}
+
+        try:
+            response = self.client.chat.completions.create(**params)
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("OpenAI API call failed: %s", sanitized)
+            raise RuntimeError(f"OpenAI API call failed: {sanitized}") from exc
+
+        if not response.choices:
+            raise RuntimeError("OpenAI API returned no choices")
+        choice = response.choices[0]
+        message = getattr(choice, "message", None)
+        text = _coerce_message_content(getattr(message, "content", None))
+        if not text:
+            raise RuntimeError("OpenAI API response did not include text output")
+        return str(text)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:  # pragma: no cover - network failures
+            logger.warning("OpenAI question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+        return _parse_question_payload("OpenAI", response_text)
+
+    def get_available_models(self) -> List[str]:
+        """Get available models from OpenAI API."""
+        try:
+            # Use the OpenAI client to list models
+            models_response = self.client.models.list()
+            return [model.id for model in models_response.data]
+        except Exception as exc:
+            logger.warning("Failed to fetch OpenAI models: %s", sanitize_error_message(str(exc)))
+            raise RuntimeError(f"Failed to fetch OpenAI models: {sanitize_error_message(str(exc))}") from exc
+
+
+class GroqProvider(OpenAIProvider):
+    """Groq provider using the OpenAI-compatible API surface."""
+
+    DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+
+    def __init__(self, api_key: str, model_name: str = "llama-3.1-70b-versatile", base_url: Optional[str] = None) -> None:
+        super().__init__(
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url or self.DEFAULT_BASE_URL,
+        )
+
+
+class QwenProvider(OpenAIProvider):
+    """Qwen provider using DashScope's OpenAI-compatible endpoint."""
+
+    DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+
+    def __init__(self, api_key: str, model_name: str = "qwen-turbo") -> None:
+        base_url = os.getenv("DASHSCOPE_HTTP_BASE_URL", self.DEFAULT_BASE_URL)
+        super().__init__(api_key=api_key, model_name=model_name, base_url=base_url)
+
+
+class GLMProvider(OpenAIProvider):
+    """Zhipu GLM provider using the OpenAI-compatible API surface."""
+
+    DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
+
+    def __init__(self, api_key: str, model_name: str = "glm-4", base_url: Optional[str] = None) -> None:
+        super().__init__(
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url or self.DEFAULT_BASE_URL,
+        )
+
+    def get_available_models(self) -> List[str]:
+        """Get available models from GLM API."""
+        try:
+            # Use the OpenAI client (configured for GLM) to list models
+            models_response = self.client.models.list()
+            return [model.id for model in models_response.data]
+        except Exception as exc:
+            logger.warning("Failed to fetch GLM models: %s", sanitize_error_message(str(exc)))
+            raise RuntimeError(f"Failed to fetch GLM models: {sanitize_error_message(str(exc))}") from exc
 
 
 def get_provider(provider_name: str, config: Config, model_name: Optional[str] = None) -> LLMProvider:
@@ -501,18 +623,45 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
             model_name=model_to_use,
             available_models=provider_config.get("models"),
         )
-    if provider_name == "vertex-ai":
-        return VertexAIProvider(
-            api_key=provider_config["api_key"],
-            model_name=model_to_use,
-            available_models=provider_config.get("models"),
-        )
     if provider_name == "anthropic":
         return AnthropicProvider(
             api_key=provider_config["api_key"],
             model_name=model_to_use,
             base_url=provider_config.get("base_url"),
         )
+    if provider_name == "openai":
+        return OpenAIProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+            base_url=provider_config.get("base_url"),
+            organization=provider_config.get("organization"),
+            project=provider_config.get("project"),
+        )
+    if provider_name == "groq":
+        return GroqProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+        )
+    if provider_name == "qwen":
+        return QwenProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+        )
+    if provider_name == "glm":
+        return GLMProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+            base_url=provider_config.get("base_url"),
+        )
     raise ValueError(f"Unknown provider: {provider_name}")
 
-__all__ = ["LLMProvider", "get_provider", "GeminiProvider", "VertexAIProvider", "AnthropicProvider"]
+__all__ = [
+    "LLMProvider",
+    "get_provider",
+    "GeminiProvider",
+    "AnthropicProvider",
+    "OpenAIProvider",
+    "GroqProvider",
+    "QwenProvider",
+    "GLMProvider",
+]

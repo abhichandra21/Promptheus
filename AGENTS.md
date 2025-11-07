@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Runtime code lives under `src/promptheus/`. `main.py` owns the CLI entry point, `providers.py` wraps the Gemini, Claude, and Z.ai adapters, `config.py` manages environment-driven settings, and `history.py` persists prompt sessions. Shared assets (e.g., `models.json`, `logging_config.py`, `utils.py`) sit alongside. Tests mirror this layout in `tests/`, while helper tools such as `env_validator.py` and `sample_prompts.txt` remain at the repository root. Add new runtime modules inside `src/promptheus/` and keep provider-specific helpers beside existing integrations to simplify discovery.
+Runtime code lives under `src/promptheus/`. `main.py` owns the CLI entry point, `providers.py` wraps the adapters for multiple LLM providers (Gemini, Claude, OpenAI, Groq, Qwen, GLM), `config.py` manages environment-driven settings, and `history.py` persists prompt sessions. Shared assets (e.g., `models.json`, `logging_config.py`, `utils.py`) sit alongside. Tests mirror this layout in `tests/`, while helper tools such as `env_validator.py` and `sample_prompts.txt` remain at the repository root. Add new runtime modules inside `src/promptheus/` and keep provider-specific helpers beside existing integrations to simplify discovery.
 
 ## Build, Test, and Development Commands
 Install dependencies in editable mode before contributing:
@@ -17,6 +17,7 @@ python -m promptheus.main --static "Smoke test"
 Validate credentials before hitting remote APIs:
 ```bash
 python env_validator.py --provider gemini
+python env_validator.py --test-connection  # to test actual API connectivity
 ```
 
 ## Coding Style & Naming Conventions
@@ -30,3 +31,20 @@ Use concise, imperative commit messages (e.g., `Add OpenAI provider guard`, `Tig
 
 ## Security & Configuration Tips
 Store provider secrets in `.env` (bootstrap from `.env.example`) and never log raw tokens. Run `env_validator.py` after updating credentials to ensure required keys are present. Honor the default timeout settings in `constants.py`, and mask sensitive values when printing exceptions (use `sanitize_error_message` to stay consistent).
+
+## Supported Providers
+Promptheus supports 6 major LLM providers:
+- **Gemini** (Google) - using `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- **Claude** (Anthropic) - using `ANTHROPIC_API_KEY`
+- **OpenAI** - using `OPENAI_API_KEY`
+- **Groq** - using `GROQ_API_KEY`
+- **Qwen** (Alibaba/DashScope) - using `DASHSCOPE_API_KEY`
+- **GLM** (Zhipu) - using `ZAI_API_KEY`
+
+Each provider has its own configuration in `models.json` and respective adapter in `providers.py`.
+
+## History Management
+The system automatically tracks all prompt refinements in a local history file. Users can access:
+- CLI command: `promptheus history`
+- Interactive commands: `:history`, `:load <n>`, `:clear-history`
+- History includes timestamps, task types, and both original and refined prompts.

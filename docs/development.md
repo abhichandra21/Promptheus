@@ -11,6 +11,7 @@ cp .env.example .env              # drop in provider keys
 - Standard CLI: `promptheus "Draft a release note"`.
 - Module entry point: `python -m promptheus.main --static "Smoke test"`.
 - Provider sanity checks: `python env_validator.py --provider gemini`.
+- API connectivity test: `python env_validator.py --test-connection`.
 
 ## Automated Tests
 ```bash
@@ -23,6 +24,13 @@ Add new tests under `tests/` as `test_<module>.py`. Prefer lightweight unit test
 - Type hints where practical (mirror `main.py` signatures).
 - Keep modules under 300 lines; factor helpers into `src/promptheus/`.
 - Run `black .` before committing and keep imports sorted.
+
+## Python 3.14 Compatibility Notes
+The `gemini` provider now supports Python 3.14 via the unified `google-genai` SDK.
+When developing for multiple Python versions:
+- Test with your target Python version before committing
+- Some provider libraries may have compatibility limitations with Python 3.14 
+- Consider using virtual environments to manage different Python versions during development
 
 ## Contribution Tips
 1. Keep changes focused (feature vs refactor vs docs).

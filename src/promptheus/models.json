@@ -9,20 +9,8 @@
         "gemini-2.0-flash",
         "gemini-2.0-flash-exp"
       ],
-      "api_key_env": "GEMINI_API_KEY",
+      "api_key_env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
       "api_key_prefixes": ["AIza", "AQ."]
-    },
-    "vertex-ai": {
-      "default_model": "gemini-2.5-flash",
-      "models": [
-        "gemini-2.5-pro",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-exp"
-      ],
-      "api_key_env": "VERTEX_AI_API_KEY",
-      "api_key_prefixes": ["AQ."]
     },
     "anthropic": {
       "default_model": "claude-sonnet-4-5-20250929",
@@ -51,13 +39,50 @@
         "o1-mini"
       ],
       "api_key_env": "OPENAI_API_KEY",
-      "api_key_prefixes": ["sk-", "rk-"]
+      "api_key_prefixes": ["sk-", "rk-"],
+      "base_url_env": "OPENAI_BASE_URL",
+      "organization_env": "OPENAI_ORG_ID",
+      "project_env": "OPENAI_PROJECT"
+    },
+    "groq": {
+      "default_model": "llama-3.3-70b-versatile",
+      "models": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
+      ],
+      "api_key_env": "GROQ_API_KEY",
+      "api_key_prefixes": ["gsk_"],
+      "base_url_env": "GROQ_BASE_URL"
+    },
+    "qwen": {
+      "default_model": "qwen-turbo",
+      "models": [
+        "qwen-turbo",
+        "qwen-plus",
+        "qwen-max",
+        "qwen-long"
+      ],
+      "api_key_env": "DASHSCOPE_API_KEY",
+      "api_key_prefixes": []
+    },
+    "glm": {
+      "default_model": "glm-4.5-air",
+      "models": [
+        "glm-4.5",
+        "glm-4.6",
+        "glm-4-air"
+      ],
+      "api_key_env": "ZAI_API_KEY",
+      "base_url_env": "ZAI_BASE_URL",
+      "api_key_prefixes": []
     }
   },
   "provider_aliases": {
     "gemini": "Gemini",
-    "vertex-ai": "Vertex AI",
     "anthropic": "Claude",
-    "openai": "OpenAI"
+    "openai": "OpenAI",
+    "groq": "Groq",
+    "qwen": "Qwen",
+    "glm": "GLM"
   }
 }
