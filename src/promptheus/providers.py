@@ -1,10 +1,12 @@
 """
 LLM Provider abstraction layer.
-Supports multiple AI providers: Gemini, Anthropic.
+Supports Gemini, Anthropic/Claude, OpenAI, Groq, Qwen, and GLM.
 """
 
 from __future__ import annotations
 
+import importlib
+from http import HTTPStatus
 import json
 import logging
 import sys
@@ -28,11 +30,7 @@ def _print_user_error(message: str) -> None:
 
 
 if TYPE_CHECKING:  # pragma: no cover - typing support only
-    from google.generativeai.types.generation_types import GenerationConfigType
-
     from promptheus.config import Config
-else:
-    GenerationConfigType = Any  # type: ignore[misc,assignment]
 
 
 class LLMProvider(ABC):
@@ -161,130 +159,66 @@ class LLMProvider(ABC):
         )
 
 
-class GeminiProvider(LLMProvider):
-    """Google Gemini provider."""
 
-    def __init__(
-        self,
-        api_key: str,
-        model_name: str = "gemini-pro",
-        available_models: Optional[Sequence[str]] = None,
-    ) -> None:
-        import google.generativeai as genai
-        try:
-            from google.api_core import exceptions as google_exceptions  # type: ignore[attr-defined]
-            self._fatal_exceptions: Tuple[type[Exception], ...] = (
-                google_exceptions.PermissionDenied,
-                google_exceptions.InvalidArgument,
-                google_exceptions.ResourceExhausted,
-            )
-        except Exception:  # pragma: no cover - optional dependency
-            self._fatal_exceptions = ()
 
-        genai.configure(api_key=api_key)
-        self.genai = genai
-        self.model_name = model_name
-        self._model_cache: Dict[Tuple[str, str, bool], Any] = {}
-        self._available_models = list(available_models or [])
-        if not self._available_models:
-            self._available_models = [self.model_name]
+_JSON_ONLY_SUFFIX = (
+    "Respond ONLY with a valid JSON object using double-quoted keys. "
+    "Include the fields specified in the instructions (for example, task_type and questions). "
+    "Do not wrap the JSON in markdown code fences or add commentary."
+)
 
-    def _get_model(self, model_name: str, system_instruction: str, json_mode: bool) -> Any:
-        cache_key = (model_name, system_instruction, json_mode)
-        if cache_key in self._model_cache:
-            return self._model_cache[cache_key]
 
-        generation_config: Optional[GenerationConfigType] = None
-        if json_mode:
-            generation_config = cast(
-                GenerationConfigType,
-                {"response_mime_type": "application/json"},
-            )
+def _build_chat_messages(system_instruction: str, prompt: str) -> List[Dict[str, str]]:
+    messages: List[Dict[str, str]] = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    messages.append({"role": "user", "content": prompt})
+    return messages
 
-        model = self.genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=system_instruction,
-            generation_config=generation_config,
+
+def _coerce_message_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        fragments: List[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                text_value = item.get("text") or item.get("content") or item.get("value")
+                if isinstance(text_value, str):
+                    fragments.append(text_value)
+        return "".join(fragments)
+    if hasattr(content, "text"):
+        value = getattr(content, "text")
+        if isinstance(value, str):
+            return value
+    return str(content or "")
+
+
+def _append_json_instruction(prompt: str) -> str:
+    if not prompt:
+        return _JSON_ONLY_SUFFIX
+    if _JSON_ONLY_SUFFIX in prompt:
+        return prompt
+    suffix = "" if prompt.endswith("\n") else "\n\n"
+    return f"{prompt}{suffix}{_JSON_ONLY_SUFFIX}"
+
+
+def _parse_question_payload(provider_label: str, raw_text: str) -> Optional[Dict[str, Any]]:
+    try:
+        result = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        logger.warning("%s returned invalid JSON: %s", provider_label, sanitize_error_message(str(exc)))
+        return None
+
+    if not isinstance(result, dict) or "task_type" not in result:
+        logger.warning(
+            "%s question payload missing task_type; falling back to static questions",
+            provider_label,
         )
-        self._model_cache[cache_key] = model
-        return model
+        return None
 
-    def _generate_text(
-        self,
-        prompt: str,
-        system_instruction: str,
-        *,
-        json_mode: bool = False,
-        max_tokens: Optional[int] = None,
-    ) -> str:
-        """Try multiple models until one succeeds, caching model instances."""
-        models_to_try = [self.model_name] + [
-            model for model in self._available_models if model != self.model_name
-        ]
-        last_error: Optional[Exception] = None
-
-        for model_name in models_to_try:
-            try:
-                model = self._get_model(model_name, system_instruction, json_mode)
-                generation_config: Optional[Dict[str, Any]] = None
-                if max_tokens is not None:
-                    generation_config = {"max_output_tokens": max_tokens}
-                response = model.generate_content(
-                    prompt,
-                    generation_config=generation_config,
-                )
-                text = getattr(response, "text", None)
-                if text is None and hasattr(response, "candidates"):
-                    candidates = getattr(response, "candidates", [])
-                    if candidates:
-                        first_candidate = candidates[0]
-                        parts = getattr(first_candidate, "content", [])
-                        if parts:
-                            text = getattr(parts[0], "text", None)
-                if text is None and hasattr(response, "result"):
-                    text = getattr(response.result, "text", None)
-                if text is None:
-                    raise RuntimeError("Gemini response did not include text content")
-                return str(text)
-            except Exception as exc:  # pragma: no cover - network failures
-                last_error = exc
-                sanitized = sanitize_error_message(str(exc))
-                logger.warning("Gemini model %s failed: %s", model_name, sanitized)
-                if self._fatal_exceptions and isinstance(exc, self._fatal_exceptions):
-                    # Fatal auth/argument errors – stop immediately
-                    break
-                if "401" in str(exc) and model_name != models_to_try[-1]:
-                    continue
-
-        if last_error:
-            sanitized = sanitize_error_message(str(last_error))
-            raise RuntimeError(f"Gemini API call failed: {sanitized}") from last_error
-        raise RuntimeError("Gemini API call failed: unknown error")
-
-    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        """Generate clarifying questions using Gemini."""
-        try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                json_mode=True,
-            )
-        except Exception as exc:
-            logger.warning("Gemini question generation failed: %s", sanitize_error_message(str(exc)))
-            return None
-
-        try:
-            result = json.loads(response_text)
-        except json.JSONDecodeError as exc:
-            logger.warning("Gemini returned invalid JSON: %s", sanitize_error_message(str(exc)))
-            return None
-
-        if not isinstance(result, dict) or "task_type" not in result:
-            logger.warning("Gemini question payload missing task_type; falling back to static questions")
-            return None
-
-        result.setdefault("questions", [])
-        return result
+    result.setdefault("questions", [])
+    return result
 
 
 class AnthropicProvider(LLMProvider):
@@ -377,8 +311,11 @@ class AnthropicProvider(LLMProvider):
         return result
 
 
-class VertexAIProvider(LLMProvider):
-    """Google Vertex AI provider using the new google-genai SDK."""
+class GeminiProvider(LLMProvider):
+    """Google Gemini provider using the unified google-genai SDK.
+
+    Supports both Gemini Developer API (AIza... keys) and Vertex AI (AQ... keys).
+    Automatically detects API key type and routes to appropriate endpoint."""
 
     def __init__(
         self,
@@ -389,10 +326,13 @@ class VertexAIProvider(LLMProvider):
         from google import genai
         from google.genai import types
 
-        # Use v1alpha API version for Gemini Developer API
+        # Detect API key type and use appropriate endpoint
+        # AQ.* keys are Vertex AI, AIza.* keys are Gemini Developer API
+        is_vertex_ai_key = api_key.startswith('AQ.')
+
         self.client = genai.Client(
             api_key=api_key,
-            http_options=types.HttpOptions(api_version='v1alpha')
+            vertexai=is_vertex_ai_key,  # Use Vertex AI for AQ.* keys, Gemini API for AIza.* keys
         )
         self.model_name = model_name
         self._available_models = list(available_models or [])
@@ -435,12 +375,12 @@ class VertexAIProvider(LLMProvider):
 
                 if hasattr(response, 'text') and response.text:
                     return str(response.text)
-                raise RuntimeError("Vertex AI response did not include text content")
+                raise RuntimeError("Gemini response did not include text content")
 
             except Exception as exc:
                 last_error = exc
                 sanitized = sanitize_error_message(str(exc))
-                logger.warning("Vertex AI model %s failed: %s", model_name, sanitized)
+                logger.warning("Gemini model %s failed: %s", model_name, sanitized)
 
                 # Check for fatal errors
                 if "401" in str(exc) or "403" in str(exc):
@@ -450,11 +390,11 @@ class VertexAIProvider(LLMProvider):
 
         if last_error:
             sanitized = sanitize_error_message(str(last_error))
-            raise RuntimeError(f"Vertex AI API call failed: {sanitized}") from last_error
-        raise RuntimeError("Vertex AI API call failed: unknown error")
+            raise RuntimeError(f"Gemini API call failed: {sanitized}") from last_error
+        raise RuntimeError("Gemini API call failed: unknown error")
 
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        """Generate clarifying questions using Vertex AI."""
+        """Generate clarifying questions using Gemini."""
         try:
             response_text = self._generate_text(
                 initial_prompt,
@@ -464,13 +404,13 @@ class VertexAIProvider(LLMProvider):
         except Exception as exc:
             error_msg = str(exc)
             sanitized = sanitize_error_message(error_msg)
-            logger.warning("Vertex AI question generation failed: %s", sanitized)
+            logger.warning("Gemini question generation failed: %s", sanitized)
 
             # Provide helpful context for common errors
             if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "UNAUTHENTICATED" in error_msg:
-                _print_user_error("Authentication failed: Vertex AI requires OAuth2 authentication")
-                _print_user_error("Your API key may be for Gemini Developer API, not Vertex AI")
-                _print_user_error("Solution: Use --provider gemini for simple API key authentication")
+                _print_user_error("Authentication failed: Please check your API key")
+                _print_user_error("Ensure your GOOGLE_API_KEY or GEMINI_API_KEY is valid and active")
+                _print_user_error("Get your API key at: https://makersuite.google.com/app/apikey")
             elif "404" in error_msg:
                 _print_user_error(f"Model not found: The model '{self.model_name}' may not exist or be available")
 
@@ -479,15 +419,287 @@ class VertexAIProvider(LLMProvider):
         try:
             result = json.loads(response_text)
         except json.JSONDecodeError as exc:
-            logger.warning("Vertex AI returned invalid JSON: %s", sanitize_error_message(str(exc)))
+            logger.warning("Gemini returned invalid JSON: %s", sanitize_error_message(str(exc)))
             return None
 
         if not isinstance(result, dict) or "task_type" not in result:
-            logger.warning("Vertex AI question payload missing task_type; falling back to static questions")
+            logger.warning("Gemini question payload missing task_type; falling back to static questions")
             return None
 
         result.setdefault("questions", [])
         return result
+
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI provider backed by the official openai-python client."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "gpt-4o",
+        *,
+        base_url: Optional[str] = None,
+        organization: Optional[str] = None,
+        project: Optional[str] = None,
+    ) -> None:
+        from openai import OpenAI
+
+        client_kwargs: Dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": DEFAULT_PROVIDER_TIMEOUT,
+        }
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        if organization:
+            client_kwargs["organization"] = organization
+        if project:
+            client_kwargs["project"] = project
+        self.client = OpenAI(**client_kwargs)
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        messages = _build_chat_messages(
+            system_instruction,
+            _append_json_instruction(prompt) if json_mode else prompt,
+        )
+        params: Dict[str, Any] = {
+            "model": self.model_name,
+            "messages": messages,
+            "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+        }
+        if json_mode:
+            params["response_format"] = {"type": "json_object"}
+
+        try:
+            response = self.client.chat.completions.create(**params)
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("OpenAI API call failed: %s", sanitized)
+            raise RuntimeError(f"OpenAI API call failed: {sanitized}") from exc
+
+        if not response.choices:
+            raise RuntimeError("OpenAI API returned no choices")
+        choice = response.choices[0]
+        message = getattr(choice, "message", None)
+        text = _coerce_message_content(getattr(message, "content", None))
+        if not text:
+            raise RuntimeError("OpenAI API response did not include text output")
+        return str(text)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:  # pragma: no cover - network failures
+            logger.warning("OpenAI question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+        return _parse_question_payload("OpenAI", response_text)
+
+
+class GroqProvider(LLMProvider):
+    """Groq provider using the groq-python client (OpenAI-compatible API)."""
+
+    def __init__(self, api_key: str, model_name: str = "llama-3.1-70b-versatile") -> None:
+        from groq import Groq
+
+        self.client = Groq(api_key=api_key)
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        messages = _build_chat_messages(
+            system_instruction,
+            _append_json_instruction(prompt) if json_mode else prompt,
+        )
+        params: Dict[str, Any] = {
+            "model": self.model_name,
+            "messages": messages,
+            "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+        }
+        if json_mode:
+            params["response_format"] = {"type": "json_object"}
+
+        try:
+            response = self.client.chat.completions.create(**params)
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("Groq API call failed: %s", sanitized)
+            raise RuntimeError(f"Groq API call failed: {sanitized}") from exc
+
+        if not response.choices:
+            raise RuntimeError("Groq API returned no choices")
+
+        choice = response.choices[0]
+        message = getattr(choice, "message", None)
+        text = _coerce_message_content(getattr(message, "content", None))
+        if not text:
+            raise RuntimeError("Groq API response did not include text output")
+        return str(text)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning("Groq question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+        return _parse_question_payload("Groq", response_text)
+
+
+class QwenProvider(LLMProvider):
+    """Qwen provider powered by Alibaba's DashScope SDK."""
+
+    def __init__(self, api_key: str, model_name: str = "qwen-turbo") -> None:
+        import dashscope
+        from dashscope import Generation
+
+        dashscope.api_key = api_key
+        self._generation = Generation
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        prompt_parts: List[str] = []
+        if system_instruction:
+            prompt_parts.append(f"System instruction:\n{system_instruction}")
+        prompt_parts.append(f"User request:\n{prompt}")
+        combined_prompt = "\n\n".join(part for part in prompt_parts if part)
+        if json_mode:
+            combined_prompt = _append_json_instruction(combined_prompt)
+
+        try:
+            response = self._generation.call(
+                model=self.model_name,
+                prompt=combined_prompt,
+                max_tokens=max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            )
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("DashScope API call failed: %s", sanitized)
+            raise RuntimeError(f"DashScope API call failed: {sanitized}") from exc
+
+        status_code = getattr(response, "status_code", None)
+        if status_code != HTTPStatus.OK:
+            message = getattr(response, "message", "") or str(status_code)
+            sanitized = sanitize_error_message(message)
+            raise RuntimeError(f"DashScope API call failed ({status_code}): {sanitized}")
+
+        output = getattr(response, "output", None)
+        text: Optional[str] = None
+        if hasattr(output, "text"):
+            text = getattr(output, "text")
+        elif isinstance(output, dict):
+            if "text" in output:
+                text = str(output["text"])
+            elif "choices" in output and output["choices"]:
+                choice = output["choices"][0]
+                if isinstance(choice, dict):
+                    message = choice.get("message") or choice
+                    content = message.get("content") if isinstance(message, dict) else None
+                    text = _coerce_message_content(content)
+        if not text:
+            raise RuntimeError("DashScope API response did not include text output")
+        return str(text)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning("Qwen question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+        return _parse_question_payload("Qwen", response_text)
+
+
+class GLMProvider(LLMProvider):
+    """Zhipu GLM provider using the official zai SDK."""
+
+    def __init__(self, api_key: str, model_name: str = "glm-4", base_url: Optional[str] = None) -> None:
+        from zai import ZaiClient
+
+        client_kwargs: Dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self.client = ZaiClient(**client_kwargs)
+        self.model_name = model_name
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        messages = _build_chat_messages(
+            system_instruction,
+            _append_json_instruction(prompt) if json_mode else prompt,
+        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            )
+        except Exception as exc:  # pragma: no cover - network failures
+            sanitized = sanitize_error_message(str(exc))
+            logger.warning("GLM API call failed: %s", sanitized)
+            raise RuntimeError(f"GLM API call failed: {sanitized}") from exc
+
+        choices = getattr(response, "choices", None)
+        if not choices:
+            raise RuntimeError("GLM API returned no choices")
+        first_choice = choices[0]
+        message = getattr(first_choice, "message", None) or first_choice
+        content = getattr(message, "content", None)
+        text = _coerce_message_content(content)
+        if not text:
+            raise RuntimeError("GLM API response did not include text output")
+        return str(text)
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        try:
+            response_text = self._generate_text(
+                initial_prompt,
+                system_instruction,
+                json_mode=True,
+                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning("GLM question generation failed: %s", sanitize_error_message(str(exc)))
+            return None
+        return _parse_question_payload("GLM", response_text)
 
 
 def get_provider(provider_name: str, config: Config, model_name: Optional[str] = None) -> LLMProvider:
@@ -501,18 +713,45 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
             model_name=model_to_use,
             available_models=provider_config.get("models"),
         )
-    if provider_name == "vertex-ai":
-        return VertexAIProvider(
-            api_key=provider_config["api_key"],
-            model_name=model_to_use,
-            available_models=provider_config.get("models"),
-        )
     if provider_name == "anthropic":
         return AnthropicProvider(
             api_key=provider_config["api_key"],
             model_name=model_to_use,
             base_url=provider_config.get("base_url"),
         )
+    if provider_name == "openai":
+        return OpenAIProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+            base_url=provider_config.get("base_url"),
+            organization=provider_config.get("organization"),
+            project=provider_config.get("project"),
+        )
+    if provider_name == "groq":
+        return GroqProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+        )
+    if provider_name == "qwen":
+        return QwenProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+        )
+    if provider_name == "glm":
+        return GLMProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+            base_url=provider_config.get("base_url"),
+        )
     raise ValueError(f"Unknown provider: {provider_name}")
 
-__all__ = ["LLMProvider", "get_provider", "GeminiProvider", "VertexAIProvider", "AnthropicProvider"]
+__all__ = [
+    "LLMProvider",
+    "get_provider",
+    "GeminiProvider",
+    "AnthropicProvider",
+    "OpenAIProvider",
+    "GroqProvider",
+    "QwenProvider",
+    "GLMProvider",
+]

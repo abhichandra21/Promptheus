@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Promptheus Developer Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance for AI assistants (including Claude Code) when working with code in this repository.
 
 ## Development Commands
 
@@ -42,6 +42,7 @@ python -m promptheus.main --static "Smoke test"
 
 # Test different input methods
 promptheus -f test_prompt.txt
+promptheus @test_prompt.txt
 cat test_prompt.txt | promptheus
 
 # Environment validation
@@ -71,6 +72,7 @@ python -m mypy src/promptheus/
 - Handles interactive loop mode (REPL) for continuous prompt processing
 - Manages the question-answer-refinement workflow
 - Contains the core `process_single_prompt()` orchestrator function
+- Supports history commands: `promptheus history`, `:history`, `:load <n>`, `:clear-history`
 
 **Provider Abstraction (`src/promptheus/providers.py`)**
 - Abstract `LLMProvider` base class defining the interface for AI providers
@@ -86,6 +88,7 @@ python -m mypy src/promptheus/
 - Secure `.env` file loading with upward search from current directory
 - Provider-specific configuration and model selection
 - Handles validation and setup of API credentials
+- Supports environment variable overrides for provider and model selection
 
 **Supporting Modules**
 - `src/promptheus/prompts.py`: System instruction templates for different operations
@@ -100,6 +103,10 @@ python -m mypy src/promptheus/
 - Validates API keys and tests provider connections
 - Generates environment file templates for each provider
 - Supports connection testing with actual API calls
+
+**Model Information Helper (`get-models.py`)**
+- Helper script to list all available providers and their supported models
+- Used for tab completion and provider discovery
 
 ### Key Architectural Patterns
 
@@ -142,6 +149,11 @@ When AI generates questions, the system maintains a mapping from generic keys (q
 
 **Interactive Mode**
 The REPL-style interactive mode persists provider, model, and flag settings across multiple prompts in a session, providing a seamless workflow for batch processing.
+
+**History Management**
+Prompt history is automatically saved for each refinement and can be accessed via:
+- CLI: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`
+- Interactive: `:history`, `:load <n>`, `:clear-history`
 
 ## Development Notes
 
@@ -189,3 +201,9 @@ All providers must implement `generate_questions()` that returns:
     ]
 }
 ```
+
+### Python 3.14 Compatibility Notes
+Some provider libraries may not yet support Python 3.14. For providers experiencing compatibility issues:
+1. The `gemini` provider now supports Python 3.14 via the unified `google-genai` SDK
+2. For other providers, consider using Python 3.13 or earlier until compatibility is ensured
+3. Use virtual environments to isolate different Python versions as needed
