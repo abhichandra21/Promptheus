@@ -32,8 +32,9 @@ from promptheus.prompts import (
 )
 from promptheus.providers import LLMProvider, get_provider
 from promptheus.utils import configure_logging, sanitize_error_message
-from promptheus.cli import build_parser
+from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
+from promptheus.commands import list_models, validate_environment, generate_template
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -471,8 +472,7 @@ def main() -> None:
     configure_logging()
     app_config = Config()
 
-    parser = build_parser()
-    args = parser.parse_args()
+    args = parse_arguments()
 
     if args.verbose:
         os.environ[PROMPTHEUS_DEBUG_ENV] = "1"
@@ -480,6 +480,20 @@ def main() -> None:
 
     notify: MessageSink = console.print
     plain_mode = False
+
+    # Handle utility commands that exit immediately
+    if args.list_models:
+        providers_to_list = [args.provider] if args.provider else None
+        list_models(app_config, console, providers=providers_to_list)
+        sys.exit(0)
+    
+    if args.validate:
+        validate_environment(app_config, console, test_connection=args.test_connection)
+        sys.exit(0)
+
+    if args.template:
+        generate_template(app_config, console, args.template)
+        sys.exit(0)
 
     if getattr(args, "command", None) == "history":
         if getattr(args, "clear", False):
