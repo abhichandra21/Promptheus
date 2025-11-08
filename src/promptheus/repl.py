@@ -6,6 +6,8 @@ from typing import Callable, Optional, Tuple
 
 import questionary
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion, WordCompleter
+from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
@@ -26,6 +28,69 @@ ProcessPromptFn = Callable[
 ]
 
 logger = logging.getLogger(__name__)
+
+
+class CommandCompleter(Completer):
+    """
+    Custom completer for slash commands.
+
+    Shows completions when user types / with command descriptions.
+    """
+
+    def __init__(self):
+        self.commands = {
+            'history': 'View recent prompts',
+            'clear-history': 'Clear all history',
+            'load': 'Load a prompt by number (e.g., /load 5)',
+            'help': 'Show available commands',
+            'exit': 'Exit Promptheus',
+            'quit': 'Exit Promptheus',
+        }
+
+    def get_completions(self, document: Document, complete_event):
+        """Generate completions for the current document."""
+        text = document.text_before_cursor
+
+        # Only provide completions if text starts with /
+        if not text.startswith('/'):
+            return
+
+        # Remove the leading /
+        command_part = text[1:].lower()
+
+        # Check if we're completing a command or its arguments
+        parts = command_part.split(None, 1)
+
+        if len(parts) == 1:
+            # Completing the command itself
+            for cmd, description in self.commands.items():
+                if cmd.startswith(parts[0]):
+                    yield Completion(
+                        cmd,
+                        start_position=-len(parts[0]),
+                        display=cmd,
+                        display_meta=description,
+                    )
+        elif len(parts) == 2 and parts[0] == 'load':
+            # Completing /load with history indices
+            # Show recent history entries
+            try:
+                history = get_history()
+                recent = history.get_recent(20)
+                for idx, entry in enumerate(recent, 1):
+                    idx_str = str(idx)
+                    if idx_str.startswith(parts[1]):
+                        preview = entry.original_prompt[:50]
+                        if len(entry.original_prompt) > 50:
+                            preview += "..."
+                        yield Completion(
+                            idx_str,
+                            start_position=-len(parts[1]),
+                            display=f"{idx_str}",
+                            display_meta=preview,
+                        )
+            except Exception:
+                pass
 
 
 def display_history(console: Console, notify: MessageSink, limit: int = 20) -> None:
@@ -66,7 +131,29 @@ def display_history(console: Console, notify: MessageSink, limit: int = 20) -> N
     console.print()
     console.print(table)
     console.print()
-    notify("[dim]Use ':load <number>' to load a prompt from history[/dim]")
+    notify("[dim]Use '/load <number>' to load a prompt from history[/dim]")
+
+
+def show_help(console: Console) -> None:
+    """Display help information about available commands."""
+    console.print()
+    console.print("[bold cyan]Available Commands:[/bold cyan]")
+    console.print()
+    console.print("  [bold]/history[/bold]              View recent prompts")
+    console.print("  [bold]/clear-history[/bold]        Clear all history")
+    console.print("  [bold]/load <number>[/bold]        Load a prompt from history")
+    console.print("  [bold]/help[/bold]                 Show this help message")
+    console.print("  [bold]/exit[/bold] or [bold]/quit[/bold]       Exit Promptheus")
+    console.print()
+    console.print("[bold cyan]Key Bindings:[/bold cyan]")
+    console.print()
+    console.print("  [bold]Enter[/bold]                 Submit your prompt")
+    console.print("  [bold]Alt+Enter[/bold]             Add a new line (multiline input)")
+    console.print("  [bold]Esc[/bold]                   Cancel current operation")
+    console.print("  [bold]Ctrl+C[/bold]                Exit Promptheus")
+    console.print()
+    console.print("[dim]Tip: Type / to see all available commands[/dim]")
+    console.print()
 
 
 def create_key_bindings() -> KeyBindings:
@@ -101,11 +188,11 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel
+    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel │ [/] commands
     """
     return HTML(
         f' {provider} | {model} │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel'
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel │ <b>[/]</b> commands'
     )
 
 
@@ -126,11 +213,12 @@ def interactive_mode(
     - Bottom toolbar with provider/model info and key bindings
     - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
+    - Slash command completion (type / to see commands)
     - Enter to submit, Alt+Enter for new line, Esc to cancel
     """
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
-    console.print("[dim]Interactive mode ready. Type your prompt below.[/dim]\n")
+    console.print("[dim]Interactive mode ready. Type / for commands.[/dim]\n")
 
     prompt_count = 1
     use_prompt_toolkit = not plain_mode
@@ -150,8 +238,9 @@ def interactive_mode(
         'bottom-toolbar.text': '#cccccc',
     })
 
-    # Create custom key bindings
+    # Create custom key bindings and completer
     bindings = create_key_bindings()
+    completer = CommandCompleter()
 
     session: Optional[PromptSession] = None
     if use_prompt_toolkit:
@@ -162,6 +251,8 @@ def interactive_mode(
                 multiline=True,
                 prompt_continuation='… ',  # Continuation prompt for wrapped lines
                 key_bindings=bindings,
+                completer=completer,
+                complete_while_typing=True,  # Show completions as you type
             )
         except Exception as exc:
             logger.warning("Failed to initialize history: %s", sanitize_error_message(str(exc)))
@@ -201,15 +292,24 @@ def interactive_mode(
                 console.print("[bold yellow]Goodbye![/bold yellow]")
                 break
 
-            # Handle special commands
-            if user_input.startswith(":"):
-                command_parts = user_input.split(None, 1)
+            # Handle slash commands
+            if user_input.startswith("/"):
+                command_parts = user_input[1:].split(None, 1)
+                if not command_parts:
+                    continue
+
                 command = command_parts[0].lower()
 
-                if command == ":history":
+                if command == "history":
                     display_history(console, notify)
                     continue
-                if command == ":load" and len(command_parts) > 1:
+                elif command == "help":
+                    show_help(console)
+                    continue
+                elif command in ("exit", "quit"):
+                    console.print("[bold yellow]Goodbye![/bold yellow]")
+                    break
+                elif command == "load" and len(command_parts) > 1:
                     try:
                         index = int(command_parts[1])
                         entry = get_history().get_by_index(index)
@@ -220,9 +320,9 @@ def interactive_mode(
                             console.print(f"[yellow]No history entry found at index {index}[/yellow]")
                             continue
                     except ValueError:
-                        console.print("[yellow]Invalid history index. Use ':load <number>'[/yellow]")
+                        console.print("[yellow]Invalid history index. Use '/load <number>'[/yellow]")
                         continue
-                elif command == ":clear-history":
+                elif command == "clear-history":
                     confirm = questionary.confirm(
                         "Are you sure you want to clear all history?",
                         default=False,
@@ -232,8 +332,8 @@ def interactive_mode(
                         console.print("[green]✓[/green] History cleared")
                     continue
                 else:
-                    console.print(f"[yellow]Unknown command: {command}[/yellow]")
-                    console.print("[dim]Available commands: :history, :load <number>, :clear-history[/dim]")
+                    console.print(f"[yellow]Unknown command: /{command}[/yellow]")
+                    console.print("[dim]Type /help to see available commands[/dim]")
                     continue
 
             # Don't process empty prompts
