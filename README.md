@@ -86,21 +86,8 @@ Switch providers with `--provider` or pin a specific model with `--model`. The t
 
 When Promptheus detects a generation task, it can ask you clarifying questions to flesh out your prompt:
 
-```
-$ promptheus "Write a blog post"
+<img width="685" height="225" alt="image" src="https://github.com/user-attachments/assets/b55615b5-a34c-4a1f-9744-b900ac509f77" />
 
-Ask clarifying questions to refine your prompt? (Y/n): y
-
-What is the main topic or focus of the blog post?
-> AI ethics in healthcare
-
-Who is your target audience?
-> Healthcare professionals and policy makers
-
-What tone should the post have?
-> Professional but accessible
-...
-```
 
 The AI generates contextual questions based on your initial prompt, or you can use static predefined questions with the `--static` flag.
 
@@ -108,21 +95,8 @@ The AI generates contextual questions based on your initial prompt, or you can u
 
 After refinement, you get a chance to make targeted edits:
 
-```
-╭─ Refined Prompt ───────────────────────────────╮
-│ Write an in-depth blog post exploring ethical   │
-│ considerations in AI-powered healthcare...       │
-╰──────────────────────────────────────────────────╯
+<img width="1272" height="450" alt="image" src="https://github.com/user-attachments/assets/f421c6c4-461e-4a88-b420-f9d17260600d" />
 
-Tweak? (Enter to accept, or describe your change): make it more concise
-
-╭─ Updated Prompt ───────────────────────────────╮
-│ Write a concise blog post on AI ethics in       │
-│ healthcare, focusing on...                       │
-╰──────────────────────────────────────────────────╯
-
-Tweak? (Enter to accept, or describe your change):
-```
 
 Just describe what you want changed in natural language. Hit Enter when you're happy with it.
 
@@ -154,23 +128,8 @@ History includes timestamps, task types, and both original and refined versions 
 
 Launch `promptheus` with no arguments to enter interactive mode. Process multiple prompts in one session, reuse your provider/model/flag settings, and use built-in helpers like `:history` and arrow-key navigation.
 
-```bash
-$ promptheus
-╭─ Welcome to Promptheus ───────────────────────╮
-│ Interactive prompt engineering session          │
-│ Type 'exit', 'quit', or Ctrl+C to leave        │
-╰─────────────────────────────────────────────────╯
+<img width="1272" height="450" alt="image" src="https://github.com/user-attachments/assets/ddc68d1b-2495-4926-9b74-6d1ac80b2413" />
 
-Provider: gemini | Model: gemini-2.0-flash-exp
-
-Your prompt: Explain REST API design principles
-...
-
-Your prompt: Draft a README for a Python CLI tool
-...
-
-Your prompt: exit
-```
 
 ### Input Methods
 
@@ -277,79 +236,18 @@ For more detailed guides, check the `docs/` directory:
 
 ### Creative Writing
 
-```bash
-$ promptheus "Write a sci-fi short story"
+<img width="1273" height="666" alt="image" src="https://github.com/user-attachments/assets/be13ab3f-242c-4606-8c4c-e2f144e2ba13" />
 
-✓ Creative task detected with clarifying questions
-Ask clarifying questions to refine your prompt? (Y/n): y
-
-What is the main theme or conflict of the story?
-> Human consciousness uploaded to digital realm
-
-What is the desired length?
-> 1000-1500 words
-
-Any specific stylistic preferences?
-> Noir-inspired, first-person perspective
-
-╭─ Refined Prompt ───────────────────────────────╮
-│ Write a 1000-1500 word sci-fi short story in a  │
-│ noir-inspired, first-person style. The story     │
-│ explores human consciousness being uploaded to   │
-│ a digital realm...                               │
-╰──────────────────────────────────────────────────╯
-```
 
 ### Code Analysis
 
-```bash
-$ promptheus "Review the authentication module"
+<img width="1273" height="323" alt="image" src="https://github.com/user-attachments/assets/a423b031-e829-48e4-a3f7-0ad97305776f" />
 
-✓ Analysis task detected – light refinement
-
-╭─ Refined Prompt ───────────────────────────────╮
-│ Review the authentication module, focusing on    │
-│ security vulnerabilities, code structure, error  │
-│ handling, and adherence to best practices        │
-╰──────────────────────────────────────────────────╯
-```
-
-### Quick Mode for Fast Execution
-
-```bash
-$ promptheus -q "Explain the differences between TCP and UDP"
-
-✓ Quick mode – using original prompt without modification
-
-╭─ Your Prompt ──────────────────────────────────╮
-│ Explain the differences between TCP and UDP     │
-╰──────────────────────────────────────────────────╯
-```
 
 ### Interactive Session
 
-```bash
-$ promptheus
+<img width="1273" height="323" alt="image" src="https://github.com/user-attachments/assets/2ea98af0-ce29-4438-a491-877ea407f10f" />
 
-Provider: gemini | Model: gemini-2.0-flash-exp
-
-Your prompt: List best practices for API versioning
-✓ Analysis task – light refinement
-
-Your prompt: Now draft API documentation template
-✓ Creative task detected with clarifying questions
-Ask clarifying questions to refine your prompt? (Y/n): y
-...
-
-Your prompt: :history
-1. List best practices for API versioning (analysis)
-2. Draft API documentation template for RESTful APIs (generation)
-
-Your prompt: :load 1
-Loaded: List best practices for API versioning
-
-Your prompt: exit
-```
 
 ## Requirements
 
@@ -386,28 +284,20 @@ The Gemini provider fully supports Python 3.14 via the unified `google-genai` SD
 Test your API keys and provider connections:
 
 ```bash
-# Validate a specific provider
-python env_validator.py --provider gemini
-python env_validator.py --provider anthropic
-
-# Test actual API connectivity
-python env_validator.py --test-connection
-
-# Generate .env template for a provider
-python env_validator.py --generate-template gemini
+# Validate providers
+promptheus --validate --test-connection
 ```
+<img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/5706b57e-f96d-4b53-b0ce-5495e4f8cfe9" />
 
 ### Model Lister
 
 See all available providers and models:
 
 ```bash
-# List all providers
-python get-models.py providers
-
-# List all models across providers
-python get-models.py models
+# List all providers and models
+promptheus --list-models
 ```
+<img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/b96eae2a-7963-4b2f-af36-4a837eb3f7ae" />
 
 ## Contributing
 
