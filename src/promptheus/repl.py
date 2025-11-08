@@ -6,7 +6,7 @@ from typing import Callable, Optional, Tuple
 
 import questionary
 from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import Completer, Completion, WordCompleter
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
@@ -61,13 +61,14 @@ class CommandCompleter(Completer):
         # Check if we're completing a command or its arguments
         parts = command_part.split(None, 1)
 
-        if len(parts) == 1:
+        if len(parts) <= 1:
             # Completing the command itself
+            search_term = parts[0] if parts else ''
             for cmd, description in self.commands.items():
-                if cmd.startswith(parts[0]):
+                if cmd.startswith(search_term):
                     yield Completion(
                         cmd,
-                        start_position=-len(parts[0]),
+                        start_position=-len(search_term),
                         display=cmd,
                         display_meta=description,
                     )
@@ -149,10 +150,9 @@ def show_help(console: Console) -> None:
     console.print()
     console.print("  [bold]Enter[/bold]                 Submit your prompt")
     console.print("  [bold]Alt+Enter[/bold]             Add a new line (multiline input)")
-    console.print("  [bold]Esc[/bold]                   Cancel current operation")
-    console.print("  [bold]Ctrl+C[/bold]                Exit Promptheus")
+    console.print("  [bold]Ctrl+C[/bold]                Cancel or exit")
     console.print()
-    console.print("[dim]Tip: Type / to see all available commands[/dim]")
+    console.print("[dim]Tip: Type / to see all available commands with Tab[/dim]")
     console.print()
 
 
@@ -162,7 +162,6 @@ def create_key_bindings() -> KeyBindings:
 
     - Enter: Submit the prompt
     - Alt+Enter (Meta+Enter): Add a new line
-    - Esc: Cancel current operation
     """
     kb = KeyBindings()
 
@@ -176,11 +175,6 @@ def create_key_bindings() -> KeyBindings:
         """Insert newline on Alt+Enter."""
         event.current_buffer.insert_text('\n')
 
-    @kb.add('escape')
-    def _(event):
-        """Cancel on Esc - raise KeyboardInterrupt to stop processing."""
-        raise KeyboardInterrupt()
-
     return kb
 
 
@@ -188,11 +182,11 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel │ [/] commands
+    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [/] commands
     """
     return HTML(
-        f' {provider} | {model} │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel │ <b>[/]</b> commands'
+        f' <ansicyan>{provider}</ansicyan> | <ansicyan>{model}</ansicyan> │ '
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[/]</b> commands'
     )
 
 
@@ -214,7 +208,7 @@ def interactive_mode(
     - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
     - Slash command completion (type / to see commands)
-    - Enter to submit, Alt+Enter for new line, Esc to cancel
+    - Enter to submit, Alt+Enter for new line
     """
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
@@ -234,8 +228,12 @@ def interactive_mode(
     bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
 
     style = Style.from_dict({
-        'bottom-toolbar': 'bg:#1a1a1a #888888',  # Very dark background, medium gray text
-        'bottom-toolbar.text': '#cccccc',
+        'bottom-toolbar': 'bg:#2d2d2d #00ff00',  # Dark gray bg, bright green text
+        'completion-menu': 'bg:#3d3d3d #ffffff',
+        'completion-menu.completion': 'bg:#3d3d3d #ffffff',
+        'completion-menu.completion.current': 'bg:#00ff00 #000000',
+        'completion-menu.meta': 'bg:#3d3d3d #888888',
+        'completion-menu.meta.current': 'bg:#00ff00 #000000',
     })
 
     # Create custom key bindings and completer
@@ -253,6 +251,7 @@ def interactive_mode(
                 key_bindings=bindings,
                 completer=completer,
                 complete_while_typing=True,  # Show completions as you type
+                enable_history_search=False,  # Disable Ctrl+R to avoid conflicts
             )
         except Exception as exc:
             logger.warning("Failed to initialize history: %s", sanitize_error_message(str(exc)))
@@ -296,6 +295,7 @@ def interactive_mode(
             if user_input.startswith("/"):
                 command_parts = user_input[1:].split(None, 1)
                 if not command_parts:
+                    show_help(console)
                     continue
 
                 command = command_parts[0].lower()
@@ -323,13 +323,16 @@ def interactive_mode(
                         console.print("[yellow]Invalid history index. Use '/load <number>'[/yellow]")
                         continue
                 elif command == "clear-history":
-                    confirm = questionary.confirm(
-                        "Are you sure you want to clear all history?",
-                        default=False,
-                    ).ask()
-                    if confirm:
-                        get_history().clear()
-                        console.print("[green]✓[/green] History cleared")
+                    try:
+                        confirm = questionary.confirm(
+                            "Are you sure you want to clear all history?",
+                            default=False,
+                        ).ask()
+                        if confirm:
+                            get_history().clear()
+                            console.print("[green]✓[/green] History cleared")
+                    except KeyboardInterrupt:
+                        console.print("[yellow]Cancelled[/yellow]")
                     continue
                 else:
                     console.print(f"[yellow]Unknown command: /{command}[/yellow]")
