@@ -8,7 +8,7 @@ Uses the mock AI handler from core.py for testing without API keys.
 Key bindings:
 - Enter: Submit the prompt
 - Alt+Enter: Add a new line
-- Ctrl+C: Quit
+- Esc: Cancel
 """
 
 import sys
@@ -29,6 +29,7 @@ def create_key_bindings() -> KeyBindings:
 
     - Enter: Submit the prompt
     - Alt+Enter (Meta+Enter): Add a new line
+    - Esc: Cancel current operation
     """
     kb = KeyBindings()
 
@@ -42,6 +43,11 @@ def create_key_bindings() -> KeyBindings:
         """Insert newline on Alt+Enter."""
         event.current_buffer.insert_text('\n')
 
+    @kb.add('escape')
+    def _(event):
+        """Cancel on Esc - raise KeyboardInterrupt to stop processing."""
+        raise KeyboardInterrupt()
+
     return kb
 
 
@@ -49,11 +55,11 @@ def create_bottom_toolbar(provider: str = "demo", model: str = "mock-ai") -> HTM
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: demo | mock-ai │ [Enter] submit │ [Alt+Enter] new line │ [Ctrl+C] quit
+    Format: demo | mock-ai │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel
     """
     return HTML(
         f' {provider} | {model} │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Ctrl+C]</b> quit'
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel'
     )
 
 
@@ -95,31 +101,34 @@ def main():
     try:
         while True:
             # --- Get Input from User ---
-            prompt_text = session.prompt(
-                prompt_message,
-                bottom_toolbar=bottom_toolbar,
-                style=style,
-            )
+            try:
+                prompt_text = session.prompt(
+                    prompt_message,
+                    bottom_toolbar=bottom_toolbar,
+                    style=style,
+                )
+            except KeyboardInterrupt:
+                console.print("\n[bold yellow]Goodbye![/bold yellow]")
+                break
 
             # Do not process empty prompts
             if not prompt_text.strip():
                 continue
 
             # --- Process and Display ---
-
-            # Print the user's prompt
             console.print()
-            console.print(f"[dim]{prompt_text}[/dim]")
-            console.print()
-
-            # Call the AI function (simulates 1.5s delay)
             try:
+                # Call the AI function (simulates 1.5s delay)
                 response = get_ai_response(prompt_text)
 
                 # Print the AI's response as Markdown
                 console.print(Markdown(response))
                 console.print()
 
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Cancelled[/yellow]")
+                console.print()
+                continue
             except Exception as e:
                 console.print(f"[bold red]Error: {e}[/bold red]")
 

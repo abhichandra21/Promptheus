@@ -75,6 +75,7 @@ def create_key_bindings() -> KeyBindings:
 
     - Enter: Submit the prompt
     - Alt+Enter (Meta+Enter): Add a new line
+    - Esc: Cancel current operation
     """
     kb = KeyBindings()
 
@@ -88,6 +89,11 @@ def create_key_bindings() -> KeyBindings:
         """Insert newline on Alt+Enter."""
         event.current_buffer.insert_text('\n')
 
+    @kb.add('escape')
+    def _(event):
+        """Cancel on Esc - raise KeyboardInterrupt to stop processing."""
+        raise KeyboardInterrupt()
+
     return kb
 
 
@@ -95,11 +101,11 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Ctrl+C] quit
+    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel
     """
     return HTML(
         f' {provider} | {model} │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Ctrl+C]</b> quit'
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel'
     )
 
 
@@ -120,9 +126,9 @@ def interactive_mode(
     - Bottom toolbar with provider/model info and key bindings
     - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
-    - Enter to submit, Alt+Enter for new line
+    - Enter to submit, Alt+Enter for new line, Esc to cancel
     """
-    # Welcome message - simpler now since toolbar shows provider/model
+    # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
     console.print("[dim]Interactive mode ready. Type your prompt below.[/dim]\n")
 
@@ -234,16 +240,16 @@ def interactive_mode(
             if not user_input:
                 continue
 
-            # Print the user's prompt
+            # Process the prompt (no echo, no wrapper spinner)
             console.print()
-            console.print(f"[dim]{user_input}[/dim]")
-            console.print()
-
-            # Process the prompt (no wrapper spinner - process_prompt has its own)
             try:
                 result = process_prompt(
                     provider, user_input, args, debug_enabled, plain_mode, notify, app_config
                 )
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Cancelled[/yellow]")
+                console.print()
+                continue
             except Exception as exc:
                 sanitized = sanitize_error_message(str(exc))
                 console.print(f"[bold red]✗ Error:[/bold red] {sanitized}")
