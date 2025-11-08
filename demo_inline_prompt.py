@@ -48,9 +48,11 @@ def create_key_bindings() -> KeyBindings:
 def create_bottom_toolbar(provider: str = "demo", model: str = "mock-ai") -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
+
+    Format: demo | mock-ai │ [Enter] submit │ [Alt+Enter] new line │ [Ctrl+C] quit
     """
     return HTML(
-        f' <b>Provider:</b> {provider}  <b>Model:</b> {model} │ '
+        f' {provider} | {model} │ '
         f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Ctrl+C]</b> quit'
     )
 
@@ -105,20 +107,18 @@ def main():
 
             # --- Process and Display ---
 
-            # 1. Print the user's prompt (using dim style)
-            console.print("\n👤 [bold]You:[/bold]")
+            # Print the user's prompt
+            console.print()
             console.print(f"[dim]{prompt_text}[/dim]")
+            console.print()
 
-            # 2. Show a spinner while waiting for the AI (ONLY during processing)
+            # Call the AI function (simulates 1.5s delay)
             try:
-                with console.status("[bold cyan]⚙ Processing...", spinner="dots"):
-                    # Call the blocking AI function
-                    response = get_ai_response(prompt_text)
+                response = get_ai_response(prompt_text)
 
-                # 3. Print the AI's response as Markdown (after spinner is gone)
-                console.print("\n🤖 [bold]AI:[/bold]")
+                # Print the AI's response as Markdown
                 console.print(Markdown(response))
-                console.print()  # Add a blank line for spacing
+                console.print()
 
             except Exception as e:
                 console.print(f"[bold red]Error: {e}[/bold red]")
