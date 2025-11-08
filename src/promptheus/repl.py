@@ -8,6 +8,7 @@ import questionary
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markdown import Markdown
@@ -68,6 +69,28 @@ def display_history(console: Console, notify: MessageSink, limit: int = 20) -> N
     notify("[dim]Use ':load <number>' to load a prompt from history[/dim]")
 
 
+def create_key_bindings() -> KeyBindings:
+    """
+    Create custom key bindings for the prompt.
+
+    - Enter: Submit the prompt
+    - Alt+Enter (Meta+Enter): Add a new line
+    """
+    kb = KeyBindings()
+
+    @kb.add('enter')
+    def _(event):
+        """Submit on Enter."""
+        event.current_buffer.validate_and_handle()
+
+    @kb.add('escape', 'enter')  # Alt+Enter on most systems
+    def _(event):
+        """Insert newline on Alt+Enter."""
+        event.current_buffer.insert_text('\n')
+
+    return kb
+
+
 def interactive_mode(
     provider: LLMProvider,
     app_config: Config,
@@ -83,9 +106,10 @@ def interactive_mode(
 
     Features:
     - Bottom toolbar with help text
-    - Multiline input support
+    - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
     - Loading spinner during processing
+    - Enter to submit, Alt+Enter for new line
     """
     # Welcome message with rich formatting
     console.print("[bold cyan]Welcome to Promptheus Interactive Mode![/bold cyan]")
@@ -98,11 +122,14 @@ def interactive_mode(
     # Define the UI components for prompt_toolkit
     prompt_message = HTML('<b>&gt; </b>')
     bottom_toolbar = HTML(
-        ' <b>[Enter]</b> to submit, <b>[Alt+Enter]</b> for new line, <b>[Ctrl+C]</b> to quit'
+        ' <b>[Enter]</b> to submit  |  <b>[Alt+Enter]</b> for new line  |  <b>[Ctrl+C]</b> to quit'
     )
     style = Style.from_dict({
-        'bottom-toolbar': 'bg:#1e1e1e #ffffff',  # Dark background, white text
+        'bottom-toolbar': 'bg:#222222 #aaaaaa',  # Dark gray background, light gray text
     })
+
+    # Create custom key bindings
+    bindings = create_key_bindings()
 
     session: Optional[PromptSession] = None
     if use_prompt_toolkit:
@@ -111,7 +138,8 @@ def interactive_mode(
             session = PromptSession(
                 history=FileHistory(str(history_file)),
                 multiline=True,
-                prompt_continuation='  ',  # Indent for continued lines
+                prompt_continuation='… ',  # Continuation prompt for wrapped lines
+                key_bindings=bindings,
             )
         except Exception as exc:
             logger.warning("Failed to initialize history: %s", sanitize_error_message(str(exc)))
