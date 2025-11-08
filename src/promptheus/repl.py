@@ -91,6 +91,18 @@ def create_key_bindings() -> KeyBindings:
     return kb
 
 
+def create_bottom_toolbar(provider: str, model: str) -> HTML:
+    """
+    Create the bottom toolbar with provider/model info and key bindings.
+
+    Format: [Provider: gemini | Model: gemini-2.0] | [Enter] submit | [Alt+Enter] new line | [Ctrl+C] quit
+    """
+    return HTML(
+        f' <b>Provider:</b> {provider}  <b>Model:</b> {model} │ '
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Ctrl+C]</b> quit'
+    )
+
+
 def interactive_mode(
     provider: LLMProvider,
     app_config: Config,
@@ -105,27 +117,32 @@ def interactive_mode(
     Interactive REPL mode with rich inline prompt.
 
     Features:
-    - Bottom toolbar with help text
+    - Bottom toolbar with provider/model info and key bindings
     - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
-    - Loading spinner during processing
+    - Loading spinner during processing (only when processing)
     - Enter to submit, Alt+Enter for new line
     """
-    # Welcome message with rich formatting
-    console.print("[bold cyan]Welcome to Promptheus Interactive Mode![/bold cyan]")
-    console.print(f"[dim]Using provider: {app_config.provider} | Model: {app_config.get_model()}[/dim]")
-    console.print("[dim]Type 'exit' or 'quit' to exit, ':history' to view history[/dim]\n")
+    # Welcome message - simpler now since toolbar shows provider/model
+    console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
+    console.print("[dim]Interactive mode ready. Type your prompt below.[/dim]\n")
 
     prompt_count = 1
     use_prompt_toolkit = not plain_mode
 
+    # Get provider and model names for the toolbar
+    provider_name = app_config.provider or "unknown"
+    model_name = app_config.get_model() or "default"
+
     # Define the UI components for prompt_toolkit
     prompt_message = HTML('<b>&gt; </b>')
-    bottom_toolbar = HTML(
-        ' <b>[Enter]</b> to submit  |  <b>[Alt+Enter]</b> for new line  |  <b>[Ctrl+C]</b> to quit'
-    )
+
+    # Create toolbar with provider/model info
+    bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
+
     style = Style.from_dict({
-        'bottom-toolbar': 'bg:#222222 #aaaaaa',  # Dark gray background, light gray text
+        'bottom-toolbar': 'bg:#1a1a1a #888888',  # Very dark background, medium gray text
+        'bottom-toolbar.text': '#cccccc',
     })
 
     # Create custom key bindings
@@ -221,34 +238,37 @@ def interactive_mode(
             # Print the user's prompt with rich formatting
             console.print()
             console.print("👤 [bold]You:[/bold]")
-            console.print(f"[dim]> {user_input}[/dim]")
-            console.print()
+            console.print(f"[dim]{user_input}[/dim]")
 
-            # Process the prompt with a loading spinner
+            # Process the prompt with a loading spinner (ONLY during processing)
+            result = None
             try:
-                with console.status("[bold green]AI is thinking...", spinner="dots"):
+                with console.status("[bold cyan]⚙ Processing...", spinner="dots"):
                     result = process_prompt(
                         provider, user_input, args, debug_enabled, plain_mode, notify, app_config
                     )
-
-                if result is None:
-                    console.print("[yellow]No response generated[/yellow]\n")
-                    continue
-
-                # Extract the refined prompt from the result
-                final_prompt, task_type = result
-
-                # Render the response as Markdown
-                console.print("🤖 [bold]AI:[/bold]")
-                console.print(Markdown(final_prompt))
-                console.print()
-
             except Exception as exc:
                 sanitized = sanitize_error_message(str(exc))
-                console.print(f"[bold red]Error: {sanitized}[/bold red]")
+                console.print(f"\n[bold red]✗ Error:[/bold red] {sanitized}")
                 if debug_enabled:
                     console.print_exception()
                 logger.exception("Error processing prompt")
+                console.print()
+                continue
+
+            # Handle the result after spinner is gone
+            if result is None:
+                console.print("\n[yellow]No response generated[/yellow]\n")
+                continue
+
+            # Extract the refined prompt from the result
+            final_prompt, task_type = result
+
+            # Render the response as Markdown
+            console.print()
+            console.print("🤖 [bold]AI:[/bold]")
+            console.print(Markdown(final_prompt))
+            console.print()
 
             prompt_count += 1
 
@@ -257,7 +277,7 @@ def interactive_mode(
             break
         except Exception as exc:
             sanitized = sanitize_error_message(str(exc))
-            console.print(f"[bold red]Error:[/bold red] {sanitized}\n")
+            console.print(f"\n[bold red]Error:[/bold red] {sanitized}\n")
             if debug_enabled:
                 console.print_exception()
             logger.exception("Unexpected error in interactive mode")
