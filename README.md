@@ -284,15 +284,8 @@ The Gemini provider fully supports Python 3.14 via the unified `google-genai` SD
 Test your API keys and provider connections:
 
 ```bash
-# Validate a specific provider
-python env_validator.py --provider gemini
-python env_validator.py --provider anthropic
-
-# Test actual API connectivity
-python env_validator.py --test-connection
-
-# Generate .env template for a provider
-python env_validator.py --generate-template gemini
+# Validate providers
+promptheus --validate --test-connection
 ```
 <img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/5706b57e-f96d-4b53-b0ce-5495e4f8cfe9" />
 
@@ -301,11 +294,8 @@ python env_validator.py --generate-template gemini
 See all available providers and models:
 
 ```bash
-# List all providers
-python get-models.py providers
-
-# List all models across providers
-python get-models.py models
+# List all providers and models
+promptheus --list-models
 ```
 <img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/b96eae2a-7963-4b2f-af36-4a837eb3f7ae" />
 
