@@ -95,10 +95,10 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: [Provider: gemini | Model: gemini-2.0] | [Enter] submit | [Alt+Enter] new line | [Ctrl+C] quit
+    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Ctrl+C] quit
     """
     return HTML(
-        f' <b>Provider:</b> {provider}  <b>Model:</b> {model} │ '
+        f' {provider} | {model} │ '
         f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Ctrl+C]</b> quit'
     )
 
@@ -120,7 +120,6 @@ def interactive_mode(
     - Bottom toolbar with provider/model info and key bindings
     - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
-    - Loading spinner during processing (only when processing)
     - Enter to submit, Alt+Enter for new line
     """
     # Welcome message - simpler now since toolbar shows provider/model
@@ -235,38 +234,34 @@ def interactive_mode(
             if not user_input:
                 continue
 
-            # Print the user's prompt with rich formatting
+            # Print the user's prompt
             console.print()
-            console.print("👤 [bold]You:[/bold]")
             console.print(f"[dim]{user_input}[/dim]")
+            console.print()
 
-            # Process the prompt with a loading spinner (ONLY during processing)
-            result = None
+            # Process the prompt (no wrapper spinner - process_prompt has its own)
             try:
-                with console.status("[bold cyan]⚙ Processing...", spinner="dots"):
-                    result = process_prompt(
-                        provider, user_input, args, debug_enabled, plain_mode, notify, app_config
-                    )
+                result = process_prompt(
+                    provider, user_input, args, debug_enabled, plain_mode, notify, app_config
+                )
             except Exception as exc:
                 sanitized = sanitize_error_message(str(exc))
-                console.print(f"\n[bold red]✗ Error:[/bold red] {sanitized}")
+                console.print(f"[bold red]✗ Error:[/bold red] {sanitized}")
                 if debug_enabled:
                     console.print_exception()
                 logger.exception("Error processing prompt")
                 console.print()
                 continue
 
-            # Handle the result after spinner is gone
+            # Handle the result
             if result is None:
-                console.print("\n[yellow]No response generated[/yellow]\n")
+                console.print("[yellow]No response generated[/yellow]\n")
                 continue
 
             # Extract the refined prompt from the result
             final_prompt, task_type = result
 
             # Render the response as Markdown
-            console.print()
-            console.print("🤖 [bold]AI:[/bold]")
             console.print(Markdown(final_prompt))
             console.print()
 
@@ -277,7 +272,7 @@ def interactive_mode(
             break
         except Exception as exc:
             sanitized = sanitize_error_message(str(exc))
-            console.print(f"\n[bold red]Error:[/bold red] {sanitized}\n")
+            console.print(f"[bold red]Error:[/bold red] {sanitized}\n")
             if debug_enabled:
                 console.print_exception()
             logger.exception("Unexpected error in interactive mode")
