@@ -4,17 +4,45 @@ Demo script for the new inline prompt interface.
 
 This demonstrates the prompt_toolkit with bottom toolbar and rich markdown rendering.
 Uses the mock AI handler from core.py for testing without API keys.
+
+Key bindings:
+- Enter: Submit the prompt
+- Alt+Enter: Add a new line
+- Ctrl+C: Quit
 """
 
 import sys
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markdown import Markdown
 
 # Import the core AI response function
 from promptheus.core import get_ai_response
+
+
+def create_key_bindings() -> KeyBindings:
+    """
+    Create custom key bindings for the prompt.
+
+    - Enter: Submit the prompt
+    - Alt+Enter (Meta+Enter): Add a new line
+    """
+    kb = KeyBindings()
+
+    @kb.add('enter')
+    def _(event):
+        """Submit on Enter."""
+        event.current_buffer.validate_and_handle()
+
+    @kb.add('escape', 'enter')  # Alt+Enter on most systems
+    def _(event):
+        """Insert newline on Alt+Enter."""
+        event.current_buffer.insert_text('\n')
+
+    return kb
 
 
 def main():
@@ -24,8 +52,15 @@ def main():
     # Use Rich Console for all output
     console = Console()
 
+    # Create custom key bindings
+    bindings = create_key_bindings()
+
     # Create a PromptSession for persistent history
-    session = PromptSession()
+    session = PromptSession(
+        multiline=True,
+        prompt_continuation='… ',
+        key_bindings=bindings,
+    )
 
     # --- Define the UI components ---
 
@@ -34,17 +69,18 @@ def main():
 
     # 2. The static bottom toolbar
     bottom_toolbar = HTML(
-        ' <b>[Enter]</b> to submit, <b>[Alt+Enter]</b> for new line, <b>[Ctrl+C]</b> to quit'
+        ' <b>[Enter]</b> to submit  |  <b>[Alt+Enter]</b> for new line  |  <b>[Ctrl+C]</b> to quit'
     )
 
     # 3. Style for the bottom toolbar
     style = Style.from_dict({
-        'bottom-toolbar': 'bg:#1e1e1e #ffffff',  # Dark background, white text
+        'bottom-toolbar': 'bg:#222222 #aaaaaa',  # Dark gray background, light gray text
     })
 
     # --- Start the Application ---
     console.print("[bold cyan]Welcome to Promptheus Demo![/bold cyan]")
-    console.print("Type your prompt below. Use Alt+Enter for multi-line input.")
+    console.print("Type your prompt below. Use [bold]Alt+Enter[/bold] for multi-line input.")
+    console.print("Press [bold]Enter[/bold] to submit your prompt.")
     console.print()
 
     try:
@@ -54,8 +90,6 @@ def main():
                 prompt_message,
                 bottom_toolbar=bottom_toolbar,
                 style=style,
-                multiline=True,
-                prompt_continuation='  '  # Indent for continued lines
             )
 
             # Do not process empty prompts
