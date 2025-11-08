@@ -50,6 +50,11 @@ Examples:
     # Behavior modification arguments
     behavior_group = parser.add_argument_group("Behavior Customization")
     behavior_group.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch the full-screen TUI (Text User Interface) mode",
+    )
+    behavior_group.add_argument(
         "--static",
         "--mvp",
         action="store_true",
