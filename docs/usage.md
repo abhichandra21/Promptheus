@@ -8,7 +8,7 @@ Promptheus keeps the fun parts of prompt crafting while the AI handles the house
 - Launch with `promptheus`.
 - Stay in one colorful session, reuse your provider/model/flags, and cruise through multiple prompts.
 - Built-in helpers:
-  - `:history`, `:load <n>`, `:clear-history`.
+  - `/history`, `/load <n>`, `/clear-history`.
   - Arrow-key recall for previous prompts.
   - Type `exit`, `quit`, or hit `Ctrl+C` when you’re done.
 
@@ -46,7 +46,7 @@ Mix and match with providers, models, and file input as needed, e.g. `promptheus
 
 ## Session History
 - CLI commands: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`.
-- Interactive shortcuts: `:history`, `:load <n>`, `:clear-history`, plus ↑/↓ navigation.
+- Interactive shortcuts: `/history`, `/load <n>`, `/clear-history`, plus ↑/↓ navigation.
 - Every refined prompt is saved automatically so you never lose that one perfect phrasing.
 - History includes timestamps, task types, and both original and refined prompts for reference.
 

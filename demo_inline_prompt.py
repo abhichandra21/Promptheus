@@ -7,7 +7,7 @@ Uses the mock AI handler from core.py for testing without API keys.
 
 Key bindings:
 - Enter: Submit the prompt
-- Alt+Enter: Add a new line
+- Shift+Enter (Option/Alt+Enter fallback): Add a new line
 - Esc: Cancel
 """
 
@@ -22,25 +22,40 @@ from rich.markdown import Markdown
 # Import the core AI response function
 from promptheus.core import get_ai_response
 
+SHIFT_ENTER_SEQUENCES = {
+    "\x1b[27;2;13~",
+    "\x1b[13;2~",
+    "\x1b[13;2u",
+}
+
 
 def create_key_bindings() -> KeyBindings:
     """
     Create custom key bindings for the prompt.
 
     - Enter: Submit the prompt
-    - Alt+Enter (Meta+Enter): Add a new line
+    - Shift+Enter (Option/Alt+Enter fallback): Add a new line
     - Esc: Cancel current operation
     """
     kb = KeyBindings()
 
     @kb.add('enter')
     def _(event):
-        """Submit on Enter."""
-        event.current_buffer.validate_and_handle()
+        """Submit on Enter unless a Shift-modified sequence is detected."""
+        data = event.key_sequence[-1].data or ""
+        if data in SHIFT_ENTER_SEQUENCES:
+            event.current_buffer.insert_text('\n')
+        else:
+            event.current_buffer.validate_and_handle()
 
-    @kb.add('escape', 'enter')  # Alt+Enter on most systems
+    @kb.add('escape', 'enter', eager=True)  # Option/Alt+Enter fallback
     def _(event):
-        """Insert newline on Alt+Enter."""
+        """Insert newline on Option/Alt+Enter."""
+        event.current_buffer.insert_text('\n')
+
+    @kb.add('c-j', eager=True)  # Ctrl+J fallback
+    def _(event):
+        """Insert newline on Ctrl+J."""
         event.current_buffer.insert_text('\n')
 
     @kb.add('escape')
@@ -55,11 +70,11 @@ def create_bottom_toolbar(provider: str = "demo", model: str = "mock-ai") -> HTM
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: demo | mock-ai │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel
+    Format: demo | mock-ai │ [Enter] submit │ [Shift+Enter] new line │ [Esc] cancel
     """
     return HTML(
         f' {provider} | {model} │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel'
+        f'<b>[Enter]</b> submit │ <b>[Shift+Enter]</b> new line │ <b>[Esc]</b> cancel'
     )
 
 
