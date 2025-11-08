@@ -276,12 +276,15 @@ def interactive_mode(
                     console.print("\n[bold yellow]Goodbye![/bold yellow]")
                     break
                 except (OSError, RuntimeError) as exc:
+                    # Fall back to plain mode on terminal errors (resize, etc.)
                     logger.warning(
-                        "Interactive prompt failed (%s); exiting",
+                        "Interactive prompt failed (%s); switching to plain mode",
                         sanitize_error_message(str(exc)),
                     )
-                    console.print("\n[bold yellow]Goodbye![/bold yellow]")
-                    break
+                    use_prompt_toolkit = False
+                    plain_mode = True
+                    session = None
+                    continue
             else:
                 try:
                     user_input = input(f"promptheus [{prompt_count}]> ").strip()
@@ -395,5 +398,13 @@ def interactive_mode(
             if debug_enabled:
                 console.print_exception()
             logger.exception("Unexpected error in interactive mode")
-            console.print("\n[bold yellow]Goodbye![/bold yellow]")
-            break
+            if use_prompt_toolkit:
+                # Try to recover by falling back to plain mode
+                use_prompt_toolkit = False
+                plain_mode = True
+                session = None
+                continue
+            else:
+                # Already in plain mode, can't recover
+                console.print("\n[bold yellow]Goodbye![/bold yellow]")
+                break
