@@ -45,6 +45,16 @@ def create_key_bindings() -> KeyBindings:
     return kb
 
 
+def create_bottom_toolbar(provider: str = "demo", model: str = "mock-ai") -> HTML:
+    """
+    Create the bottom toolbar with provider/model info and key bindings.
+    """
+    return HTML(
+        f' <b>Provider:</b> {provider}  <b>Model:</b> {model} │ '
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Ctrl+C]</b> quit'
+    )
+
+
 def main():
     """
     Demo of the inline prompt interface.
@@ -67,20 +77,17 @@ def main():
     # 1. The prompt message itself (the ">" symbol)
     prompt_message = HTML('<b>&gt; </b>')
 
-    # 2. The static bottom toolbar
-    bottom_toolbar = HTML(
-        ' <b>[Enter]</b> to submit  |  <b>[Alt+Enter]</b> for new line  |  <b>[Ctrl+C]</b> to quit'
-    )
+    # 2. The static bottom toolbar with provider/model info
+    bottom_toolbar = create_bottom_toolbar()
 
     # 3. Style for the bottom toolbar
     style = Style.from_dict({
-        'bottom-toolbar': 'bg:#222222 #aaaaaa',  # Dark gray background, light gray text
+        'bottom-toolbar': 'bg:#1a1a1a #888888',  # Very dark background, medium gray text
     })
 
     # --- Start the Application ---
     console.print("[bold cyan]Welcome to Promptheus Demo![/bold cyan]")
-    console.print("Type your prompt below. Use [bold]Alt+Enter[/bold] for multi-line input.")
-    console.print("Press [bold]Enter[/bold] to submit your prompt.")
+    console.print("[dim]Interactive mode ready. Type your prompt below.[/dim]")
     console.print()
 
     try:
@@ -100,15 +107,15 @@ def main():
 
             # 1. Print the user's prompt (using dim style)
             console.print("\n👤 [bold]You:[/bold]")
-            console.print(f"> {prompt_text}", style="dim")
+            console.print(f"[dim]{prompt_text}[/dim]")
 
-            # 2. Show a spinner while waiting for the AI
+            # 2. Show a spinner while waiting for the AI (ONLY during processing)
             try:
-                with console.status("[bold green]AI is thinking...", spinner="dots"):
+                with console.status("[bold cyan]⚙ Processing...", spinner="dots"):
                     # Call the blocking AI function
                     response = get_ai_response(prompt_text)
 
-                # 3. Print the AI's response as Markdown
+                # 3. Print the AI's response as Markdown (after spinner is gone)
                 console.print("\n🤖 [bold]AI:[/bold]")
                 console.print(Markdown(response))
                 console.print()  # Add a blank line for spacing
