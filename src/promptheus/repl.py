@@ -150,7 +150,6 @@ def show_help(console: Console) -> None:
     console.print()
     console.print("  [bold]Enter[/bold]                 Submit your prompt")
     console.print("  [bold]Alt+Enter[/bold]             Add a new line (multiline input)")
-    console.print("  [bold]Esc[/bold]                   Cancel current operation")
     console.print("  [bold]Ctrl+C or Ctrl+D[/bold]      Exit Promptheus")
     console.print()
     console.print("[dim]Tip: Type / then Tab to see all available commands[/dim]")
@@ -163,7 +162,6 @@ def create_key_bindings() -> KeyBindings:
 
     - Enter: Submit the prompt
     - Alt+Enter (Meta+Enter): Add a new line
-    - Esc: Cancel (raise KeyboardInterrupt)
     """
     kb = KeyBindings()
 
@@ -177,11 +175,6 @@ def create_key_bindings() -> KeyBindings:
         """Insert newline on Alt+Enter."""
         event.current_buffer.insert_text('\n')
 
-    @kb.add('escape', eager=True)
-    def _(event):
-        """Cancel on Esc - raise KeyboardInterrupt to stop processing."""
-        raise KeyboardInterrupt()
-
     return kb
 
 
@@ -189,11 +182,11 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel │ [/] commands
+    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [/] commands
     """
     return HTML(
         f' {provider} | {model} │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel │ <b>[/]</b> commands'
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[/]</b> commands'
     )
 
 
@@ -215,7 +208,7 @@ def interactive_mode(
     - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
     - Slash command completion (type / to see commands)
-    - Enter to submit, Alt+Enter for new line, Esc to cancel
+    - Enter to submit, Alt+Enter for new line
     """
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
