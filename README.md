@@ -44,9 +44,6 @@ Promptheus will auto-detect which provider to use based on your available keys. 
 # Interactive mode (REPL-style)
 promptheus
 
-# Full-screen TUI mode (Text User Interface)
-promptheus --tui
-
 # Single prompt
 promptheus "Write a technical blog post about microservices"
 
@@ -77,23 +74,6 @@ Promptheus automatically detects what kind of task you're working on:
 - **Generation tasks** (writing, creating, design): Offers clarifying questions to help you think through requirements
 
 You can override this with `-q` (quick) or `-r` (refine) flags.
-
-### Full-Screen TUI Mode
-
-Promptheus includes a modern, full-screen Text User Interface built with [Textual](https://textual.textualize.io/):
-
-```bash
-promptheus --tui
-```
-
-The TUI provides:
-- **Chat-style interface** with scrollable history
-- **Persistent input box** at the bottom of the screen
-- **Non-blocking UI** that stays responsive during AI calls
-- **Dark mode toggle** (Ctrl+S) for comfortable viewing
-- **Clean keybindings**: Ctrl+C to quit, Ctrl+Enter to submit
-
-Perfect for longer interactive sessions where you want a more app-like experience.
 
 ### Six AI Providers, One Interface
 
