@@ -481,61 +481,6 @@ def main() -> None:
     notify: MessageSink = console.print
     plain_mode = False
 
-    # Handle TUI mode
-    if getattr(args, "tui", False):
-        try:
-            from promptheus.core import get_ai_response
-            from promptheus.tui import PromptheusApp
-
-            # Initialize config for TUI
-            for message in app_config.consume_status_messages():
-                notify(f"[cyan]●[/cyan] {message}")
-
-            if args.provider:
-                app_config.set_provider(args.provider)
-            if args.model:
-                app_config.set_model(args.model)
-
-            for message in app_config.consume_status_messages():
-                notify(f"[cyan]●[/cyan] {message}")
-
-            if not app_config.validate():
-                notify("")
-                for message in app_config.consume_error_messages():
-                    lines = message.split('\n')
-                    if len(lines) == 1:
-                        notify(f"[red]✗[/red] {message}")
-                    else:
-                        notify(f"[red]✗[/red] {lines[0]}")
-                        for line in lines[1:]:
-                            notify(f"  {line}")
-                notify("")
-                sys.exit(1)
-
-            # Create the AI handler function
-            provider_name = app_config.provider or "gemini"
-            provider = get_provider(provider_name, app_config, app_config.get_model())
-
-            def ai_handler(prompt: str) -> str:
-                """Wrapper for TUI that uses the initialized provider and config."""
-                return get_ai_response(prompt, provider=provider, config=app_config)
-
-            # Launch the TUI
-            app = PromptheusApp(ai_handler=ai_handler)
-            app.run()
-            sys.exit(0)
-
-        except ImportError as exc:
-            notify(f"[red]✗[/red] TUI mode requires the 'textual' package.")
-            notify(f"[yellow]Install it with:[/yellow] pip install textual")
-            logger.exception("Failed to import textual")
-            sys.exit(1)
-        except Exception as exc:
-            sanitized = sanitize_error_message(str(exc))
-            notify(f"[red]✗[/red] TUI mode failed: {sanitized}")
-            logger.exception("TUI mode failed")
-            sys.exit(1)
-
     # Handle utility commands that exit immediately
     if args.list_models:
         providers_to_list = [args.provider] if args.provider else None

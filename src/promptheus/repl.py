@@ -6,8 +6,11 @@ from typing import Callable, Optional, Tuple
 
 import questionary
 from prompt_toolkit import PromptSession
+from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.styles import Style
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.table import Table
 
 from promptheus.config import Config
@@ -75,19 +78,41 @@ def interactive_mode(
     console: Console,
     process_prompt: ProcessPromptFn,
 ) -> None:
-    """Interactive REPL mode - continuously process prompts until user types exit/quit."""
-    notify("[bold cyan]Welcome to Promptheus Interactive Mode![/bold cyan]")
-    notify(f"[dim]Using provider: {app_config.provider} | Model: {app_config.get_model()}[/dim]")
-    notify("[dim]Type 'exit' or 'quit' to exit, ':history' to view history[/dim]\n")
+    """
+    Interactive REPL mode with rich inline prompt.
+
+    Features:
+    - Bottom toolbar with help text
+    - Multiline input support
+    - Rich markdown rendering for AI responses
+    - Loading spinner during processing
+    """
+    # Welcome message with rich formatting
+    console.print("[bold cyan]Welcome to Promptheus Interactive Mode![/bold cyan]")
+    console.print(f"[dim]Using provider: {app_config.provider} | Model: {app_config.get_model()}[/dim]")
+    console.print("[dim]Type 'exit' or 'quit' to exit, ':history' to view history[/dim]\n")
 
     prompt_count = 1
     use_prompt_toolkit = not plain_mode
+
+    # Define the UI components for prompt_toolkit
+    prompt_message = HTML('<b>&gt; </b>')
+    bottom_toolbar = HTML(
+        ' <b>[Enter]</b> to submit, <b>[Alt+Enter]</b> for new line, <b>[Ctrl+C]</b> to quit'
+    )
+    style = Style.from_dict({
+        'bottom-toolbar': 'bg:#1e1e1e #ffffff',  # Dark background, white text
+    })
 
     session: Optional[PromptSession] = None
     if use_prompt_toolkit:
         try:
             history_file = get_history().get_prompt_history_file()
-            session = PromptSession(history=FileHistory(str(history_file)))
+            session = PromptSession(
+                history=FileHistory(str(history_file)),
+                multiline=True,
+                prompt_continuation='  ',  # Indent for continued lines
+            )
         except Exception as exc:
             logger.warning("Failed to initialize history: %s", sanitize_error_message(str(exc)))
             use_prompt_toolkit = False
@@ -97,9 +122,13 @@ def interactive_mode(
         try:
             if use_prompt_toolkit and session:
                 try:
-                    user_input = session.prompt(f"promptheus [{prompt_count}]> ").strip()
+                    user_input = session.prompt(
+                        prompt_message,
+                        bottom_toolbar=bottom_toolbar,
+                        style=style,
+                    ).strip()
                 except KeyboardInterrupt:
-                    notify("\n[yellow]Exiting...[/yellow]")
+                    console.print("\n[bold yellow]Goodbye![/bold yellow]")
                     break
                 except (EOFError, OSError, RuntimeError) as exc:
                     logger.warning(
@@ -113,14 +142,16 @@ def interactive_mode(
             else:
                 try:
                     user_input = input(f"promptheus [{prompt_count}]> ").strip()
-                except EOFError:
-                    notify("\n[yellow]Exiting...[/yellow]")
+                except (EOFError, KeyboardInterrupt):
+                    console.print("\n[bold yellow]Goodbye![/bold yellow]")
                     break
 
+            # Handle exit commands
             if user_input.lower() in {"exit", "quit", "q"}:
-                notify("[green]Goodbye![/green]")
+                console.print("[bold yellow]Goodbye![/bold yellow]")
                 break
 
+            # Handle special commands
             if user_input.startswith(":"):
                 command_parts = user_input.split(None, 1)
                 command = command_parts[0].lower()
@@ -133,13 +164,13 @@ def interactive_mode(
                         index = int(command_parts[1])
                         entry = get_history().get_by_index(index)
                         if entry:
-                            notify(f"[green]✓[/green] Loaded prompt #{index} from history")
+                            console.print(f"[green]✓[/green] Loaded prompt #{index} from history")
                             user_input = entry.original_prompt
                         else:
-                            notify(f"[yellow]No history entry found at index {index}[/yellow]")
+                            console.print(f"[yellow]No history entry found at index {index}[/yellow]")
                             continue
                     except ValueError:
-                        notify("[yellow]Invalid history index. Use ':load <number>'[/yellow]")
+                        console.print("[yellow]Invalid history index. Use ':load <number>'[/yellow]")
                         continue
                 elif command == ":clear-history":
                     confirm = questionary.confirm(
@@ -148,32 +179,57 @@ def interactive_mode(
                     ).ask()
                     if confirm:
                         get_history().clear()
-                        notify("[green]✓[/green] History cleared")
+                        console.print("[green]✓[/green] History cleared")
                     continue
                 else:
-                    notify(f"[yellow]Unknown command: {command}[/yellow]")
-                    notify("[dim]Available commands: :history, :load <number>, :clear-history[/dim]")
+                    console.print(f"[yellow]Unknown command: {command}[/yellow]")
+                    console.print("[dim]Available commands: :history, :load <number>, :clear-history[/dim]")
                     continue
 
+            # Don't process empty prompts
             if not user_input:
                 continue
 
-            notify("")
-            result = process_prompt(provider, user_input, args, debug_enabled, plain_mode, notify, app_config)
+            # Print the user's prompt with rich formatting
+            console.print()
+            console.print("👤 [bold]You:[/bold]")
+            console.print(f"[dim]> {user_input}[/dim]")
+            console.print()
 
-            if result is None:
-                notify("")
-                continue
+            # Process the prompt with a loading spinner
+            try:
+                with console.status("[bold green]AI is thinking...", spinner="dots"):
+                    result = process_prompt(
+                        provider, user_input, args, debug_enabled, plain_mode, notify, app_config
+                    )
+
+                if result is None:
+                    console.print("[yellow]No response generated[/yellow]\n")
+                    continue
+
+                # Extract the refined prompt from the result
+                final_prompt, task_type = result
+
+                # Render the response as Markdown
+                console.print("🤖 [bold]AI:[/bold]")
+                console.print(Markdown(final_prompt))
+                console.print()
+
+            except Exception as exc:
+                sanitized = sanitize_error_message(str(exc))
+                console.print(f"[bold red]Error: {sanitized}[/bold red]")
+                if debug_enabled:
+                    console.print_exception()
+                logger.exception("Error processing prompt")
 
             prompt_count += 1
-            notify("")
 
         except KeyboardInterrupt:
-            notify("\n[yellow]Exiting...[/yellow]")
+            console.print("\n[bold yellow]Goodbye![/bold yellow]")
             break
         except Exception as exc:
             sanitized = sanitize_error_message(str(exc))
-            notify(f"[bold red]Error:[/bold red] {sanitized}\n")
+            console.print(f"[bold red]Error:[/bold red] {sanitized}\n")
             if debug_enabled:
                 console.print_exception()
             logger.exception("Unexpected error in interactive mode")

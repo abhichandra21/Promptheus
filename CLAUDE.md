@@ -24,9 +24,6 @@ python -m promptheus.main "Your prompt here"
 # Interactive mode (REPL-style)
 promptheus
 
-# TUI mode (Full-screen Text User Interface)
-promptheus --tui
-
 # Quick mode (skip questions)
 promptheus -q "Your prompt"
 
@@ -100,8 +97,7 @@ python -m mypy src/promptheus/
 - `src/promptheus/logging_config.py`: Structured logging configuration
 - `src/promptheus/history.py`: Session history management with file persistence
 - `src/promptheus/models.json`: Provider configurations and model definitions
-- `src/promptheus/core.py`: Simplified AI response wrapper for TUI integration
-- `src/promptheus/tui.py`: Full-screen Text User Interface using Textual framework
+- `src/promptheus/core.py`: Core AI response function for demo/testing purposes
 
 **Environment Validator (`env_validator.py`)**
 - Standalone utility for testing provider configurations
