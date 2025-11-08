@@ -150,9 +150,10 @@ def show_help(console: Console) -> None:
     console.print()
     console.print("  [bold]Enter[/bold]                 Submit your prompt")
     console.print("  [bold]Alt+Enter[/bold]             Add a new line (multiline input)")
-    console.print("  [bold]Ctrl+C[/bold]                Cancel or exit")
+    console.print("  [bold]Esc[/bold]                   Cancel current operation")
+    console.print("  [bold]Ctrl+C or Ctrl+D[/bold]      Exit Promptheus")
     console.print()
-    console.print("[dim]Tip: Type / to see all available commands with Tab[/dim]")
+    console.print("[dim]Tip: Type / then Tab to see all available commands[/dim]")
     console.print()
 
 
@@ -162,6 +163,7 @@ def create_key_bindings() -> KeyBindings:
 
     - Enter: Submit the prompt
     - Alt+Enter (Meta+Enter): Add a new line
+    - Esc: Cancel (raise KeyboardInterrupt)
     """
     kb = KeyBindings()
 
@@ -175,6 +177,11 @@ def create_key_bindings() -> KeyBindings:
         """Insert newline on Alt+Enter."""
         event.current_buffer.insert_text('\n')
 
+    @kb.add('escape', eager=True)
+    def _(event):
+        """Cancel on Esc - raise KeyboardInterrupt to stop processing."""
+        raise KeyboardInterrupt()
+
     return kb
 
 
@@ -182,11 +189,11 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
 
-    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [/] commands
+    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [Esc] cancel │ [/] commands
     """
     return HTML(
-        f' <ansicyan>{provider}</ansicyan> | <ansicyan>{model}</ansicyan> │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[/]</b> commands'
+        f' {provider} | {model} │ '
+        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[Esc]</b> cancel │ <b>[/]</b> commands'
     )
 
 
@@ -208,7 +215,7 @@ def interactive_mode(
     - Multiline input support (Alt+Enter)
     - Rich markdown rendering for AI responses
     - Slash command completion (type / to see commands)
-    - Enter to submit, Alt+Enter for new line
+    - Enter to submit, Alt+Enter for new line, Esc to cancel
     """
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
@@ -227,13 +234,14 @@ def interactive_mode(
     # Create toolbar with provider/model info
     bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
 
+    # Neutral, subtle styling - black text on gray background
     style = Style.from_dict({
-        'bottom-toolbar': 'bg:#2d2d2d #00ff00',  # Dark gray bg, bright green text
-        'completion-menu': 'bg:#3d3d3d #ffffff',
-        'completion-menu.completion': 'bg:#3d3d3d #ffffff',
-        'completion-menu.completion.current': 'bg:#00ff00 #000000',
-        'completion-menu.meta': 'bg:#3d3d3d #888888',
-        'completion-menu.meta.current': 'bg:#00ff00 #000000',
+        'bottom-toolbar': 'bg:#808080 #000000',  # Gray bg, black text (neutral)
+        'completion-menu': 'bg:#404040 #ffffff',
+        'completion-menu.completion': 'bg:#404040 #ffffff',
+        'completion-menu.completion.current': 'bg:#606060 #ffffff bold',
+        'completion-menu.meta': 'bg:#404040 #888888',
+        'completion-menu.meta.current': 'bg:#606060 #ffffff',
     })
 
     # Create custom key bindings and completer
@@ -270,15 +278,17 @@ def interactive_mode(
                 except KeyboardInterrupt:
                     console.print("\n[bold yellow]Goodbye![/bold yellow]")
                     break
-                except (EOFError, OSError, RuntimeError) as exc:
+                except EOFError:
+                    # Ctrl+D should exit completely
+                    console.print("\n[bold yellow]Goodbye![/bold yellow]")
+                    break
+                except (OSError, RuntimeError) as exc:
                     logger.warning(
-                        "Interactive prompt failed (%s); switching to plain mode",
+                        "Interactive prompt failed (%s); exiting",
                         sanitize_error_message(str(exc)),
                     )
-                    use_prompt_toolkit = False
-                    plain_mode = True
-                    session = None
-                    continue
+                    console.print("\n[bold yellow]Goodbye![/bold yellow]")
+                    break
             else:
                 try:
                     user_input = input(f"promptheus [{prompt_count}]> ").strip()
@@ -309,18 +319,25 @@ def interactive_mode(
                 elif command in ("exit", "quit"):
                     console.print("[bold yellow]Goodbye![/bold yellow]")
                     break
-                elif command == "load" and len(command_parts) > 1:
-                    try:
-                        index = int(command_parts[1])
-                        entry = get_history().get_by_index(index)
-                        if entry:
-                            console.print(f"[green]✓[/green] Loaded prompt #{index} from history")
-                            user_input = entry.original_prompt
-                        else:
-                            console.print(f"[yellow]No history entry found at index {index}[/yellow]")
+                elif command == "load":
+                    if len(command_parts) > 1:
+                        # Has an argument - try to load that specific entry
+                        try:
+                            index = int(command_parts[1])
+                            entry = get_history().get_by_index(index)
+                            if entry:
+                                console.print(f"[green]✓[/green] Loaded prompt #{index} from history")
+                                user_input = entry.original_prompt
+                            else:
+                                console.print(f"[yellow]No history entry found at index {index}[/yellow]")
+                                continue
+                        except ValueError:
+                            console.print("[yellow]Invalid history index. Use '/load <number>'[/yellow]")
                             continue
-                    except ValueError:
-                        console.print("[yellow]Invalid history index. Use '/load <number>'[/yellow]")
+                    else:
+                        # No argument - show history to help them choose
+                        console.print("[yellow]Specify which prompt to load. Showing history:[/yellow]\n")
+                        display_history(console, notify)
                         continue
                 elif command == "clear-history":
                     try:
@@ -385,8 +402,5 @@ def interactive_mode(
             if debug_enabled:
                 console.print_exception()
             logger.exception("Unexpected error in interactive mode")
-            if use_prompt_toolkit:
-                use_prompt_toolkit = False
-                plain_mode = True
-                session = None
-            continue
+            console.print("\n[bold yellow]Goodbye![/bold yellow]")
+            break
