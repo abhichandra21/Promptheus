@@ -72,7 +72,7 @@ python -m mypy src/promptheus/
 - Handles interactive loop mode (REPL) for continuous prompt processing
 - Manages the question-answer-refinement workflow
 - Contains the core `process_single_prompt()` orchestrator function
-- Supports history commands: `promptheus history`, `:history`, `:load <n>`, `:clear-history`
+- Supports history commands: `promptheus history`, `/history`, `/load <n>`, `/clear-history`
 
 **Provider Abstraction (`src/promptheus/providers.py`)**
 - Abstract `LLMProvider` base class defining the interface for AI providers
@@ -154,7 +154,7 @@ The REPL-style interactive mode persists provider, model, and flag settings acro
 **History Management**
 Prompt history is automatically saved for each refinement and can be accessed via:
 - CLI: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`
-- Interactive: `:history`, `:load <n>`, `:clear-history`
+- Interactive: `/history`, `/load <n>`, `/clear-history`
 
 ## Development Notes
 

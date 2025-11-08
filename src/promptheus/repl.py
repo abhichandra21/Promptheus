@@ -15,11 +15,13 @@ from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
+from rich.text import Text
 
 from promptheus.config import Config
 from promptheus.history import get_history
 from promptheus.providers import LLMProvider
 from promptheus.utils import sanitize_error_message
+from promptheus.exceptions import PromptCancelled
 
 MessageSink = Callable[[str], None]
 ProcessPromptFn = Callable[
@@ -149,11 +151,19 @@ def show_help(console: Console) -> None:
     console.print("[bold cyan]Key Bindings:[/bold cyan]")
     console.print()
     console.print("  [bold]Enter[/bold]                 Submit your prompt")
-    console.print("  [bold]Alt+Enter[/bold]             Add a new line (multiline input)")
+    console.print("  [bold]Shift+Enter[/bold]           Add a new line (multiline input)")
+    console.print("  [bold]Option/Alt+Enter[/bold]      Alternate shortcut for new line")
     console.print("  [bold]Ctrl+C or Ctrl+D[/bold]      Exit Promptheus")
     console.print()
     console.print("[dim]Tip: Type / then Tab to see all available commands[/dim]")
     console.print()
+
+
+SHIFT_ENTER_SEQUENCES = {
+    "\x1b[27;2;13~",  # Xterm modifyOtherKeys format
+    "\x1b[13;2~",     # Some terminals (CSI 13;2~)
+    "\x1b[13;2u",     # Kitty/WezTerm CSI-u format
+}
 
 
 def create_key_bindings() -> KeyBindings:
@@ -161,32 +171,48 @@ def create_key_bindings() -> KeyBindings:
     Create custom key bindings for the prompt.
 
     - Enter: Submit the prompt
-    - Alt+Enter (Meta+Enter): Add a new line
+    - Shift+Enter: Add a new line (fallback to Option/Alt+Enter on some terminals)
     """
     kb = KeyBindings()
 
     @kb.add('enter')
     def _(event):
-        """Submit on Enter."""
-        event.current_buffer.validate_and_handle()
+        """Submit on Enter, unless Shift-modified sequences are detected."""
+        data = event.key_sequence[-1].data or ""
+        if data in SHIFT_ENTER_SEQUENCES:
+            event.current_buffer.insert_text('\n')
+        else:
+            event.current_buffer.validate_and_handle()
 
-    @kb.add('escape', 'enter')  # Alt+Enter on most systems
+    @kb.add('escape', 'enter', eager=True)  # Option/Alt+Enter fallback
     def _(event):
-        """Insert newline on Alt+Enter."""
+        """Insert newline on Option/Alt+Enter."""
+        event.current_buffer.insert_text('\n')
+
+    @kb.add('c-j', eager=True)  # Ctrl+J is another common newline combo
+    def _(event):
+        """Insert newline on Ctrl+J."""
         event.current_buffer.insert_text('\n')
 
     return kb
 
 
+def format_toolbar_text(provider: str, model: str) -> Text:
+    """
+    Return a plain-text version of the toolbar so we can print it into the scrollback.
+    """
+    text = Text(f"{provider} | {model} │ [Enter] submit │ [Shift+Enter] new line │ [/] commands")
+    text.stylize("dim")
+    return text
+
+
 def create_bottom_toolbar(provider: str, model: str) -> HTML:
     """
     Create the bottom toolbar with provider/model info and key bindings.
-
-    Format: gemini | gemini-2.0 │ [Enter] submit │ [Alt+Enter] new line │ [/] commands
     """
     return HTML(
         f' {provider} | {model} │ '
-        f'<b>[Enter]</b> submit │ <b>[Alt+Enter]</b> new line │ <b>[/]</b> commands'
+        f'<b>[Enter]</b> submit │ <b>[Shift+Enter]</b> new line │ <b>[/]</b> commands'
     )
 
 
@@ -204,11 +230,11 @@ def interactive_mode(
     Interactive REPL mode with rich inline prompt.
 
     Features:
-    - Bottom toolbar with provider/model info and key bindings
-    - Multiline input support (Alt+Enter)
+    - Status banner printed above the prompt with provider/model info
+    - Multiline input support (Shift+Enter, Option/Alt+Enter fallback)
     - Rich markdown rendering for AI responses
     - Slash command completion (type / to see commands)
-    - Enter to submit, Alt+Enter for new line
+    - Enter to submit, Shift+Enter for new line
     """
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
@@ -224,12 +250,13 @@ def interactive_mode(
     # Define the UI components for prompt_toolkit
     prompt_message = HTML('<b>&gt; </b>')
 
-    # Create toolbar with provider/model info
+    # Create toolbar/banner content with provider/model info
+    toolbar_message = format_toolbar_text(provider_name, model_name)
     bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
 
     # Neutral, subtle styling - black text on gray background
     style = Style.from_dict({
-        'bottom-toolbar': 'bg:#808080 #000000',  # Gray bg, black text (neutral)
+        'bottom-toolbar': 'bg:#808080 #000000',
         'completion-menu': 'bg:#404040 #ffffff',
         'completion-menu.completion': 'bg:#404040 #ffffff',
         'completion-menu.completion.current': 'bg:#606060 #ffffff bold',
@@ -287,6 +314,7 @@ def interactive_mode(
                     continue
             else:
                 try:
+                    console.print(toolbar_message)
                     user_input = input(f"promptheus [{prompt_count}]> ").strip()
                 except (EOFError, KeyboardInterrupt):
                     console.print("\n[bold yellow]Goodbye![/bold yellow]")
@@ -362,6 +390,10 @@ def interactive_mode(
                 result = process_prompt(
                     provider, user_input, args, debug_enabled, plain_mode, notify, app_config
                 )
+            except PromptCancelled as cancel_exc:
+                console.print(f"\n[yellow]{cancel_exc}[/yellow]")
+                console.print()
+                continue
             except KeyboardInterrupt:
                 console.print("\n[yellow]Cancelled[/yellow]")
                 console.print()

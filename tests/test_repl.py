@@ -9,10 +9,12 @@ from argparse import Namespace
 from promptheus.repl import (
     interactive_mode,
     display_history,
+    format_toolbar_text,
 )
 from promptheus.config import Config
 from promptheus.providers import LLMProvider
 from promptheus.history import PromptHistory, HistoryEntry
+from promptheus.exceptions import PromptCancelled
 
 
 class MockProvider(LLMProvider):
@@ -102,7 +104,7 @@ def test_display_history_with_entries(mock_get_history, mock_console, mock_notif
     assert mock_console.print.call_count >= 3
 
     # Should call notify with usage hint
-    mock_notify.assert_any_call("[dim]Use ':load <number>' to load a prompt from history[/dim]")
+    mock_notify.assert_any_call("[dim]Use '/load <number>' to load a prompt from history[/dim]")
 
 
 @patch('promptheus.repl.get_history')
@@ -128,9 +130,11 @@ def test_interactive_mode_plain_mode_exit(mock_input, mock_get_history,
         Mock()  # process_prompt function
     )
 
-    # Should show welcome message
-    mock_notify.assert_any_call("[bold cyan]Welcome to Promptheus Interactive Mode![/bold cyan]")
-    mock_notify.assert_any_call("[green]Goodbye![/green]")
+    toolbar_message = format_toolbar_text("test", "test-model")
+    # Should show welcome, toolbar, and goodbye via console
+    mock_console.print.assert_any_call("[bold cyan]Welcome to Promptheus![/bold cyan]")
+    mock_console.print.assert_any_call(toolbar_message)
+    mock_console.print.assert_any_call("[bold yellow]Goodbye![/bold yellow]")
 
 
 @patch('promptheus.repl.get_history')
@@ -160,7 +164,9 @@ def test_interactive_mode_plain_mode_quit_command(mock_input, mock_get_history,
             Mock()  # process_prompt function
         )
 
-        mock_notify.assert_any_call("[green]Goodbye![/green]")
+        toolbar_message = format_toolbar_text("test", "test-model")
+        mock_console.print.assert_any_call("[bold yellow]Goodbye![/bold yellow]")
+        mock_console.print.assert_any_call(toolbar_message)
 
 
 @patch('promptheus.repl.get_history')
@@ -168,8 +174,8 @@ def test_interactive_mode_plain_mode_quit_command(mock_input, mock_get_history,
 def test_interactive_mode_history_command(mock_input, mock_get_history,
                                          mock_provider, mock_config, mock_notify, mock_console,
                                          sample_history_entries):
-    """Test :history command in interactive mode."""
-    mock_input.side_effect = [":history", "exit"]
+    """Test /history command in interactive mode."""
+    mock_input.side_effect = ["/history", "exit"]
     mock_history = Mock()
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_history.get_recent.return_value = sample_history_entries
@@ -197,8 +203,8 @@ def test_interactive_mode_history_command(mock_input, mock_get_history,
 def test_interactive_mode_load_command_valid(mock_input, mock_get_history,
                                            mock_provider, mock_config, mock_notify, mock_console,
                                            sample_history_entries):
-    """Test :load command with valid index."""
-    mock_input.side_effect = [":load 1", "exit"]
+    """Test /load command with valid index."""
+    mock_input.side_effect = ["/load 1", "exit"]
     mock_history = Mock()
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_history.get_by_index.return_value = sample_history_entries[0]
@@ -219,7 +225,7 @@ def test_interactive_mode_load_command_valid(mock_input, mock_get_history,
     )
 
     # Should show success message
-    mock_notify.assert_any_call("[green]✓[/green] Loaded prompt #1 from history")
+    mock_console.print.assert_any_call("[green]✓[/green] Loaded prompt #1 from history")
     # Should process the loaded prompt
     mock_process_prompt.assert_called()
 
@@ -228,8 +234,8 @@ def test_interactive_mode_load_command_valid(mock_input, mock_get_history,
 @patch('builtins.input')
 def test_interactive_mode_load_command_invalid(mock_input, mock_get_history,
                                              mock_provider, mock_config, mock_notify, mock_console):
-    """Test :load command with invalid index."""
-    mock_input.side_effect = [":load 999", "exit"]
+    """Test /load command with invalid index."""
+    mock_input.side_effect = ["/load 999", "exit"]
     mock_history = Mock()
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_history.get_by_index.return_value = None
@@ -248,7 +254,7 @@ def test_interactive_mode_load_command_invalid(mock_input, mock_get_history,
         Mock()  # process_prompt function
     )
 
-    mock_notify.assert_any_call("[yellow]No history entry found at index 999[/yellow]")
+    mock_console.print.assert_any_call("[yellow]No history entry found at index 999[/yellow]")
 
 
 @patch('promptheus.repl.get_history')
@@ -256,9 +262,9 @@ def test_interactive_mode_load_command_invalid(mock_input, mock_get_history,
 @patch('promptheus.repl.questionary.confirm')
 def test_interactive_mode_clear_history_confirmed(mock_confirm, mock_input, mock_get_history, mock_provider, mock_config,
                                                  mock_notify, mock_console):
-    """Test :clear-history command with confirmation."""
+    """Test /clear-history command with confirmation."""
     mock_confirm.return_value.ask.return_value = True
-    mock_input.side_effect = [":clear-history", "exit"]
+    mock_input.side_effect = ["/clear-history", "exit"]
     mock_history = Mock()
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_get_history.return_value = mock_history
@@ -277,7 +283,7 @@ def test_interactive_mode_clear_history_confirmed(mock_confirm, mock_input, mock
     )
 
     mock_history.clear.assert_called_once()
-    mock_notify.assert_any_call("[green]✓[/green] History cleared")
+    mock_console.print.assert_any_call("[green]✓[/green] History cleared")
 
 
 @patch('promptheus.repl.get_history')
@@ -285,7 +291,7 @@ def test_interactive_mode_clear_history_confirmed(mock_confirm, mock_input, mock
 def test_interactive_mode_unknown_command(mock_input, mock_get_history,
                                          mock_provider, mock_config, mock_notify, mock_console):
     """Test unknown command handling."""
-    mock_input.side_effect = [":unknown", "exit"]
+    mock_input.side_effect = ["/unknown", "exit"]
     mock_history = Mock()
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_get_history.return_value = mock_history
@@ -303,8 +309,36 @@ def test_interactive_mode_unknown_command(mock_input, mock_get_history,
         Mock()  # process_prompt function
     )
 
-    mock_notify.assert_any_call("[yellow]Unknown command: :unknown[/yellow]")
-    mock_notify.assert_any_call("[dim]Available commands: :history, :load <number>, :clear-history[/dim]")
+    mock_console.print.assert_any_call("[yellow]Unknown command: /unknown[/yellow]")
+    mock_console.print.assert_any_call("[dim]Type /help to see available commands[/dim]")
+
+
+@patch('promptheus.repl.get_history')
+@patch('builtins.input')
+def test_interactive_mode_process_prompt_cancelled(mock_input, mock_get_history,
+                                                  mock_provider, mock_config, mock_notify, mock_console):
+    """Ensure PromptCancelled from process_prompt is handled gracefully."""
+    mock_input.side_effect = ["run", "exit"]
+    mock_history = Mock()
+    mock_history.get_prompt_history_file.return_value = "test_history"
+    mock_get_history.return_value = mock_history
+
+    args = Namespace()
+    mock_process_prompt = Mock(side_effect=PromptCancelled("Analysis cancelled"))
+
+    interactive_mode(
+        mock_provider,
+        mock_config,
+        args,
+        False,  # debug_enabled
+        True,   # plain_mode
+        mock_notify,
+        mock_console,
+        mock_process_prompt
+    )
+
+    mock_console.print.assert_any_call("\n[yellow]Analysis cancelled[/yellow]")
+    mock_process_prompt.assert_called_once()
 
 
 @patch('promptheus.repl.get_history')
@@ -330,9 +364,11 @@ def test_interactive_mode_empty_input(mock_input, mock_get_history,
         Mock()  # process_prompt function
     )
 
-    # Should still show welcome and goodbye
-    mock_notify.assert_any_call("[bold cyan]Welcome to Promptheus Interactive Mode![/bold cyan]")
-    mock_notify.assert_any_call("[green]Goodbye![/green]")
+    toolbar_message = format_toolbar_text("test", "test-model")
+    # Should still show welcome, toolbar, and goodbye
+    mock_console.print.assert_any_call("[bold cyan]Welcome to Promptheus![/bold cyan]")
+    mock_console.print.assert_any_call(toolbar_message)
+    mock_console.print.assert_any_call("[bold yellow]Goodbye![/bold yellow]")
 
 
 @patch('promptheus.repl.get_history')
@@ -358,4 +394,4 @@ def test_interactive_mode_keyboard_interrupt(mock_input, mock_get_history,
         Mock()  # process_prompt function
     )
 
-    mock_notify.assert_any_call("\n[yellow]Exiting...[/yellow]")
+    mock_console.print.assert_any_call("\n[bold yellow]Goodbye![/bold yellow]")

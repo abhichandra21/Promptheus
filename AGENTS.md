@@ -46,5 +46,5 @@ Each provider has its own configuration in `models.json` and respective adapter 
 ## History Management
 The system automatically tracks all prompt refinements in a local history file. Users can access:
 - CLI command: `promptheus history`
-- Interactive commands: `:history`, `:load <n>`, `:clear-history`
+- Interactive commands: `/history`, `/load <n>`, `/clear-history`
 - History includes timestamps, task types, and both original and refined prompts.

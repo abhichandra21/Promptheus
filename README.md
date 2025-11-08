@@ -117,9 +117,9 @@ promptheus history --limit 50
 promptheus history --clear
 
 # From interactive mode
-:history
-:load 3
-:clear-history
+/history
+/load 3
+/clear-history
 ```
 
 History includes timestamps, task types, and both original and refined versions so you can track what worked.
@@ -132,7 +132,7 @@ History includes timestamps, task types, and both original and refined versions 
 
 ### Interactive Mode (REPL)
 
-Launch `promptheus` with no arguments to enter interactive mode. Process multiple prompts in one session, reuse your provider/model/flag settings, and use built-in helpers like `:history` and arrow-key navigation.
+Launch `promptheus` with no arguments to enter interactive mode. Process multiple prompts in one session, reuse your provider/model/flag settings, and use built-in helpers like `/history` and arrow-key navigation.
 
 <img width="1272" height="450" alt="image" src="https://github.com/user-attachments/assets/ddc68d1b-2495-4926-9b74-6d1ac80b2413" />
 
@@ -180,9 +180,9 @@ Mix and match with flags as needed.
 | `promptheus history` | View all saved prompts |
 | `promptheus history --limit N` | View last N prompts |
 | `promptheus history --clear` | Clear all history |
-| `:history` | View history (interactive mode) |
-| `:load <n>` | Load prompt #n from history (interactive mode) |
-| `:clear-history` | Clear history (interactive mode) |
+| `/history` | View history (interactive mode) |
+| `/load <n>` | Load prompt #n from history (interactive mode) |
+| `/clear-history` | Clear history (interactive mode) |
 
 ### Utility Commands
 
