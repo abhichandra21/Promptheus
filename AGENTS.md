@@ -61,7 +61,7 @@ The system automatically tracks all prompt refinements in a local history file. 
 Promptheus supports clean stdout/stderr separation for scripting and piping:
 - **Auto-quiet mode**: Automatically enabled when stdout is not a TTY (e.g., when piping)
 - **Manual quiet**: Use `--quiet-output` to suppress UI messages even on a TTY
-- **Force interactive**: Use `--force-interactive` to keep clarifying questions even when piping
+- **Prompt processing unchanged**: Questions are still asked based on LLM's decision, regardless of output mode
 - **Output formats**: `-o/--output-format` supports `plain`, `json`, `yaml`, and `markdown` (default)
-- **Behavior**: In quiet mode, all UI (status, warnings, spinners) goes to stderr, only the refined prompt goes to stdout
+- **Behavior**: In quiet mode, all UI (status, warnings, spinners, questions) goes to stderr, only the refined prompt goes to stdout
 - **Limitations**: Interactive tweaks, clipboard (`--copy`), and editor (`--edit`) are disabled in quiet mode

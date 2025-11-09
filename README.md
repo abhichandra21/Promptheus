@@ -141,8 +141,8 @@ promptheus --quiet-output "Write a blog post" > output.txt
 # Auto-quiet: automatically enabled when piping
 promptheus "Explain Docker" | cat
 
-# Force interactive questions even when piping
-promptheus --force-interactive "Draft a report" | tee result.txt
+# Questions are still asked based on LLM decision, even when piping
+promptheus "Draft a report" | tee result.txt
 
 # Different output formats
 promptheus -o plain "Write a haiku"        # Plain text
@@ -154,8 +154,8 @@ promptheus -o markdown "Explain concept"   # Markdown (default)
 **Quiet Mode Behavior:**
 - **Auto-quiet**: When stdout is not a TTY (e.g., when piping), quiet mode is automatically enabled
 - **Manual control**: Use `--quiet-output` to force quiet mode even on a TTY
-- **Override**: Use `--force-interactive` to keep questions even when piping
-- **Clean separation**: All UI messages (status, warnings, progress) go to stderr; only the final refined prompt goes to stdout
+- **Prompt processing unchanged**: Questions are still asked based on LLM's decision, regardless of output mode
+- **Clean separation**: All UI messages (status, warnings, progress, questions) go to stderr; only the final refined prompt goes to stdout
 - **No interactive tweaks**: Clipboard (`--copy`) and editor (`--edit`) are disabled in quiet mode
 
 ### Interactive Mode (REPL)

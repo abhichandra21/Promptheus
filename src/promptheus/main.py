@@ -261,11 +261,6 @@ def determine_question_plan(
     if console_err is None:
         console_err = console
 
-    # In quiet mode without force_interactive, skip questions automatically
-    if quiet_output and not getattr(args, "force_interactive", False):
-        notify("[dim]Auto-quiet mode: skipping clarifying questions[/dim]")
-        return QuestionPlan(skip_questions=True, task_type="analysis", questions=[], mapping={}, use_light_refinement=True)
-
     if getattr(args, "static", False):
         notify("\n[bold]Using static questions (MVP mode)[/bold]\n")
         questions, mapping = get_static_questions()
@@ -567,8 +562,9 @@ def main() -> None:
         configure_logging(logging.DEBUG)
 
     # Determine quiet mode behavior
+    # Quiet mode only affects output routing (stdout/stderr), not prompt processing
     stdout_is_tty = sys.stdout.isatty()
-    quiet_output = (not stdout_is_tty and not getattr(args, "force_interactive", False)) or getattr(args, "quiet_output", False)
+    quiet_output = (not stdout_is_tty) or getattr(args, "quiet_output", False)
 
     # Create dual consoles: console_out for payloads (stdout), console_err for UI (stderr)
     console_out = Console(file=sys.stdout, color_system=None, force_terminal=False)

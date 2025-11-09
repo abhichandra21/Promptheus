@@ -71,7 +71,7 @@ Examples:
     behavior_group.add_argument(
         "--force-interactive",
         action="store_true",
-        help="Keep interactive questions even when stdout is not a TTY (overrides auto-quiet mode)",
+        help="(Deprecated: questions are now always asked based on LLM decision regardless of output mode)",
     )
 
     # Output handling arguments
