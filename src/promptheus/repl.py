@@ -534,21 +534,17 @@ def interactive_mode(
     last_ctrl_c_time = [0.0]  # Track time of last Ctrl+C for graceful exit
     use_prompt_toolkit = not plain_mode
     last_result: Optional[str] = None  # Track last refined prompt for /copy
+
+    transient_toolbar_message: Optional[str] = None
+    show_transient_message_for_next_prompt: bool = False
     consecutive_ctrl_c = 0  # Track consecutive Ctrl+C presses
 
     # Track current provider (may be reloaded during session)
     current_provider = provider
 
-    # Get provider and model names for the toolbar (will be updated dynamically)
-    provider_name = app_config.provider or "unknown"
-    model_name = app_config.get_model() or "default"
-
-    # Define the UI components for prompt_toolkit
     prompt_message = HTML('<b>&gt; </b>')
 
-    # Create toolbar/banner content with provider/model info
-    toolbar_message = format_toolbar_text(provider_name, model_name)
-    bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
+
 
     # Neutral, subtle styling - black text on gray background
     style = Style.from_dict({
@@ -584,11 +580,25 @@ def interactive_mode(
 
     while True:
         try:
+            # Update toolbar with current provider/model info
+            provider_name = app_config.provider or "unknown"
+            model_name = app_config.get_model() or "default"
+
+            if show_transient_message_for_next_prompt and transient_toolbar_message:
+                current_toolbar_text = Text(transient_toolbar_message)
+                current_toolbar_text.stylize("bold yellow")
+                current_bottom_toolbar = HTML(f'<b><span style="color:yellow">{transient_toolbar_message}</span></b>')
+                show_transient_message_for_next_prompt = False # Reset for next prompt
+                transient_toolbar_message = None # Clear message
+            else:
+                current_toolbar_text = format_toolbar_text(provider_name, model_name)
+                current_bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
+
             if use_prompt_toolkit and session:
                 try:
                     user_input = session.prompt(
                         prompt_message,
-                        bottom_toolbar=bottom_toolbar,
+                        bottom_toolbar=current_bottom_toolbar,
                         style=style,
                     ).strip()
                 except KeyboardInterrupt:
@@ -597,7 +607,8 @@ def interactive_mode(
                         console.print("\n[yellow]Exiting.[/yellow]")
                         break
                     else:
-                        console.print("\n[yellow]Press Ctrl+C again to exit.[/yellow]")
+                        transient_toolbar_message = "Press Ctrl+C again to exit."
+                        show_transient_message_for_next_prompt = True
                         last_ctrl_c_time[0] = now
                         continue
                 except EOFError:
@@ -616,7 +627,7 @@ def interactive_mode(
                     continue
             else:
                 try:
-                    console.print(toolbar_message)
+                    console.print(current_toolbar_text)
                     user_input = input(f"promptheus [{prompt_count}]> ").strip()
                     # Reset consecutive Ctrl+C counter on successful input
                     consecutive_ctrl_c = 0
@@ -656,8 +667,7 @@ def interactive_mode(
                         # Update toolbar with new provider/model info
                         provider_name = app_config.provider or "unknown"
                         model_name = app_config.get_model() or "default"
-                        toolbar_message = format_toolbar_text(provider_name, model_name)
-                        bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
+
                     else:
                         notify("[yellow]Continuing with previous provider[/yellow]")
                     continue
