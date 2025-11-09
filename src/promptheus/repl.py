@@ -17,7 +17,10 @@ from rich.markdown import Markdown
 from rich.table import Table
 from rich.text import Text
 
+import pyperclip
+
 from promptheus.config import Config
+from promptheus.constants import VERSION, GITHUB_REPO, GITHUB_ISSUES
 from promptheus.history import get_history
 from promptheus.providers import LLMProvider
 from promptheus.utils import sanitize_error_message
@@ -32,6 +35,17 @@ ProcessPromptFn = Callable[
 logger = logging.getLogger(__name__)
 
 
+def copy_to_clipboard(text: str, console: Console) -> None:
+    """Copy text to clipboard."""
+    try:
+        pyperclip.copy(text)
+        console.print("[green]✓[/green] Copied to clipboard!")
+    except Exception as exc:
+        sanitized = sanitize_error_message(str(exc))
+        console.print(f"[yellow]Warning: Failed to copy to clipboard: {sanitized}[/yellow]")
+        logger.exception("Clipboard copy failed")
+
+
 class CommandCompleter(Completer):
     """
     Custom completer for slash commands.
@@ -41,6 +55,9 @@ class CommandCompleter(Completer):
 
     def __init__(self):
         self.commands = {
+            'about': 'Show version info',
+            'bug': 'Submit a bug report',
+            'copy': 'Copy the last result to clipboard',
             'history': 'View recent prompts',
             'clear-history': 'Clear all history',
             'load': 'Load a prompt by number (e.g., /load 5)',
@@ -142,6 +159,9 @@ def show_help(console: Console) -> None:
     console.print()
     console.print("[bold cyan]Available Commands:[/bold cyan]")
     console.print()
+    console.print("  [bold]/about[/bold]                Show version info")
+    console.print("  [bold]/bug[/bold]                  Submit a bug report")
+    console.print("  [bold]/copy[/bold]                 Copy the last result to clipboard")
     console.print("  [bold]/history[/bold]              View recent prompts")
     console.print("  [bold]/clear-history[/bold]        Clear all history")
     console.print("  [bold]/load <number>[/bold]        Load a prompt from history")
@@ -156,6 +176,62 @@ def show_help(console: Console) -> None:
     console.print("  [bold]Ctrl+C or Ctrl+D[/bold]      Exit Promptheus")
     console.print()
     console.print("[dim]Tip: Type / then Tab to see all available commands[/dim]")
+    console.print()
+
+
+def show_about(console: Console, app_config: Config) -> None:
+    """Display version and system information."""
+    import platform
+    import sys
+
+    console.print()
+    console.print("[bold cyan]Promptheus - AI-powered Prompt Engineering[/bold cyan]")
+    console.print()
+    console.print(f"  [bold]Version:[/bold]       {VERSION}")
+    console.print(f"  [bold]GitHub:[/bold]        {GITHUB_REPO}")
+    console.print()
+    console.print("[bold cyan]System Information:[/bold cyan]")
+    console.print()
+    console.print(f"  [bold]Python:[/bold]        {sys.version.split()[0]}")
+    console.print(f"  [bold]Platform:[/bold]      {platform.system()} {platform.release()}")
+    console.print()
+    console.print("[bold cyan]Current Configuration:[/bold cyan]")
+    console.print()
+    console.print(f"  [bold]Provider:[/bold]      {app_config.provider or 'auto-detect'}")
+    console.print(f"  [bold]Model:[/bold]         {app_config.get_model() or 'default'}")
+
+    configured = app_config.get_configured_providers()
+    if configured:
+        console.print(f"  [bold]Available:[/bold]     {', '.join(configured)}")
+    console.print()
+
+
+def show_bug_report(console: Console) -> None:
+    """Display bug report information and optionally open GitHub issues."""
+    import webbrowser
+
+    console.print()
+    console.print("[bold cyan]Bug Report[/bold cyan]")
+    console.print()
+    console.print("Found a bug? We'd love to hear about it!")
+    console.print()
+    console.print(f"  [bold]Report issues at:[/bold] {GITHUB_ISSUES}")
+    console.print()
+
+    try:
+        open_browser = questionary.confirm(
+            "Open GitHub issues in your browser?",
+            default=True,
+        ).ask()
+
+        if open_browser:
+            webbrowser.open(GITHUB_ISSUES)
+            console.print("[green]✓[/green] Opened in browser")
+        else:
+            console.print("[yellow]Cancelled[/yellow]")
+    except KeyboardInterrupt:
+        console.print("[yellow]Cancelled[/yellow]")
+
     console.print()
 
 
@@ -242,6 +318,7 @@ def interactive_mode(
 
     prompt_count = 1
     use_prompt_toolkit = not plain_mode
+    last_result: Optional[str] = None  # Track last refined prompt for /copy
 
     # Get provider and model names for the toolbar
     provider_name = app_config.provider or "unknown"
@@ -334,7 +411,19 @@ def interactive_mode(
 
                 command = command_parts[0].lower()
 
-                if command == "history":
+                if command == "about":
+                    show_about(console, app_config)
+                    continue
+                elif command == "bug":
+                    show_bug_report(console)
+                    continue
+                elif command == "copy":
+                    if last_result:
+                        copy_to_clipboard(last_result, console)
+                    else:
+                        console.print("[yellow]No result to copy yet. Process a prompt first.[/yellow]")
+                    continue
+                elif command == "history":
                     display_history(console, notify)
                     continue
                 elif command == "help":
@@ -429,6 +518,9 @@ def interactive_mode(
 
             # Extract the refined prompt from the result
             final_prompt, task_type = result
+
+            # Store the result for /copy command
+            last_result = final_prompt
 
             # Render the response as Markdown
             console.print(Markdown(final_prompt))
