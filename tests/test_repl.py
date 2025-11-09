@@ -198,9 +198,10 @@ def test_interactive_mode_history_command(mock_input, mock_get_history,
         mock_display.assert_called_once_with(mock_console, mock_notify)
 
 
+@patch('promptheus.repl.questionary.confirm')
 @patch('promptheus.repl.get_history')
 @patch('builtins.input')
-def test_interactive_mode_load_command_valid(mock_input, mock_get_history,
+def test_interactive_mode_load_command_valid(mock_input, mock_get_history, mock_confirm,
                                            mock_provider, mock_config, mock_notify, mock_console,
                                            sample_history_entries):
     """Test /load command with valid index."""
@@ -209,6 +210,11 @@ def test_interactive_mode_load_command_valid(mock_input, mock_get_history,
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_history.get_by_index.return_value = sample_history_entries[0]
     mock_get_history.return_value = mock_history
+
+    # Mock the confirmation to return True
+    mock_confirm_instance = Mock()
+    mock_confirm_instance.ask.return_value = True
+    mock_confirm.return_value = mock_confirm_instance
 
     args = Namespace()
     mock_process_prompt = Mock(return_value=("processed", "task"))
@@ -224,9 +230,11 @@ def test_interactive_mode_load_command_valid(mock_input, mock_get_history,
         mock_process_prompt
     )
 
-    # Should show success message
-    mock_console.print.assert_any_call("[green]✓[/green] Loaded prompt #1 from history")
-    # Should process the loaded prompt
+    # Should show success message with new format
+    mock_console.print.assert_any_call("[green]✓[/green] Loaded prompt #1 from history:\n")
+    # Should show the loaded prompt
+    mock_console.print.assert_any_call("[cyan]Write code for sorting algorithm[/cyan]\n")
+    # Should process the loaded prompt after confirmation
     mock_process_prompt.assert_called()
 
 

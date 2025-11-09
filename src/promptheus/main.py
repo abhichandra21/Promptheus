@@ -49,6 +49,7 @@ class QuestionPlan:
     task_type: str
     questions: List[Dict[str, Any]]
     mapping: Dict[str, str]
+    use_light_refinement: bool = False
 
 
 def get_static_questions() -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
@@ -289,11 +290,11 @@ def determine_question_plan(
                     "Ask clarifying questions to refine your prompt?", default=True
                 ).ask()
             except KeyboardInterrupt:
-                notify("[yellow]Skipping questions - using original prompt[/yellow]")
-                return QuestionPlan(True, task_type, [], {})
+                notify("[yellow]Skipping questions - performing light refinement[/yellow]")
+                return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
             if not confirm:
-                notify("\n[bold]Skipping questions - using original prompt\n")
-                return QuestionPlan(True, task_type, [], {})
+                notify("\n[bold]Skipping questions - performing light refinement\n")
+                return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
 
     questions, mapping = convert_json_to_question_definitions(questions_json)
     if args.refine:
@@ -412,7 +413,8 @@ def process_single_prompt(
 
         # This is the main logic branching
         is_light_refinement = (
-            plan.task_type == "analysis" and plan.skip_questions and not args.quick
+            (plan.task_type == "analysis" and plan.skip_questions and not args.quick) or
+            plan.use_light_refinement
         )
 
         if is_light_refinement:
