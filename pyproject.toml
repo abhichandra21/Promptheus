@@ -52,3 +52,8 @@ promptheus = "promptheus.main:main"
 [tool.setuptools]
 packages = ["promptheus"]
 package-dir = {"" = "src"}
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:.*_UnionGenericAlias.*:DeprecationWarning:google.genai.types",
+]

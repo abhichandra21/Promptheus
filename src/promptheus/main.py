@@ -34,6 +34,7 @@ from promptheus.providers import LLMProvider, get_provider
 from promptheus.utils import configure_logging, sanitize_error_message
 from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
+from promptheus.exceptions import PromptCancelled
 from promptheus.commands import list_models, validate_environment, generate_template
 
 console = Console()
@@ -48,6 +49,7 @@ class QuestionPlan:
     task_type: str
     questions: List[Dict[str, Any]]
     mapping: Dict[str, str]
+    use_light_refinement: bool = False
 
 
 def get_static_questions() -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
@@ -182,7 +184,7 @@ def iterative_refinement(
                     notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
                     return current_prompt
                 tweak_instruction = answer.strip()
-        except EOFError:
+        except (EOFError, KeyboardInterrupt):
             notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
             return current_prompt
 
@@ -202,6 +204,9 @@ def iterative_refinement(
 
             display_output(current_prompt, is_refined=True)
 
+        except KeyboardInterrupt:
+            notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
+            return current_prompt
         except Exception as exc:
             sanitized = sanitize_error_message(str(exc))
             notify(f"[bold red]Error:[/bold red] Failed to tweak prompt: {sanitized}")
@@ -229,8 +234,11 @@ def determine_question_plan(
         notify("\n[bold blue]✓[/bold blue] Quick mode - using original prompt without modification\n")
         return QuestionPlan(skip_questions=True, task_type="analysis", questions=[], mapping={})
 
-    with console.status("[bold blue]Analyzing your prompt...", spinner="dots"):
-        result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
+    try:
+        with console.status("[bold blue]Analyzing your prompt...", spinner="dots"):
+            result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
+    except KeyboardInterrupt as exc:
+        raise PromptCancelled("Analysis cancelled") from exc
 
     if result is None:
         current_provider = app_config.provider or ""
@@ -282,11 +290,11 @@ def determine_question_plan(
                     "Ask clarifying questions to refine your prompt?", default=True
                 ).ask()
             except KeyboardInterrupt:
-                notify("[yellow]Skipping questions - using original prompt[/yellow]")
-                return QuestionPlan(True, task_type, [], {})
+                notify("[yellow]Skipping questions - performing light refinement[/yellow]")
+                return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
             if not confirm:
-                notify("\n[bold]Skipping questions - using original prompt\n")
-                return QuestionPlan(True, task_type, [], {})
+                notify("\n[bold]Skipping questions - performing light refinement\n")
+                return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
 
     questions, mapping = convert_json_to_question_definitions(questions_json)
     if args.refine:
@@ -376,6 +384,8 @@ def generate_final_prompt(
                 initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
             )
         return final_prompt, True
+    except KeyboardInterrupt as exc:
+        raise PromptCancelled("Refinement cancelled") from exc
     except Exception as exc:
         sanitized = sanitize_error_message(str(exc))
         notify(f"[bold red]Error:[/bold red] Failed to generate refined prompt: {sanitized}")
@@ -403,7 +413,8 @@ def process_single_prompt(
 
         # This is the main logic branching
         is_light_refinement = (
-            plan.task_type == "analysis" and plan.skip_questions and not args.quick
+            (plan.task_type == "analysis" and plan.skip_questions and not args.quick) or
+            plan.use_light_refinement
         )
 
         if is_light_refinement:
@@ -413,6 +424,8 @@ def process_single_prompt(
                         initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
                     )
                 is_refined = True
+            except KeyboardInterrupt as exc:
+                raise PromptCancelled("Light refinement cancelled") from exc
             except Exception as exc:
                 logger.warning("Light refinement failed: %s", sanitize_error_message(str(exc)))
                 notify("[yellow]Warning: Light refinement failed. Using original prompt.[/yellow]")
@@ -607,7 +620,14 @@ def main() -> None:
         )
     else:
         notify(f"[dim]Using provider: {provider_name} | Model: {app_config.get_model()}[/dim]\n")
-        process_single_prompt(provider, initial_prompt, args, debug_enabled, plain_mode, notify, app_config)
+        try:
+            process_single_prompt(provider, initial_prompt, args, debug_enabled, plain_mode, notify, app_config)
+        except PromptCancelled as exc:
+            notify(f"\n[yellow]{exc}[/yellow]\n")
+            sys.exit(130)
+        except KeyboardInterrupt:
+            notify("\n[yellow]Cancelled by user[/yellow]\n")
+            sys.exit(130)
 
 
 if __name__ == "__main__":
