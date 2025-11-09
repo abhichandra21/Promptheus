@@ -58,16 +58,16 @@ class CommandCompleter(Completer):
         self.commands = {
             'about': 'Show version info',
             'bug': 'Submit a bug report',
-            'copy': 'Copy the last result to clipboard',
-            'set': 'Change provider or model (e.g., /set provider claude)',
-            'toggle': 'Toggle refine or quick mode (e.g., /toggle refine)',
-            'status': 'Show current session settings',
-            'history': 'View recent prompts',
             'clear-history': 'Clear all history',
-            'load': 'Load a prompt by number (e.g., /load 5)',
-            'help': 'Show available commands',
+            'copy': 'Copy the last result to clipboard',
             'exit': 'Exit Promptheus',
+            'help': 'Show available commands',
+            'history': 'View recent prompts',
+            'load': 'Load a prompt by number (e.g., /load 5)',
             'quit': 'Exit Promptheus',
+            'set': 'Change provider or model (e.g., /set provider claude)',
+            'status': 'Show current session settings',
+            'toggle': 'Toggle refine or quick mode (e.g., /toggle refine)',
         }
 
     def get_completions(self, document: Document, complete_event):
@@ -231,22 +231,22 @@ def show_help(console: Console) -> None:
     console.print()
     console.print("[bold cyan]Session Commands:[/bold cyan]")
     console.print()
-    console.print("  [bold]/set provider <name>[/bold]  Change AI provider (e.g., /set provider claude)")
     console.print("  [bold]/set model <name>[/bold]     Change model (e.g., /set model gpt-4)")
-    console.print("  [bold]/toggle refine[/bold]        Toggle refine mode on/off")
-    console.print("  [bold]/toggle quick[/bold]         Toggle quick mode on/off")
+    console.print("  [bold]/set provider <name>[/bold]  Change AI provider (e.g., /set provider claude)")
     console.print("  [bold]/status[/bold]               Show current session settings")
+    console.print("  [bold]/toggle quick[/bold]         Toggle quick mode on/off")
+    console.print("  [bold]/toggle refine[/bold]        Toggle refine mode on/off")
     console.print()
     console.print("[bold cyan]Other Commands:[/bold cyan]")
     console.print()
     console.print("  [bold]/about[/bold]                Show version info")
     console.print("  [bold]/bug[/bold]                  Submit a bug report")
-    console.print("  [bold]/copy[/bold]                 Copy the last result to clipboard")
-    console.print("  [bold]/history[/bold]              View recent prompts")
     console.print("  [bold]/clear-history[/bold]        Clear all history")
-    console.print("  [bold]/load <number>[/bold]        Load a prompt from history")
-    console.print("  [bold]/help[/bold]                 Show this help message")
+    console.print("  [bold]/copy[/bold]                 Copy the last result to clipboard")
     console.print("  [bold]/exit[/bold] or [bold]/quit[/bold]       Exit Promptheus")
+    console.print("  [bold]/help[/bold]                 Show this help message")
+    console.print("  [bold]/history[/bold]              View recent prompts")
+    console.print("  [bold]/load <number>[/bold]        Load a prompt from history")
     console.print()
     console.print("[bold cyan]Key Bindings:[/bold cyan]")
     console.print()
@@ -690,21 +690,33 @@ def interactive_mode(
                 elif command == "bug":
                     show_bug_report(console)
                     continue
+                elif command == "clear-history":
+                    try:
+                        confirm = questionary.confirm(
+                            "Are you sure you want to clear all history?",
+                            default=False,
+                        ).ask()
+                        if confirm:
+                            get_history().clear()
+                            console.print("[green]✓[/green] History cleared")
+                    except KeyboardInterrupt:
+                        console.print("[yellow]Cancelled[/yellow]")
+                    continue
                 elif command == "copy":
                     if last_result:
                         copy_to_clipboard(last_result, console)
                     else:
                         console.print("[yellow]No result to copy yet. Process a prompt first.[/yellow]")
                     continue
-                elif command == "history":
-                    display_history(console, notify)
-                    continue
-                elif command == "help":
-                    show_help(console)
-                    continue
                 elif command in ("exit", "quit"):
                     console.print("[bold yellow]Goodbye![/bold yellow]")
                     break
+                elif command == "help":
+                    show_help(console)
+                    continue
+                elif command == "history":
+                    display_history(console, notify)
+                    continue
                 elif command == "load":
                     if len(command_parts) > 1:
                         # Has an argument - try to load that specific entry
@@ -740,18 +752,6 @@ def interactive_mode(
                         console.print("[yellow]Specify which prompt to load. Showing history:[/yellow]\n")
                         display_history(console, notify)
                         continue
-                elif command == "clear-history":
-                    try:
-                        confirm = questionary.confirm(
-                            "Are you sure you want to clear all history?",
-                            default=False,
-                        ).ask()
-                        if confirm:
-                            get_history().clear()
-                            console.print("[green]✓[/green] History cleared")
-                    except KeyboardInterrupt:
-                        console.print("[yellow]Cancelled[/yellow]")
-                    continue
                 else:
                     console.print(f"[yellow]Unknown command: /{command}[/yellow]")
                     console.print("[dim]Type /help to see available commands[/dim]")
