@@ -68,9 +68,26 @@ Examples:
         action="store_true",
         help="Force clarifying questions even for analysis tasks",
     )
+    behavior_group.add_argument(
+        "--force-interactive",
+        action="store_true",
+        help="Keep interactive questions even when stdout is not a TTY (overrides auto-quiet mode)",
+    )
 
     # Output handling arguments
     output_group = parser.add_argument_group("Output Handling")
+    output_group.add_argument(
+        "--quiet-output",
+        action="store_true",
+        help="Suppress UI messages on stdout; only print refined prompt (useful for piping)",
+    )
+    output_group.add_argument(
+        "-o",
+        "--output-format",
+        choices=["markdown", "plain", "json", "yaml"],
+        default="markdown",
+        help="Output format for the refined prompt (default: markdown)",
+    )
     output_group.add_argument(
         "-c",
         "--copy",

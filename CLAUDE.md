@@ -29,6 +29,16 @@ promptheus -q "Your prompt"
 
 # Refine mode (force questions)
 promptheus -r "Your prompt"
+
+# Quiet mode (clean stdout/stderr separation)
+promptheus --quiet-output "Your prompt" > output.txt
+promptheus "Your prompt" | cat  # Auto-quiet when piping
+promptheus --force-interactive "Your prompt" | tee result.txt
+
+# Different output formats
+promptheus -o plain "Your prompt"
+promptheus -o json "Your prompt"
+promptheus -o yaml "Your prompt"
 ```
 
 ### Testing
