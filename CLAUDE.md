@@ -1,6 +1,6 @@
-# Promptheus Developer Guide
+# CLAUDE.md
 
-This file provides guidance for AI assistants (including Claude Code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Commands
 
@@ -72,7 +72,7 @@ python -m mypy src/promptheus/
 - Handles interactive loop mode (REPL) for continuous prompt processing
 - Manages the question-answer-refinement workflow
 - Contains the core `process_single_prompt()` orchestrator function
-- Supports history commands: `promptheus history`, `:history`, `:load <n>`, `:clear-history`
+- Supports history commands: `promptheus history`, `/history`, `/load <n>`, `/clear-history`
 
 **Provider Abstraction (`src/promptheus/providers.py`)**
 - Abstract `LLMProvider` base class defining the interface for AI providers
@@ -90,13 +90,24 @@ python -m mypy src/promptheus/
 - Handles validation and setup of API credentials
 - Supports environment variable overrides for provider and model selection
 
+**REPL/Interactive Interface (`src/promptheus/repl.py`)**
+- Textual-based TUI for interactive mode with custom key bindings
+- Command completer with Tab completion for all `/` commands
+- Implements session management commands (`/set`, `/toggle`, `/status`)
+- Handles transient messages for non-intrusive user feedback
+- Bottom toolbar showing provider/model info and key bindings
+- Special commands: `/about`, `/bug`, `/copy`, `/help`, `/history`, `/load`, `/clear-history`
+
 **Supporting Modules**
 - `src/promptheus/prompts.py`: System instruction templates for different operations
-- `src/promptheus/constants.py`: Shared configuration values (timeouts, token limits)
+- `src/promptheus/constants.py`: Shared configuration values (VERSION, GITHUB_REPO, timeouts, token limits)
 - `src/promptheus/utils.py`: Common utilities including error sanitization
 - `src/promptheus/logging_config.py`: Structured logging configuration
 - `src/promptheus/history.py`: Session history management with file persistence
-- `src/promptheus/models.json`: Provider configurations and model definitions
+- `src/promptheus/providers.json`: Provider configurations and model definitions
+- `src/promptheus/core.py`: Core AI response function for demo/testing purposes
+- `src/promptheus/exceptions.py`: Custom exception types (e.g., `PromptCancelled`)
+- `src/promptheus/cli.py`: Argument parsing and CLI interface
 
 **Environment Validator (`env_validator.py`)**
 - Standalone utility for testing provider configurations
@@ -147,13 +158,18 @@ All provider errors are sanitized through `sanitize_error_message()` to prevent 
 **Question Mapping**
 When AI generates questions, the system maintains a mapping from generic keys (q0, q1, etc.) back to original question text. This ensures the refinement step has full context of what each answer refers to.
 
-**Interactive Mode**
-The REPL-style interactive mode persists provider, model, and flag settings across multiple prompts in a session, providing a seamless workflow for batch processing.
+**Interactive Mode (Textual TUI)**
+The REPL uses a Textual-based TUI with:
+- Custom key bindings: Enter to submit, Shift+Enter for newlines, Ctrl+C for cancellation
+- Tab completion for all slash commands with descriptions
+- Transient messages that disappear after a short duration
+- Session state persistence (provider, model, flags) across prompts
+- Bottom toolbar showing current provider/model and available key bindings
 
 **History Management**
 Prompt history is automatically saved for each refinement and can be accessed via:
 - CLI: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`
-- Interactive: `:history`, `:load <n>`, `:clear-history`
+- Interactive: `/history`, `/load <n>`, `/clear-history`
 
 ## Development Notes
 
@@ -161,18 +177,22 @@ Prompt history is automatically saved for each refinement and can be accessed vi
 - All API calls have configurable timeouts and token limits
 - The application supports both single-shot and interactive modes
 - Error handling is designed to be user-friendly while logging technical details
-- The Rich library provides terminal formatting for a polished CLI experience
+- Rich library provides terminal formatting, Textual library provides TUI framework
 - Provider libraries are imported lazily to allow optional dependencies
 - History is persisted to platform-specific directories (`~/.promptheus` or `%APPDATA%/promptheus`)
+- Interactive commands use `/` prefix (e.g., `/history`, `/load`, `/help`)
+- Cancellation flow uses `PromptCancelled` exception with exit code 130
+- Clipboard operations use `pyperclip` library
 
 ## Common Development Patterns
 
 ### Adding New Providers
 1. Implement `LLMProvider` interface in `providers.py`
-2. Add provider configuration to `models.json`
-3. Update `config.py` with API key instructions
+2. Add provider configuration to `providers.json`
+3. Update `config.py` with API key instructions and detection logic
 4. Add provider to factory function in `get_provider()`
-5. Update `__all__` exports
+5. Update `SUPPORTED_PROVIDER_IDS` in `config.py`
+6. Update `__all__` exports
 
 ### Error Handling Pattern
 ```python
@@ -202,8 +222,16 @@ All providers must implement `generate_questions()` that returns:
 }
 ```
 
+### Adding New Interactive Commands
+1. Add command to `CommandCompleter.commands` dict in `repl.py`
+2. Implement command handler in `interactive_mode()` function
+3. Add completion logic in `CommandCompleter.get_completions()` if needed
+4. Update `/help` command output in `show_help()` function
+5. Test command with Tab completion and execution
+
 ### Python 3.14 Compatibility Notes
 Some provider libraries may not yet support Python 3.14. For providers experiencing compatibility issues:
 1. The `gemini` provider now supports Python 3.14 via the unified `google-genai` SDK
 2. For other providers, consider using Python 3.13 or earlier until compatibility is ensured
 3. Use virtual environments to isolate different Python versions as needed
+4. Pytest warnings are configured in `pyproject.toml` to suppress known deprecation warnings
