@@ -47,6 +47,7 @@ Mix and match with providers, models, and file input as needed, e.g. `promptheus
 ## Session History
 - CLI commands: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`.
 - Interactive shortcuts: `/history`, `/load <n>`, `/clear-history`, plus ↑/↓ navigation.
+- Additional interactive features: `/copy` to copy the last result, `/status` to view current settings.
 - Every refined prompt is saved automatically so you never lose that one perfect phrasing.
 - History includes timestamps, task types, and both original and refined prompts for reference.
 
@@ -98,5 +99,36 @@ For other providers that may have compatibility issues:
 1. Wait for updates as newer provider SDKs support Python 3.14
 2. Use Python 3.13 or earlier if compatibility issues arise
 3. Consider using virtual environments to manage different Python versions
+
+## Interactive Features
+
+### Keyboard Shortcuts
+- **Enter**: Submit your prompt
+- **Shift+Enter**: Add a new line in the prompt (multiline input)
+- **Option/Alt+Enter**: Alternative multiline input
+- **Ctrl+J**: Another option for multiline input
+- **↑/↓ Arrow Keys**: Navigate through previous prompts
+- **Tab**: Show command completions when typing `/`
+
+### Enhanced Session Commands
+In interactive mode, you can use these slash commands:
+
+**Command Navigation:**
+- `/help` - Show all available commands
+- `/history` - View recent prompts
+- `/load <n>` - Load a specific prompt from history
+- `/clear-history` - Clear all history
+- `/about` - Show version and configuration info
+- `/bug` - Get help with bug reports
+
+**Session Control:**
+- `/status` - View current session settings
+- `/set provider <name>` - Change AI provider mid-session
+- `/set model <name>` - Change model mid-session
+- `/toggle refine` - Toggle refine mode on/off
+- `/toggle quick` - Toggle quick mode on/off
+
+**Utility:**
+- `/copy` - Copy the last refined result to clipboard
 
 Happy prompting! 🚀

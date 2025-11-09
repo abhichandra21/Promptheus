@@ -60,4 +60,22 @@ promptheus -f ./relative/path/prompt.txt
 - macOS & Windows: should work out of the box.
 - WSL: may require an X server for clipboard access.
 
+## Interactive Mode
+
+**Multiline input not working**
+- Use Shift+Enter for new lines in prompts
+- Alternative: Option/Alt+Enter or Ctrl+J
+- If terminal is not responding, try plain mode: `promptheus --plain`
+
+**Slash commands not working**
+- All commands start with `/` (not `:` anymore)
+- Use `/help` to see all available commands
+- Use Tab for command completions
+
+**Session management**
+- Use `/status` to see current provider/model settings
+- Change provider in session: `/set provider gemini`
+- Change model in session: `/set model gpt-4o`
+- Toggle modes: `/toggle refine` or `/toggle quick`
+
 Still stuck? Open an issue with the command you ran, the flags you used, and any stack trace so we can reproduce it quickly.
