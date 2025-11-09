@@ -325,9 +325,16 @@ def determine_question_plan(
                 f"\n[bold green]✓[/bold green] Creative task detected with {len(questions_json)} clarifying questions"
             )
             try:
-                confirm = questionary.confirm(
-                    "Ask clarifying questions to refine your prompt?", default=True
-                ).ask()
+                # Use simple prompt if stdout is piped, otherwise use questionary
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    confirm = questionary.confirm(
+                        "Ask clarifying questions to refine your prompt?", default=True
+                    ).ask()
+                else:
+                    sys.stderr.write("Ask clarifying questions to refine your prompt? (Y/n): ")
+                    sys.stderr.flush()
+                    response = input().strip().lower()
+                    confirm = response in ('', 'y', 'yes')
             except KeyboardInterrupt:
                 notify("[yellow]Skipping questions - performing light refinement[/yellow]")
                 return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
@@ -344,6 +351,7 @@ def determine_question_plan(
 def ask_clarifying_questions(
     plan: QuestionPlan,
     notify: MessageSink,
+    quiet_output: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Prompt the user with clarifying questions and return their answers."""
     if plan.skip_questions or not plan.questions:
@@ -352,6 +360,10 @@ def ask_clarifying_questions(
     notify("[bold]Please answer the following questions to refine your prompt:[/bold]\n")
 
     answers: Dict[str, Any] = {}
+
+    # Check if we can use fancy questionary prompts
+    # Questionary needs both stdin and stdout to be TTYs for terminal control codes to work
+    use_questionary = sys.stdin.isatty() and sys.stdout.isatty()
 
     for question in plan.questions:
         key = question["key"]
@@ -363,15 +375,67 @@ def ask_clarifying_questions(
 
         while True:
             try:
-                if qtype == "radio" and options:
-                    answer = questionary.select(message, choices=options).ask()
-                elif qtype == "checkbox" and options:
-                    answer = questionary.checkbox(message, choices=options).ask()
-                elif qtype == "confirm":
-                    default_bool = bool(default) if isinstance(default, bool) else True
-                    answer = questionary.confirm(message, default=default_bool).ask()
+                if use_questionary:
+                    # Use fancy questionary prompts when both stdin/stdout are TTYs
+                    if qtype == "radio" and options:
+                        answer = questionary.select(message, choices=options).ask()
+                    elif qtype == "checkbox" and options:
+                        answer = questionary.checkbox(message, choices=options).ask()
+                    elif qtype == "confirm":
+                        default_bool = bool(default) if isinstance(default, bool) else True
+                        answer = questionary.confirm(message, default=default_bool).ask()
+                    else:
+                        answer = questionary.text(message, default=str(default)).ask()
                 else:
-                    answer = questionary.text(message, default=str(default)).ask()
+                    # Fall back to simple input() when stdout is piped
+                    # Write prompts to stderr so they're visible
+                    if qtype == "radio" and options:
+                        sys.stderr.write(f"\n{message}\n")
+                        for i, opt in enumerate(options, 1):
+                            sys.stderr.write(f"  {i}. {opt}\n")
+                        sys.stderr.write(f"Choice [1-{len(options)}]: ")
+                        sys.stderr.flush()
+                        choice = input().strip()
+                        try:
+                            idx = int(choice) - 1
+                            if 0 <= idx < len(options):
+                                answer = options[idx]
+                            else:
+                                sys.stderr.write("Invalid choice. Please try again.\n")
+                                continue
+                        except ValueError:
+                            sys.stderr.write("Invalid input. Please try again.\n")
+                            continue
+                    elif qtype == "checkbox" and options:
+                        sys.stderr.write(f"\n{message} (comma-separated numbers)\n")
+                        for i, opt in enumerate(options, 1):
+                            sys.stderr.write(f"  {i}. {opt}\n")
+                        sys.stderr.write(f"Choices [1-{len(options)}]: ")
+                        sys.stderr.flush()
+                        choices = input().strip()
+                        try:
+                            indices = [int(c.strip()) - 1 for c in choices.split(',') if c.strip()]
+                            answer = [options[i] for i in indices if 0 <= i < len(options)]
+                        except ValueError:
+                            sys.stderr.write("Invalid input. Please try again.\n")
+                            continue
+                    elif qtype == "confirm":
+                        default_bool = bool(default) if isinstance(default, bool) else True
+                        default_str = "Y/n" if default_bool else "y/N"
+                        sys.stderr.write(f"\n{message} ({default_str}): ")
+                        sys.stderr.flush()
+                        response = input().strip().lower()
+                        if not response:
+                            answer = default_bool
+                        else:
+                            answer = response in ('y', 'yes')
+                    else:
+                        default_str = f" [{default}]" if default else ""
+                        sys.stderr.write(f"\n{message}{default_str}: ")
+                        sys.stderr.flush()
+                        answer = input().strip()
+                        if not answer and default:
+                            answer = str(default)
             except KeyboardInterrupt:
                 notify("[yellow]Cancelled.[/yellow]")
                 return None
@@ -497,7 +561,7 @@ def process_single_prompt(
                 is_refined = False
         else:
             # The standard flow: ask questions if needed, then generate
-            answers = ask_clarifying_questions(plan, notify)
+            answers = ask_clarifying_questions(plan, notify, quiet_output)
             if answers is None:
                 return None
             final_prompt, is_refined = generate_final_prompt(
