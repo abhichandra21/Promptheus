@@ -132,7 +132,13 @@ History includes timestamps, task types, and both original and refined versions 
 
 ### Interactive Mode (REPL)
 
-Launch `promptheus` with no arguments to enter interactive mode. Process multiple prompts in one session, reuse your provider/model/flag settings, and use built-in helpers like `/history` and arrow-key navigation.
+Launch `promptheus` with no arguments to enter interactive mode. Process multiple prompts in one session, reuse your provider/model/flag settings, and use built-in helpers like `/history`, arrow-key navigation, and multiline input support.
+
+Interactive mode includes:
+- **Slash commands**: `/history`, `/load <n>`, `/clear-history`, `/copy`, `/status`, `/set provider <name>`, `/toggle refine`, and many more
+- **Keyboard shortcuts**: Use Shift+Enter or Option/Alt+Enter for multiline prompts
+- **Session management**: Change provider/model on the fly with `/set` commands
+- **Copy to clipboard**: Use `/copy` to copy the last refined result
 
 <img width="1272" height="450" alt="image" src="https://github.com/user-attachments/assets/ddc68d1b-2495-4926-9b74-6d1ac80b2413" />
 
@@ -183,6 +189,23 @@ Mix and match with flags as needed.
 | `/history` | View history (interactive mode) |
 | `/load <n>` | Load prompt #n from history (interactive mode) |
 | `/clear-history` | Clear history (interactive mode) |
+
+### Interactive Mode Commands
+
+| Command | Description |
+|---------|-------------|
+| `/history` | View history |
+| `/load <n>` | Load prompt #n from history |
+| `/clear-history` | Clear all history |
+| `/copy` | Copy last refined result to clipboard |
+| `/about` | Show version and configuration info |
+| `/bug` | Submit a bug report |
+| `/help` | Show all available commands |
+| `/status` | Show current session settings |
+| `/set provider <name>` | Change AI provider mid-session |
+| `/set model <name>` | Change model mid-session |
+| `/toggle refine` | Toggle refine mode on/off |
+| `/toggle quick` | Toggle quick mode on/off |
 
 ### Utility Commands
 
