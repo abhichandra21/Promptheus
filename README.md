@@ -130,6 +130,34 @@ History includes timestamps, task types, and both original and refined versions 
 - **Open in editor**: `-e` / `--edit` — opens the result in your `$EDITOR` for further tweaking
 - **Combine them**: `promptheus -c -e "Draft a proposal"` — copy and edit at the same time
 
+### Quiet Mode & Output Formatting
+
+Promptheus supports quiet mode for clean stdout/stderr separation, perfect for piping and scripting:
+
+```bash
+# Quiet mode: only refined prompt on stdout, UI on stderr
+promptheus --quiet-output "Write a blog post" > output.txt
+
+# Auto-quiet: automatically enabled when piping
+promptheus "Explain Docker" | cat
+
+# Force interactive questions even when piping
+promptheus --force-interactive "Draft a report" | tee result.txt
+
+# Different output formats
+promptheus -o plain "Write a haiku"        # Plain text
+promptheus -o json "Create a function"     # JSON format
+promptheus -o yaml "Design an API"         # YAML format
+promptheus -o markdown "Explain concept"   # Markdown (default)
+```
+
+**Quiet Mode Behavior:**
+- **Auto-quiet**: When stdout is not a TTY (e.g., when piping), quiet mode is automatically enabled
+- **Manual control**: Use `--quiet-output` to force quiet mode even on a TTY
+- **Override**: Use `--force-interactive` to keep questions even when piping
+- **Clean separation**: All UI messages (status, warnings, progress) go to stderr; only the final refined prompt goes to stdout
+- **No interactive tweaks**: Clipboard (`--copy`) and editor (`--edit`) are disabled in quiet mode
+
 ### Interactive Mode (REPL)
 
 Launch `promptheus` with no arguments to enter interactive mode. Process multiple prompts in one session, reuse your provider/model/flag settings, and use built-in helpers like `/history`, arrow-key navigation, and multiline input support.

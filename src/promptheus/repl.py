@@ -29,7 +29,7 @@ from promptheus.exceptions import PromptCancelled
 
 MessageSink = Callable[[str], None]
 ProcessPromptFn = Callable[
-    [LLMProvider, str, Namespace, bool, bool, MessageSink, Config],
+    [LLMProvider, str, Namespace, bool, bool, MessageSink, Config, bool, Optional[Console], Optional[Console]],
     Optional[Tuple[str, str]],
 ]
 
@@ -514,6 +514,7 @@ def interactive_mode(
     notify: MessageSink,
     console: Console,
     process_prompt: ProcessPromptFn,
+    quiet_output: bool = False,
 ) -> None:
     """
     Interactive REPL mode with rich inline prompt.
@@ -526,6 +527,11 @@ def interactive_mode(
     - Enter to submit, Shift+Enter for new line
     - In-session commands to change provider, model, and modes
     """
+    # Should not enter interactive mode in quiet mode (guarded in main.py)
+    if quiet_output:
+        console.print("[red]✗[/red] Cannot enter interactive mode in quiet mode")
+        return
+
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
     console.print("[dim]Interactive mode ready. Type / for commands.[/dim]\n")
@@ -768,7 +774,7 @@ def interactive_mode(
             console.print()
             try:
                 result = process_prompt(
-                    current_provider, user_input, args, debug_enabled, plain_mode, notify, app_config
+                    current_provider, user_input, args, debug_enabled, plain_mode, notify, app_config, False, None, console
                 )
             except PromptCancelled as cancel_exc:
                 console.print(f"\n[yellow]{cancel_exc}[/yellow]")

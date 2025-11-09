@@ -113,33 +113,53 @@ def convert_json_to_question_definitions(
     return question_defs, question_mapping
 
 
-def display_output(prompt: str, is_refined: bool = True) -> None:
-    """Display the prompt in a panel."""
+def display_output(
+    prompt: str,
+    is_refined: bool = True,
+    quiet_output: bool = False,
+    console_out: Optional[Console] = None,
+    console_err: Optional[Console] = None,
+) -> None:
+    """Display the prompt in a panel or as plain text."""
+    # Use global console as fallback if not provided
+    if console_err is None:
+        console_err = console
+    if console_out is None:
+        console_out = console
+
+    if quiet_output:
+        # In quiet mode, don't display anything here - output is handled by the caller
+        return
+
+    # In non-quiet mode, display the Rich panel on stderr
     title = "[bold green]Refined Prompt[/bold green]" if is_refined else "[bold blue]Your Prompt[/bold blue]"
     border_color = "green" if is_refined else "blue"
 
     prompt_text = Text(prompt)
     panel = Panel(prompt_text, title=title, border_style=border_color, padding=(1, 2))
 
-    console.print("\n")
-    console.print(panel)
+    console_err.print("\n")
+    console_err.print(panel)
+    console_err.print()
 
-    console.print()
 
-
-def copy_to_clipboard(text: str) -> None:
+def copy_to_clipboard(text: str, notify: Optional[MessageSink] = None) -> None:
     """Copy text to clipboard."""
+    if notify is None:
+        notify = console.print
     try:
         pyperclip.copy(text)
-        console.print("[green]✓[/green] Copied to clipboard!")
+        notify("[green]✓[/green] Copied to clipboard!")
     except Exception as exc:  # pragma: no cover - platform dependent
         sanitized = sanitize_error_message(str(exc))
-        console.print(f"[yellow]Warning: Failed to copy to clipboard: {sanitized}[/yellow]")
+        notify(f"[yellow]Warning: Failed to copy to clipboard: {sanitized}[/yellow]")
         logger.exception("Clipboard copy failed")
 
 
-def open_in_editor(text: str) -> None:
+def open_in_editor(text: str, notify: Optional[MessageSink] = None) -> None:
     """Open the text in the user's default editor."""
+    if notify is None:
+        notify = console.print
     try:
         editor = os.environ.get("EDITOR", "vim")
 
@@ -149,14 +169,14 @@ def open_in_editor(text: str) -> None:
 
         try:
             subprocess.run([editor, temp_path], check=True)
-            console.print(f"[green]✓[/green] Opened in {editor}")
+            notify(f"[green]✓[/green] Opened in {editor}")
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
 
     except Exception as exc:  # pragma: no cover - external editor
         sanitized = sanitize_error_message(str(exc))
-        console.print(f"[yellow]Warning: Failed to open editor: {sanitized}[/yellow]")
+        notify(f"[yellow]Warning: Failed to open editor: {sanitized}[/yellow]")
         logger.exception("Opening editor failed")
 
 
@@ -165,11 +185,21 @@ def iterative_refinement(
     current_prompt: str,
     plain_mode: bool,
     notify: MessageSink,
+    quiet_output: bool = False,
+    console_err: Optional[Console] = None,
 ) -> str:
     """
     Allow user to iteratively refine the prompt with simple tweaks.
     Returns the final accepted prompt.
     """
+    # Use global console as fallback if not provided
+    if console_err is None:
+        console_err = console
+
+    # Skip iterative refinement in quiet mode
+    if quiet_output:
+        return current_prompt
+
     iteration = 1
 
     while True:
@@ -197,12 +227,12 @@ def iterative_refinement(
         notify(f"\n[blue]⟳[/blue] Tweaking prompt (v{iteration})...\n")
 
         try:
-            with console.status("[bold blue]Tweaking your prompt...", spinner="dots"):
+            with console_err.status("[bold blue]Tweaking your prompt...", spinner="dots"):
                 current_prompt = provider.tweak_prompt(
                     current_prompt, tweak_instruction, TWEAK_SYSTEM_INSTRUCTION
                 )
 
-            display_output(current_prompt, is_refined=True)
+            display_output(current_prompt, is_refined=True, quiet_output=False, console_err=console_err)
 
         except KeyboardInterrupt:
             notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
@@ -221,21 +251,35 @@ def determine_question_plan(
     debug_enabled: bool,
     notify: MessageSink,
     app_config: Config,
+    quiet_output: bool = False,
+    console_err: Optional[Console] = None,
 ) -> QuestionPlan:
     """
     Decide whether to ask clarifying questions and prepare them if needed.
     """
-    if args.static:
+    # Use global console as fallback if not provided
+    if console_err is None:
+        console_err = console
+
+    # In quiet mode without force_interactive, skip questions automatically
+    if quiet_output and not getattr(args, "force_interactive", False):
+        notify("[dim]Auto-quiet mode: skipping clarifying questions[/dim]")
+        return QuestionPlan(skip_questions=True, task_type="analysis", questions=[], mapping={}, use_light_refinement=True)
+
+    if getattr(args, "static", False):
         notify("\n[bold]Using static questions (MVP mode)[/bold]\n")
         questions, mapping = get_static_questions()
         return QuestionPlan(skip_questions=False, task_type="generation", questions=questions, mapping=mapping)
 
-    if args.quick:
+    if getattr(args, "quick", False):
         notify("\n[bold blue]✓[/bold blue] Quick mode - using original prompt without modification\n")
         return QuestionPlan(skip_questions=True, task_type="analysis", questions=[], mapping={})
 
     try:
-        with console.status("[bold blue]Analyzing your prompt...", spinner="dots"):
+        if not quiet_output:
+            with console_err.status("[bold blue]Analyzing your prompt...", spinner="dots"):
+                result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
+        else:
             result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
     except KeyboardInterrupt as exc:
         raise PromptCancelled("Analysis cancelled") from exc
@@ -373,13 +417,24 @@ def generate_final_prompt(
     answers: Dict[str, Any],
     mapping: Dict[str, str],
     notify: MessageSink,
+    quiet_output: bool = False,
+    console_err: Optional[Console] = None,
 ) -> Tuple[str, bool]:
     """Generate the refined prompt (or return original if no answers)."""
+    # Use global console as fallback if not provided
+    if console_err is None:
+        console_err = console
+
     if not answers:
         return initial_prompt, False
 
     try:
-        with console.status("[bold blue]Generating your refined prompt...", spinner="dots"):
+        if not quiet_output:
+            with console_err.status("[bold blue]Generating your refined prompt...", spinner="dots"):
+                final_prompt = provider.refine_from_answers(
+                    initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
+                )
+        else:
             final_prompt = provider.refine_from_answers(
                 initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
             )
@@ -401,6 +456,9 @@ def process_single_prompt(
     plain_mode: bool,
     notify: MessageSink,
     app_config: Config,
+    quiet_output: bool = False,
+    console_out: Optional[Console] = None,
+    console_err: Optional[Console] = None,
 ) -> Optional[Tuple[str, str]]:
     """
     Process a single prompt through the refinement pipeline.
@@ -408,8 +466,14 @@ def process_single_prompt(
     Returns:
         Tuple of (final_prompt, task_type) if successful, None otherwise
     """
+    # Use global console as fallback if not provided
+    if console_err is None:
+        console_err = console
+    if console_out is None:
+        console_out = console
+
     try:
-        plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, notify, app_config)
+        plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, notify, app_config, quiet_output, console_err)
 
         # This is the main logic branching
         is_light_refinement = (
@@ -419,7 +483,12 @@ def process_single_prompt(
 
         if is_light_refinement:
             try:
-                with console.status("[bold blue]Performing light refinement...", spinner="dots"):
+                if not quiet_output:
+                    with console_err.status("[bold blue]Performing light refinement...", spinner="dots"):
+                        final_prompt = provider.light_refine(
+                            initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+                        )
+                else:
                     final_prompt = provider.light_refine(
                         initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
                     )
@@ -437,7 +506,7 @@ def process_single_prompt(
             if answers is None:
                 return None
             final_prompt, is_refined = generate_final_prompt(
-                provider, initial_prompt, answers, plan.mapping, notify
+                provider, initial_prompt, answers, plan.mapping, notify, quiet_output, console_err
             )
 
     except Exception as exc:
@@ -448,14 +517,18 @@ def process_single_prompt(
         logger.exception("Failed to process prompt")
         return None
 
-    display_output(final_prompt, is_refined=is_refined)
+    display_output(final_prompt, is_refined=is_refined, quiet_output=quiet_output, console_out=console_out, console_err=console_err)
 
-    interactive_tweaks = sys.stdin.isatty() and not args.quick
+    # Skip interactive tweaks in quiet mode
+    interactive_tweaks = sys.stdin.isatty() and not args.quick and not quiet_output
     if interactive_tweaks:
-        final_prompt = iterative_refinement(provider, final_prompt, plain_mode, notify)
+        final_prompt = iterative_refinement(provider, final_prompt, plain_mode, notify, quiet_output, console_err)
     else:
         if args.quick:
             notify("[dim]Skipping interactive tweaking (quick mode)[/dim]\n")
+        elif quiet_output:
+            # Don't notify in quiet mode
+            pass
         else:
             notify("[dim]Skipping interactive tweaking (stdin is not a TTY)[/dim]\n")
 
@@ -471,11 +544,13 @@ def process_single_prompt(
     except Exception as exc:
         logger.warning(f"Failed to save prompt to history: {sanitize_error_message(str(exc))}")
 
-    if args.copy:
-        copy_to_clipboard(final_prompt)
+    # Skip clipboard and editor in quiet mode
+    if not quiet_output:
+        if getattr(args, "copy", False):
+            copy_to_clipboard(final_prompt, notify)
 
-    if args.edit:
-        open_in_editor(final_prompt)
+        if getattr(args, "edit", False):
+            open_in_editor(final_prompt, notify)
 
     return final_prompt, plan.task_type
 
@@ -491,21 +566,31 @@ def main() -> None:
         os.environ[PROMPTHEUS_DEBUG_ENV] = "1"
         configure_logging(logging.DEBUG)
 
-    notify: MessageSink = console.print
+    # Determine quiet mode behavior
+    stdout_is_tty = sys.stdout.isatty()
+    quiet_output = (not stdout_is_tty and not getattr(args, "force_interactive", False)) or getattr(args, "quiet_output", False)
+
+    # Create dual consoles: console_out for payloads (stdout), console_err for UI (stderr)
+    console_out = Console(file=sys.stdout, color_system=None, force_terminal=False)
+    console_err = Console(file=sys.stderr)
+
+    # Define notify to gate informational messages (only show if not quiet)
+    notify: MessageSink = console_err.print if not quiet_output else (lambda *args, **kwargs: None)
+
     plain_mode = False
 
     # Handle utility commands that exit immediately
-    if args.list_models:
+    if getattr(args, "list_models", False):
         providers_to_list = [args.provider] if args.provider else None
-        list_models(app_config, console, providers=providers_to_list)
-        sys.exit(0)
-    
-    if args.validate:
-        validate_environment(app_config, console, test_connection=args.test_connection)
+        list_models(app_config, console_err, providers=providers_to_list)
         sys.exit(0)
 
-    if args.template:
-        generate_template(app_config, console, args.template)
+    if getattr(args, "validate", False):
+        validate_environment(app_config, console_err, test_connection=getattr(args, "test_connection", False))
+        sys.exit(0)
+
+    if getattr(args, "template", None):
+        generate_template(app_config, console_err, args.template)
         sys.exit(0)
 
     if getattr(args, "command", None) == "history":
@@ -520,7 +605,7 @@ def main() -> None:
             else:
                 notify("[yellow]Cancelled[/yellow]")
         else:
-            display_history(console, notify, limit=args.limit)
+            display_history(console_err, notify, limit=args.limit)
         sys.exit(0)
 
     # Show provider status in a friendly way
@@ -608,6 +693,12 @@ def main() -> None:
     debug_enabled = args.verbose or os.getenv(PROMPTHEUS_DEBUG_ENV, "").lower() in {"1", "true", "yes", "on"}
 
     if initial_prompt is None or not initial_prompt:
+        # Cannot enter interactive mode in quiet mode without a prompt
+        if quiet_output:
+            console_err.print("[red]✗[/red] Error: Cannot enter interactive mode with --quiet-output or when stdout is not a TTY")
+            console_err.print("[dim]Provide a prompt as an argument, via --file, stdin, or use --force-interactive[/dim]")
+            sys.exit(1)
+
         interactive_mode(
             provider,
             app_config,
@@ -615,13 +706,33 @@ def main() -> None:
             debug_enabled,
             plain_mode,
             notify,
-            console,
+            console_err,
             process_single_prompt,
+            quiet_output,
         )
     else:
         notify(f"[dim]Using provider: {provider_name} | Model: {app_config.get_model()}[/dim]\n")
         try:
-            process_single_prompt(provider, initial_prompt, args, debug_enabled, plain_mode, notify, app_config)
+            result = process_single_prompt(
+                provider, initial_prompt, args, debug_enabled, plain_mode, notify, app_config, quiet_output, console_out, console_err
+            )
+            if result:
+                final_prompt, task_type = result
+                # In quiet mode or with specific output formats, write the final output to stdout
+                output_format = getattr(args, "output_format", "markdown")
+                if quiet_output or output_format != "markdown":
+                    if output_format == "json":
+                        import json
+                        console_out.print(json.dumps({"prompt": final_prompt, "task_type": task_type}))
+                    elif output_format == "yaml":
+                        try:
+                            import yaml
+                            console_out.print(yaml.dump({"prompt": final_prompt, "task_type": task_type}, default_flow_style=False))
+                        except ImportError:
+                            notify("[yellow]Warning: PyYAML not installed, falling back to plain text[/yellow]")
+                            console_out.print(final_prompt)
+                    else:  # plain
+                        console_out.print(final_prompt)
         except PromptCancelled as exc:
             notify(f"\n[yellow]{exc}[/yellow]\n")
             sys.exit(130)

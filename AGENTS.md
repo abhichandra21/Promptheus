@@ -13,6 +13,14 @@ Run the CLI locally with either binary or module syntax:
 ```bash
 promptheus "Draft an onboarding email"
 python -m promptheus.main --static "Smoke test"
+
+# Quiet mode for scripting (clean stdout/stderr separation)
+promptheus --quiet-output "Generate a report" > output.txt
+promptheus "Write code" | cat  # Auto-quiet when piping
+
+# Different output formats
+promptheus -o json "Create function" | jq .
+promptheus -o plain "Write haiku"
 ```
 Validate credentials before hitting remote APIs:
 ```bash
@@ -48,3 +56,12 @@ The system automatically tracks all prompt refinements in a local history file. 
 - CLI command: `promptheus history`
 - Interactive commands: `/history`, `/load <n>`, `/clear-history`
 - History includes timestamps, task types, and both original and refined prompts.
+
+## Quiet Mode & Piping
+Promptheus supports clean stdout/stderr separation for scripting and piping:
+- **Auto-quiet mode**: Automatically enabled when stdout is not a TTY (e.g., when piping)
+- **Manual quiet**: Use `--quiet-output` to suppress UI messages even on a TTY
+- **Force interactive**: Use `--force-interactive` to keep clarifying questions even when piping
+- **Output formats**: `-o/--output-format` supports `plain`, `json`, `yaml`, and `markdown` (default)
+- **Behavior**: In quiet mode, all UI (status, warnings, spinners) goes to stderr, only the refined prompt goes to stdout
+- **Limitations**: Interactive tweaks, clipboard (`--copy`), and editor (`--edit`) are disabled in quiet mode
