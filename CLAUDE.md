@@ -32,8 +32,7 @@ promptheus -r "Your prompt"
 
 # Quiet mode (clean stdout/stderr separation)
 promptheus --quiet-output "Your prompt" > output.txt
-promptheus "Your prompt" | cat  # Auto-quiet when piping
-promptheus --force-interactive "Your prompt" | tee result.txt
+promptheus "Your prompt" | cat  # Auto-quiet when piping, questions still asked
 
 # Different output formats
 promptheus -o plain "Your prompt"
