@@ -350,8 +350,23 @@ def interactive_mode(
                             index = int(command_parts[1])
                             entry = get_history().get_by_index(index)
                             if entry:
-                                console.print(f"[green]✓[/green] Loaded prompt #{index} from history")
-                                user_input = entry.original_prompt
+                                console.print(f"[green]✓[/green] Loaded prompt #{index} from history:\n")
+                                console.print(f"[cyan]{entry.original_prompt}[/cyan]\n")
+
+                                # Ask for confirmation
+                                try:
+                                    confirm = questionary.confirm(
+                                        "Proceed with this prompt?",
+                                        default=True,
+                                    ).ask()
+                                    if confirm:
+                                        user_input = entry.original_prompt
+                                    else:
+                                        console.print("[yellow]Cancelled[/yellow]")
+                                        continue
+                                except KeyboardInterrupt:
+                                    console.print("[yellow]Cancelled[/yellow]")
+                                    continue
                             else:
                                 console.print(f"[yellow]No history entry found at index {index}[/yellow]")
                                 continue
