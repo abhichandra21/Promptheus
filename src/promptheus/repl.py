@@ -15,6 +15,7 @@ from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
+import time
 from rich.text import Text
 
 import pyperclip
@@ -22,7 +23,7 @@ import pyperclip
 from promptheus.config import Config
 from promptheus.constants import VERSION, GITHUB_REPO, GITHUB_ISSUES
 from promptheus.history import get_history
-from promptheus.providers import LLMProvider
+from promptheus.providers import LLMProvider, get_provider
 from promptheus.utils import sanitize_error_message
 from promptheus.exceptions import PromptCancelled
 
@@ -58,6 +59,9 @@ class CommandCompleter(Completer):
             'about': 'Show version info',
             'bug': 'Submit a bug report',
             'copy': 'Copy the last result to clipboard',
+            'set': 'Change provider or model (e.g., /set provider claude)',
+            'toggle': 'Toggle refine or quick mode (e.g., /toggle refine)',
+            'status': 'Show current session settings',
             'history': 'View recent prompts',
             'clear-history': 'Clear all history',
             'load': 'Load a prompt by number (e.g., /load 5)',
@@ -75,14 +79,30 @@ class CommandCompleter(Completer):
             return
 
         # Remove the leading /
-        command_part = text[1:].lower()
+        command_part = text[1:]
 
-        # Check if we're completing a command or its arguments
-        parts = command_part.split(None, 1)
+        # Split into parts, preserving empty strings
+        parts = command_part.split()
 
-        if len(parts) <= 1:
+        # Determine if we have a trailing space (indicates moving to next argument)
+        has_trailing_space = command_part.endswith(' ') and command_part.strip()
+
+        if not parts:
+            # Just "/" typed, show all commands
+            for cmd, description in self.commands.items():
+                yield Completion(
+                    cmd,
+                    start_position=0,
+                    display=cmd,
+                    display_meta=description,
+                )
+            return
+
+        command = parts[0].lower()
+
+        if len(parts) == 1 and not has_trailing_space:
             # Completing the command itself
-            search_term = parts[0] if parts else ''
+            search_term = command
             for cmd, description in self.commands.items():
                 if cmd.startswith(search_term):
                     yield Completion(
@@ -91,26 +111,78 @@ class CommandCompleter(Completer):
                         display=cmd,
                         display_meta=description,
                     )
-        elif len(parts) == 2 and parts[0] == 'load':
-            # Completing /load with history indices
-            # Show recent history entries
+        elif (len(parts) == 2 and has_trailing_space and command == 'set' and parts[1] == 'provider') or \
+             (len(parts) == 3 and command == 'set' and parts[1] == 'provider'):
+            # Completing /set provider with available providers (must check before general case)
             try:
-                history = get_history()
-                recent = history.get_recent(20)
-                for idx, entry in enumerate(recent, 1):
-                    idx_str = str(idx)
-                    if idx_str.startswith(parts[1]):
-                        preview = entry.original_prompt[:50]
-                        if len(entry.original_prompt) > 50:
-                            preview += "..."
+                from promptheus.config import Config
+                config = Config()
+                providers = config.get_configured_providers()
+                search_term = parts[2] if len(parts) == 3 else ''
+                for provider in providers:
+                    if provider.startswith(search_term):
                         yield Completion(
-                            idx_str,
-                            start_position=-len(parts[1]),
-                            display=f"{idx_str}",
-                            display_meta=preview,
+                            provider,
+                            start_position=-len(search_term),
+                            display=provider,
+                            display_meta=f'Switch to {provider}',
                         )
             except Exception:
                 pass
+
+        elif (len(parts) == 1 and has_trailing_space) or len(parts) == 2:
+            # Completing first argument after command
+            search_term = parts[1] if len(parts) == 2 else ''
+
+            if command == 'load':
+                # Completing /load with history indices
+                try:
+                    history = get_history()
+                    recent = history.get_recent(20)
+                    for idx, entry in enumerate(recent, 1):
+                        idx_str = str(idx)
+                        if idx_str.startswith(search_term):
+                            preview = entry.original_prompt[:50]
+                            if len(entry.original_prompt) > 50:
+                                preview += "..."
+                            yield Completion(
+                                idx_str,
+                                start_position=-len(search_term),
+                                display=f"{idx_str}",
+                                display_meta=preview,
+                            )
+                except Exception:
+                    pass
+
+            elif command == 'set':
+                # Completing /set with 'provider' or 'model'
+                subcommands = {
+                    'provider': 'Change the AI provider',
+                    'model': 'Change the model',
+                }
+                for subcmd, desc in subcommands.items():
+                    if subcmd.startswith(search_term):
+                        yield Completion(
+                            subcmd,
+                            start_position=-len(search_term),
+                            display=subcmd,
+                            display_meta=desc,
+                        )
+
+            elif command == 'toggle':
+                # Completing /toggle with 'refine' or 'quick'
+                subcommands = {
+                    'refine': 'Toggle refine mode on/off',
+                    'quick': 'Toggle quick mode on/off',
+                }
+                for subcmd, desc in subcommands.items():
+                    if subcmd.startswith(search_term):
+                        yield Completion(
+                            subcmd,
+                            start_position=-len(search_term),
+                            display=subcmd,
+                            display_meta=desc,
+                        )
 
 
 def display_history(console: Console, notify: MessageSink, limit: int = 20) -> None:
@@ -157,7 +229,15 @@ def display_history(console: Console, notify: MessageSink, limit: int = 20) -> N
 def show_help(console: Console) -> None:
     """Display help information about available commands."""
     console.print()
-    console.print("[bold cyan]Available Commands:[/bold cyan]")
+    console.print("[bold cyan]Session Commands:[/bold cyan]")
+    console.print()
+    console.print("  [bold]/set provider <name>[/bold]  Change AI provider (e.g., /set provider claude)")
+    console.print("  [bold]/set model <name>[/bold]     Change model (e.g., /set model gpt-4)")
+    console.print("  [bold]/toggle refine[/bold]        Toggle refine mode on/off")
+    console.print("  [bold]/toggle quick[/bold]         Toggle quick mode on/off")
+    console.print("  [bold]/status[/bold]               Show current session settings")
+    console.print()
+    console.print("[bold cyan]Other Commands:[/bold cyan]")
     console.print()
     console.print("  [bold]/about[/bold]                Show version info")
     console.print("  [bold]/bug[/bold]                  Submit a bug report")
@@ -173,7 +253,8 @@ def show_help(console: Console) -> None:
     console.print("  [bold]Enter[/bold]                 Submit your prompt")
     console.print("  [bold]Shift+Enter[/bold]           Add a new line (multiline input)")
     console.print("  [bold]Option/Alt+Enter[/bold]      Alternate shortcut for new line")
-    console.print("  [bold]Ctrl+C or Ctrl+D[/bold]      Exit Promptheus")
+    console.print("  [bold]Ctrl+C[/bold]                Cancel input (press twice to exit)")
+    console.print("  [bold]Ctrl+D[/bold]                Exit Promptheus")
     console.print()
     console.print("[dim]Tip: Type / then Tab to see all available commands[/dim]")
     console.print()
@@ -292,6 +373,138 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     )
 
 
+def show_status(console: Console, app_config: Config, args: Namespace) -> None:
+    """Display current session settings."""
+    console.print()
+    console.print("[bold cyan]Current Session Settings:[/bold cyan]")
+    console.print()
+    console.print(f"  [bold]Provider:[/bold]      {app_config.provider or 'auto-detect'}")
+    console.print(f"  [bold]Model:[/bold]         {app_config.get_model() or 'default'}")
+    console.print()
+    console.print("[bold cyan]Active Modes:[/bold cyan]")
+    console.print()
+    console.print(f"  [bold]Quick mode:[/bold]    {'ON' if args.quick else 'OFF'}")
+    console.print(f"  [bold]Refine mode:[/bold]   {'ON' if args.refine else 'OFF'}")
+    console.print(f"  [bold]Static mode:[/bold]   {'ON' if args.static else 'OFF'}")
+    console.print()
+
+    configured = app_config.get_configured_providers()
+    if configured:
+        console.print(f"  [bold]Available providers:[/bold] {', '.join(configured)}")
+        console.print()
+
+
+def handle_repl_command(
+    command_str: str,
+    app_config: Config,
+    args: Namespace,
+    console: Console,
+    notify: MessageSink,
+) -> Optional[str]:
+    """
+    Handle in-session commands like /set, /toggle, /status.
+
+    Returns:
+        'reload_provider' if the provider needs to be reloaded,
+        'handled' if the command was handled but doesn't need reload,
+        None if this is not a session command
+    """
+    parts = command_str.strip().split()
+    if not parts:
+        return None
+
+    command = parts[0][1:].lower()  # Remove the '/' and normalize
+
+    if command == "set":
+        if len(parts) < 3:
+            notify("[yellow]Usage: /set provider <name> or /set model <name>[/yellow]")
+            return "handled"
+
+        setting = parts[1].lower()
+        value = parts[2]
+
+        if setting == "provider":
+            configured = app_config.get_configured_providers()
+            if value not in configured:
+                notify(f"[red]✗[/red] Provider '{value}' is not configured or available")
+                notify(f"[dim]Available providers: {', '.join(configured)}[/dim]")
+                return "handled"
+
+            app_config.set_provider(value)
+            notify(f"[green]✓[/green] Provider set to '{value}'")
+            return "reload_provider"
+
+        elif setting == "model":
+            app_config.set_model(value)
+            notify(f"[green]✓[/green] Model set to '{value}'")
+            return "reload_provider"
+
+        else:
+            notify(f"[yellow]Unknown setting: {setting}. Use 'provider' or 'model'.[/yellow]")
+            return "handled"
+
+    elif command == "toggle":
+        if len(parts) < 2:
+            notify("[yellow]Usage: /toggle refine or /toggle quick[/yellow]")
+            return "handled"
+
+        mode = parts[1].lower()
+
+        if mode == "refine":
+            args.refine = not args.refine
+            if args.refine:
+                args.quick = False  # Mutually exclusive
+            status = "ON" if args.refine else "OFF"
+            notify(f"[green]✓[/green] Refine mode is now {status}")
+            return "handled"
+
+        elif mode == "quick":
+            args.quick = not args.quick
+            if args.quick:
+                args.refine = False  # Mutually exclusive
+            status = "ON" if args.quick else "OFF"
+            notify(f"[green]✓[/green] Quick mode is now {status}")
+            return "handled"
+
+        else:
+            notify(f"[yellow]Unknown mode: {mode}. Use 'refine' or 'quick'.[/yellow]")
+            return "handled"
+
+    elif command == "status":
+        show_status(console, app_config, args)
+        return "handled"
+
+    else:
+        # Not a session command, return None to let the existing handler deal with it
+        return None
+
+
+def reload_provider_instance(
+    app_config: Config,
+    console: Console,
+    notify: MessageSink,
+) -> Optional[LLMProvider]:
+    """
+    Reload the provider instance based on current config.
+
+    Returns:
+        New provider instance, or None if initialization failed
+    """
+    provider_name = app_config.provider or "gemini"
+    model_name = app_config.get_model()
+
+    try:
+        with console.status(f"[bold blue]Initializing {provider_name}...", spinner="dots"):
+            new_provider = get_provider(provider_name, app_config, model_name)
+        notify(f"[green]✓[/green] Successfully initialized {provider_name} with model {model_name}")
+        return new_provider
+    except Exception as exc:
+        sanitized = sanitize_error_message(str(exc))
+        notify(f"[red]✗[/red] Failed to initialize provider: {sanitized}")
+        logger.exception("Provider reload failed")
+        return None
+
+
 def interactive_mode(
     provider: LLMProvider,
     app_config: Config,
@@ -311,16 +524,22 @@ def interactive_mode(
     - Rich markdown rendering for AI responses
     - Slash command completion (type / to see commands)
     - Enter to submit, Shift+Enter for new line
+    - In-session commands to change provider, model, and modes
     """
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
     console.print("[dim]Interactive mode ready. Type / for commands.[/dim]\n")
 
     prompt_count = 1
+    last_ctrl_c_time = [0.0]  # Track time of last Ctrl+C for graceful exit
     use_prompt_toolkit = not plain_mode
     last_result: Optional[str] = None  # Track last refined prompt for /copy
+    consecutive_ctrl_c = 0  # Track consecutive Ctrl+C presses
 
-    # Get provider and model names for the toolbar
+    # Track current provider (may be reloaded during session)
+    current_provider = provider
+
+    # Get provider and model names for the toolbar (will be updated dynamically)
     provider_name = app_config.provider or "unknown"
     model_name = app_config.get_model() or "default"
 
@@ -373,8 +592,14 @@ def interactive_mode(
                         style=style,
                     ).strip()
                 except KeyboardInterrupt:
-                    console.print("\n[bold yellow]Goodbye![/bold yellow]")
-                    break
+                    now = time.time()
+                    if now - last_ctrl_c_time[0] < 1.5:
+                        console.print("\n[yellow]Exiting.[/yellow]")
+                        break
+                    else:
+                        console.print("\n[yellow]Press Ctrl+C again to exit.[/yellow]")
+                        last_ctrl_c_time[0] = now
+                        continue
                 except EOFError:
                     # Ctrl+D should exit completely
                     console.print("\n[bold yellow]Goodbye![/bold yellow]")
@@ -393,7 +618,20 @@ def interactive_mode(
                 try:
                     console.print(toolbar_message)
                     user_input = input(f"promptheus [{prompt_count}]> ").strip()
-                except (EOFError, KeyboardInterrupt):
+                    # Reset consecutive Ctrl+C counter on successful input
+                    consecutive_ctrl_c = 0
+                except KeyboardInterrupt:
+                    # Ctrl+C: increment counter
+                    consecutive_ctrl_c += 1
+                    if consecutive_ctrl_c >= 2:
+                        # Two consecutive Ctrl+C presses -> exit
+                        console.print("\n[bold yellow]Goodbye![/bold yellow]")
+                        break
+                    else:
+                        # First Ctrl+C -> cancel and continue
+                        console.print("\n[dim]Cancelled (press Ctrl+C again to exit)[/dim]")
+                        continue
+                except EOFError:
                     console.print("\n[bold yellow]Goodbye![/bold yellow]")
                     break
 
@@ -404,6 +642,31 @@ def interactive_mode(
 
             # Handle slash commands
             if user_input.startswith("/"):
+                # Reset Ctrl+C counter when handling commands
+                consecutive_ctrl_c = 0
+
+                # First check if it's a session command (/set, /toggle, /status)
+                reload_signal = handle_repl_command(user_input, app_config, args, console, notify)
+
+                if reload_signal == "reload_provider":
+                    # Provider or model changed, reload the provider instance
+                    new_provider = reload_provider_instance(app_config, console, notify)
+                    if new_provider:
+                        current_provider = new_provider
+                        # Update toolbar with new provider/model info
+                        provider_name = app_config.provider or "unknown"
+                        model_name = app_config.get_model() or "default"
+                        toolbar_message = format_toolbar_text(provider_name, model_name)
+                        bottom_toolbar = create_bottom_toolbar(provider_name, model_name)
+                    else:
+                        notify("[yellow]Continuing with previous provider[/yellow]")
+                    continue
+
+                # If it was a session command (handled or reload_provider), don't fall through
+                if reload_signal in ("handled", "reload_provider"):
+                    continue
+
+                # Otherwise, handle other slash commands
                 command_parts = user_input[1:].split(None, 1)
                 if not command_parts:
                     show_help(console)
@@ -488,17 +751,21 @@ def interactive_mode(
             if not user_input:
                 continue
 
+            # Reset Ctrl+C counter when starting to process a prompt
+            consecutive_ctrl_c = 0
+
             # Process the prompt (no echo, no wrapper spinner)
             console.print()
             try:
                 result = process_prompt(
-                    provider, user_input, args, debug_enabled, plain_mode, notify, app_config
+                    current_provider, user_input, args, debug_enabled, plain_mode, notify, app_config
                 )
             except PromptCancelled as cancel_exc:
                 console.print(f"\n[yellow]{cancel_exc}[/yellow]")
                 console.print()
                 continue
             except KeyboardInterrupt:
+                # Ctrl+C during processing - just cancel and continue
                 console.print("\n[yellow]Cancelled[/yellow]")
                 console.print()
                 continue
