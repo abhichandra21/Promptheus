@@ -65,7 +65,7 @@ class TestIOContext:
     @patch('sys.stdin.isatty', return_value=True)
     @patch('sys.stdout.isatty', return_value=True)
     def test_create_with_quiet_flag(self, mock_stdout_tty, mock_stdin_tty):
-        """Test IOContext creation with explicit --quiet-output flag."""
+        """Test IOContext creation with explicit quiet mode flag (internal use)."""
         io = IOContext.create(quiet_output_flag=True)
 
         assert io.stdin_is_tty is True

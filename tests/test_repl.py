@@ -431,33 +431,33 @@ def test_handle_repl_command_toggle_refine(mock_config, mock_console, mock_notif
     mock_notify.assert_called_with("[green]✓[/green] Refine mode is now OFF")
 
 
-def test_handle_repl_command_toggle_quick(mock_config, mock_console, mock_notify):
-    """Test /toggle quick command."""
-    args = Namespace(quick=False, refine=True, static=False)
+def test_handle_repl_command_toggle_skip_questions(mock_config, mock_console, mock_notify):
+    """Test /toggle skip-questions command."""
+    args = Namespace(skip_questions=False, refine=True)
 
-    # Toggle quick on (should turn refine off)
-    result = handle_repl_command("/toggle quick", mock_config, args, mock_console, mock_notify)
+    # Toggle skip-questions on (should turn refine off)
+    result = handle_repl_command("/toggle skip-questions", mock_config, args, mock_console, mock_notify)
 
     assert result == "handled"
-    assert args.quick is True
+    assert args.skip_questions is True
     assert args.refine is False  # Mutually exclusive
-    mock_notify.assert_called_with("[green]✓[/green] Quick mode is now ON")
+    mock_notify.assert_called_with("[green]✓[/green] Skip-questions mode is now ON")
 
 
 def test_handle_repl_command_toggle_mutual_exclusion(mock_config, mock_console, mock_notify):
-    """Test that quick and refine are mutually exclusive."""
-    args = Namespace(quick=True, refine=False, static=False)
+    """Test that skip-questions and refine are mutually exclusive."""
+    args = Namespace(skip_questions=True, refine=False)
 
-    # Enable refine (should disable quick)
+    # Enable refine (should disable skip-questions)
     handle_repl_command("/toggle refine", mock_config, args, mock_console, mock_notify)
 
     assert args.refine is True
-    assert args.quick is False
+    assert args.skip_questions is False
 
-    # Enable quick (should disable refine)
-    handle_repl_command("/toggle quick", mock_config, args, mock_console, mock_notify)
+    # Enable skip-questions (should disable refine)
+    handle_repl_command("/toggle skip-questions", mock_config, args, mock_console, mock_notify)
 
-    assert args.quick is True
+    assert args.skip_questions is True
     assert args.refine is False
 
 
@@ -509,12 +509,12 @@ def test_handle_repl_command_set_invalid_usage(mock_config, mock_console, mock_n
 
 def test_handle_repl_command_toggle_invalid_usage(mock_config, mock_console, mock_notify):
     """Test /toggle with invalid usage (missing arguments)."""
-    args = Namespace(quick=False, refine=False, static=False)
+    args = Namespace(skip_questions=False, refine=False)
 
     result = handle_repl_command("/toggle", mock_config, args, mock_console, mock_notify)
 
     assert result == "handled"
-    mock_notify.assert_called_with("[yellow]Usage: /toggle refine or /toggle quick[/yellow]")
+    mock_notify.assert_called_with("[yellow]Usage: /toggle refine or /toggle skip-questions[/yellow]")
 
 
 def test_handle_repl_command_unknown_session_command(mock_config, mock_console, mock_notify):

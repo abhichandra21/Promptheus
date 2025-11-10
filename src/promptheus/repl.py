@@ -68,7 +68,7 @@ class CommandCompleter(Completer):
             'quit': 'Exit Promptheus',
             'set': 'Change provider or model (e.g., /set provider claude)',
             'status': 'Show current session settings',
-            'toggle': 'Toggle refine or quick mode (e.g., /toggle refine)',
+            'toggle': 'Toggle refine or skip-questions mode (e.g., /toggle refine)',
         }
 
     def get_completions(self, document: Document, complete_event):
@@ -171,10 +171,10 @@ class CommandCompleter(Completer):
                         )
 
             elif command == 'toggle':
-                # Completing /toggle with 'refine' or 'quick'
+                # Completing /toggle with 'refine' or 'skip-questions'
                 subcommands = {
                     'refine': 'Toggle refine mode on/off',
-                    'quick': 'Toggle quick mode on/off',
+                    'skip-questions': 'Toggle skip-questions mode on/off',
                 }
                 for subcmd, desc in subcommands.items():
                     if subcmd.startswith(search_term):
@@ -235,7 +235,7 @@ def show_help(console: Console) -> None:
     console.print("  [bold]/set model <name>[/bold]     Change model (e.g., /set model gpt-4)")
     console.print("  [bold]/set provider <name>[/bold]  Change AI provider (e.g., /set provider claude)")
     console.print("  [bold]/status[/bold]               Show current session settings")
-    console.print("  [bold]/toggle quick[/bold]         Toggle quick mode on/off")
+    console.print("  [bold]/toggle skip-questions[/bold] Toggle skip-questions mode on/off")
     console.print("  [bold]/toggle refine[/bold]        Toggle refine mode on/off")
     console.print()
     console.print("[bold cyan]Other Commands:[/bold cyan]")
@@ -384,9 +384,8 @@ def show_status(console: Console, app_config: Config, args: Namespace) -> None:
     console.print()
     console.print("[bold cyan]Active Modes:[/bold cyan]")
     console.print()
-    console.print(f"  [bold]Quick mode:[/bold]    {'ON' if args.quick else 'OFF'}")
-    console.print(f"  [bold]Refine mode:[/bold]   {'ON' if args.refine else 'OFF'}")
-    console.print(f"  [bold]Static mode:[/bold]   {'ON' if args.static else 'OFF'}")
+    console.print(f"  [bold]Skip questions:[/bold] {'ON' if getattr(args, 'skip_questions', False) else 'OFF'}")
+    console.print(f"  [bold]Refine mode:[/bold]    {'ON' if args.refine else 'OFF'}")
     console.print()
 
     configured = app_config.get_configured_providers()
@@ -446,7 +445,7 @@ def handle_repl_command(
 
     elif command == "toggle":
         if len(parts) < 2:
-            notify("[yellow]Usage: /toggle refine or /toggle quick[/yellow]")
+            notify("[yellow]Usage: /toggle refine or /toggle skip-questions[/yellow]")
             return "handled"
 
         mode = parts[1].lower()
@@ -454,21 +453,21 @@ def handle_repl_command(
         if mode == "refine":
             args.refine = not args.refine
             if args.refine:
-                args.quick = False  # Mutually exclusive
+                args.skip_questions = False  # Mutually exclusive
             status = "ON" if args.refine else "OFF"
             notify(f"[green]✓[/green] Refine mode is now {status}")
             return "handled"
 
-        elif mode == "quick":
-            args.quick = not args.quick
-            if args.quick:
+        elif mode == "skip-questions":
+            args.skip_questions = not args.skip_questions
+            if args.skip_questions:
                 args.refine = False  # Mutually exclusive
-            status = "ON" if args.quick else "OFF"
-            notify(f"[green]✓[/green] Quick mode is now {status}")
+            status = "ON" if args.skip_questions else "OFF"
+            notify(f"[green]✓[/green] Skip-questions mode is now {status}")
             return "handled"
 
         else:
-            notify(f"[yellow]Unknown mode: {mode}. Use 'refine' or 'quick'.[/yellow]")
+            notify(f"[yellow]Unknown mode: {mode}. Use 'refine' or 'skip-questions'.[/yellow]")
             return "handled"
 
     elif command == "status":

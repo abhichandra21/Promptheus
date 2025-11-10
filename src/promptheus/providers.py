@@ -20,6 +20,7 @@ from promptheus.constants import (
     DEFAULT_TWEAK_MAX_TOKENS,
 )
 from promptheus.utils import sanitize_error_message
+from promptheus.exceptions import ProviderAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +265,7 @@ class AnthropicProvider(LLMProvider):
         except Exception as exc:  # pragma: no cover - network failures
             sanitized = sanitize_error_message(str(exc))
             logger.warning("Anthropic API call failed: %s", sanitized)
-            raise RuntimeError(f"Anthropic API call failed: {sanitized}") from exc
+            raise ProviderAPIError(f"API call failed: {sanitized}") from exc
 
         if not response.content:
             raise RuntimeError("Anthropic API returned no content")
@@ -291,17 +292,11 @@ class AnthropicProvider(LLMProvider):
 
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
         """Generate clarifying questions using Claude."""
-        try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Anthropic question generation failed: %s", sanitize_error_message(str(exc))
-            )
-            return None
+        response_text = self._generate_text(
+            initial_prompt,
+            system_instruction,
+            max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+        )
 
         cleaned = self._extract_json_block(response_text)
         try:
@@ -394,22 +389,9 @@ class GeminiProvider(LLMProvider):
             raise RuntimeError("Gemini response did not include text content")
 
         except Exception as exc:
-            sanitized = sanitize_error_message(str(exc))
-            logger.warning("Gemini model %s failed: %s", self.model_name, sanitized)
-            raise RuntimeError(f"Gemini API call failed: {sanitized}") from exc
-
-    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        """Generate clarifying questions using Gemini."""
-        try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                json_mode=True,
-            )
-        except Exception as exc:
             error_msg = str(exc)
             sanitized = sanitize_error_message(error_msg)
-            logger.warning("Gemini question generation failed: %s", sanitized)
+            logger.warning("Gemini model %s failed: %s", self.model_name, sanitized)
 
             # Provide helpful context for common errors
             if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg or "UNAUTHENTICATED" in error_msg:
@@ -419,7 +401,15 @@ class GeminiProvider(LLMProvider):
             elif "404" in error_msg:
                 _print_user_error(f"Model not found: The model '{self.model_name}' may not exist or be available")
 
-            return None
+            raise ProviderAPIError(f"API call failed: {sanitized}") from exc
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+        """Generate clarifying questions using Gemini."""
+        response_text = self._generate_text(
+            initial_prompt,
+            system_instruction,
+            json_mode=True,
+        )
 
         try:
             result = json.loads(response_text)
@@ -516,7 +506,7 @@ class OpenAICompatibleProvider(LLMProvider):
         except Exception as exc:  # pragma: no cover - network failures
             sanitized = sanitize_error_message(str(exc))
             logger.warning("%s API call failed: %s", self._provider_label, sanitized)
-            raise RuntimeError(f"{self._provider_label} API call failed: {sanitized}") from exc
+            raise ProviderAPIError(f"API call failed: {sanitized}") from exc
 
         if not response.choices:
             raise RuntimeError(f"{self._provider_label} API returned no choices")
@@ -528,16 +518,12 @@ class OpenAICompatibleProvider(LLMProvider):
         return str(text)
 
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        try:
-            response_text = self._generate_text(
-                initial_prompt,
-                system_instruction,
-                json_mode=True,
-                max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
-            )
-        except Exception as exc:  # pragma: no cover - network failures
-            logger.warning("%s question generation failed: %s", self._provider_label, sanitize_error_message(str(exc)))
-            return None
+        response_text = self._generate_text(
+            initial_prompt,
+            system_instruction,
+            json_mode=True,
+            max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
+        )
         return _parse_question_payload(self._provider_label, response_text)
 
     def get_available_models(self) -> List[str]:

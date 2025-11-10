@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import sys
-import tempfile
 from argparse import Namespace
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -36,7 +34,7 @@ from promptheus.providers import LLMProvider, get_provider
 from promptheus.utils import configure_logging, sanitize_error_message
 from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
-from promptheus.exceptions import PromptCancelled
+from promptheus.exceptions import PromptCancelled, ProviderAPIError
 from promptheus.commands import list_models, validate_environment, generate_template
 
 console = Console()
@@ -52,32 +50,6 @@ class QuestionPlan:
     questions: List[Dict[str, Any]]
     mapping: Dict[str, str]
     use_light_refinement: bool = False
-
-
-def get_static_questions() -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
-    """Return the static list of questions for MVP mode along with mapping."""
-    specs = [
-        ("goal", "What is the goal of this prompt?", True),
-        ("audience", "Who is the target audience?", True),
-        ("tone", "What tone should it have? (e.g., formal, casual)", False),
-        ("format", "What is the desired output format? (e.g., list, paragraph, JSON)", False),
-    ]
-
-    questions: List[Dict[str, Any]] = []
-    mapping: Dict[str, str] = {}
-    for key, message, required in specs:
-        mapping[key] = message
-        questions.append(
-            {
-                "key": key,
-                "message": message if required else f"{message} (optional)",
-                "type": "text",
-                "options": [],
-                "required": required,
-                "default": "",
-            }
-        )
-    return questions, mapping
 
 
 def convert_json_to_question_definitions(
@@ -150,30 +122,6 @@ def copy_to_clipboard(text: str, notify: Optional[MessageSink] = None) -> None:
         logger.exception("Clipboard copy failed")
 
 
-def open_in_editor(text: str, notify: Optional[MessageSink] = None) -> None:
-    """Open the text in the user's default editor."""
-    if notify is None:
-        notify = console.print
-    try:
-        editor = os.environ.get("EDITOR", "vim")
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tf:
-            tf.write(text)
-            temp_path = tf.name
-
-        try:
-            subprocess.run([editor, temp_path], check=True)
-            notify(f"[green]✓[/green] Opened in {editor}")
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-
-    except Exception as exc:  # pragma: no cover - external editor
-        sanitized = sanitize_error_message(str(exc))
-        notify(f"[yellow]Warning: Failed to open editor: {sanitized}[/yellow]")
-        logger.exception("Opening editor failed")
-
-
 def iterative_refinement(
     provider: LLMProvider,
     current_prompt: str,
@@ -243,13 +191,8 @@ def determine_question_plan(
     """
     Decide whether to ask clarifying questions and prepare them if needed.
     """
-    if getattr(args, "static", False):
-        io.notify("\n[bold]Using static questions (MVP mode)[/bold]\n")
-        questions, mapping = get_static_questions()
-        return QuestionPlan(skip_questions=False, task_type="generation", questions=questions, mapping=mapping)
-
-    if getattr(args, "quick", False):
-        io.notify("\n[bold blue]✓[/bold blue] Quick mode - using original prompt without modification\n")
+    if getattr(args, "skip_questions", False):
+        io.notify("\n[bold blue]✓[/bold blue] Skip questions mode - improving prompt directly\n")
         return QuestionPlan(skip_questions=True, task_type="analysis", questions=[], mapping={})
 
     try:
@@ -258,32 +201,42 @@ def determine_question_plan(
                 result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
         else:
             result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
-    except KeyboardInterrupt as exc:
-        raise PromptCancelled("Analysis cancelled") from exc
-
-    if result is None:
+    except ProviderAPIError as exc:
         current_provider = app_config.provider or ""
         provider_display = current_provider.title() if current_provider else "Provider"
-        provider_label = current_provider or "default"
-        io.notify(
-            f"\n[bold yellow]⚠ {provider_display} is taking a break![/bold yellow] "
-            f"[dim](set {PROMPTHEUS_DEBUG_ENV}=1 to print debug output)[/dim]"
-        )
-        io.notify(f"[dim]Reason: Your {provider_display} provider couldn't respond or sent something unexpected.[/dim]")
-        io.notify("[dim]We need a working AI to generate questions for your prompt.[/dim]")
+        # Pass a larger max_length to prevent truncation of the core error message
+        sanitized_error = sanitize_error_message(str(exc), max_length=500)
+
+        io.notify(f"\n[bold red]✗ {provider_display} Error:[/bold red] [red]{sanitized_error}[/red]")
+        io.notify(f"[dim](set {PROMPTHEUS_DEBUG_ENV}=1 to print full debug output)[/dim]\n")
 
         available_providers = app_config.get_configured_providers()
-
         other_providers = [p for p in available_providers if p != current_provider]
+        provider_label = current_provider or "default"
 
         if other_providers:
             io.notify(f"[dim]💡 Current provider: '[cyan]{provider_label}[/cyan]'. Perhaps try a different one?[/dim]")
             for p in other_providers:
                 io.notify(f"[dim]  - [cyan]promptheus --provider {p} ...[/cyan][/dim]")
         else:
-            io.notify("[dim]💡 Double-check your credentials, or use '--static' for offline questions.[/dim]")
-        io.notify("") # Add an empty line for better readability
-        raise RuntimeError("AI provider unavailable for question generation")
+            io.notify("[dim]💡 Double-check your credentials, or use '--quick' for offline questions.[/dim]")
+        io.notify("")
+        raise RuntimeError("AI provider unavailable for question generation") from exc
+    except KeyboardInterrupt as exc:
+        raise PromptCancelled("Analysis cancelled") from exc
+
+    if result is None:
+        # This block should now be much harder to reach, but serves as a fallback.
+        current_provider = app_config.provider or ""
+        provider_display = current_provider.title() if current_provider else "Provider"
+        io.notify(
+            f"\n[bold yellow]⚠ {provider_display} is taking a break![/bold yellow] "
+            f"[dim](set {PROMPTHEUS_DEBUG_ENV}=1 to print debug output)[/dim]"
+        )
+        io.notify(f"[dim]Reason: Your {provider_display} provider returned an unexpected empty result.[/dim]")
+        io.notify("[dim]We need a working AI to generate questions for your prompt.[/dim]")
+        io.notify("")
+        raise RuntimeError("AI provider returned an unexpected empty result.")
 
     task_type = result.get("task_type", "generation")
     questions_json = result.get("questions", [])
@@ -295,7 +248,7 @@ def determine_question_plan(
 
     if task_type == "analysis" and not args.refine:
         io.notify("\n[bold blue]✓[/bold blue] Analysis task detected - performing light refinement")
-        io.notify("[dim]  (Use --quick to skip, or --refine to force questions)[/dim]\n")
+        io.notify("[dim]  (Use --skip-questions to skip, or --refine to force questions)[/dim]\n")
         return QuestionPlan(True, task_type, [], {})
 
     if not questions_json:
@@ -364,7 +317,7 @@ def ask_clarifying_questions(
                     answer = prompter.prompt_text(message, str(default))
             except EOFError:
                 io.notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
-                io.notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
+                io.notify("[dim]Use --skip-questions to skip questions or provide input via interactive terminal[/dim]")
                 return None
             except KeyboardInterrupt:
                 io.notify("[yellow]Cancelled.[/yellow]")
@@ -448,7 +401,7 @@ def process_single_prompt(
 
         # This is the main logic branching
         is_light_refinement = (
-            (plan.task_type == "analysis" and plan.skip_questions and not args.quick) or
+            (plan.task_type == "analysis" and plan.skip_questions) or
             plan.use_light_refinement
         )
 
@@ -483,20 +436,20 @@ def process_single_prompt(
     except Exception as exc:
         sanitized = sanitize_error_message(str(exc))
         io.notify(f"[red]✗[/red] Something went wrong: {sanitized}")
-        if debug_enabled:
+        if not debug_enabled:
             io.notify(f"[dim]Enable --verbose for full error details[/dim]")
         logger.exception("Failed to process prompt")
         return None
 
     display_output(final_prompt, io, is_refined=is_refined)
 
-    # Skip interactive tweaks in quiet mode
-    interactive_tweaks = io.stdin_is_tty and not args.quick and not io.quiet_output
+    # Skip interactive tweaks in quiet mode or when skip-questions is set
+    interactive_tweaks = io.stdin_is_tty and not getattr(args, "skip_questions", False) and not io.quiet_output
     if interactive_tweaks:
         final_prompt = iterative_refinement(provider, final_prompt, io, plain_mode)
     else:
-        if args.quick:
-            io.notify("[dim]Skipping interactive tweaking (quick mode)[/dim]\n")
+        if getattr(args, "skip_questions", False):
+            io.notify("[dim]Skipping interactive tweaking (skip-questions mode)[/dim]\n")
         elif io.quiet_output:
             # Don't notify in quiet mode
             pass
@@ -515,13 +468,10 @@ def process_single_prompt(
     except Exception as exc:
         logger.warning(f"Failed to save prompt to history: {sanitize_error_message(str(exc))}")
 
-    # Skip clipboard and editor in quiet mode
+    # Skip clipboard in quiet mode
     if not io.quiet_output:
         if getattr(args, "copy", False):
             copy_to_clipboard(final_prompt, io.notify)
-
-        if getattr(args, "edit", False):
-            open_in_editor(final_prompt, io.notify)
 
     return final_prompt, plan.task_type
 
@@ -538,24 +488,41 @@ def main() -> None:
         configure_logging(logging.DEBUG)
 
     # Create I/O context with appropriate settings
-    quiet_output_flag = getattr(args, "quiet_output", False)
-    plain_mode_flag = False  # Could be extended to support --plain in the future
-    io = IOContext.create(quiet_output_flag=quiet_output_flag, plain_mode=plain_mode_flag)
+    # IOContext auto-detects when stdout is piped for quiet mode
+    io = IOContext.create()
 
     plain_mode = False
 
     # Handle utility commands that exit immediately
-    if getattr(args, "list_models", False):
-        providers_to_list = [args.provider] if args.provider else None
-        list_models(app_config, io.console_err, providers=providers_to_list)
+    if getattr(args, "command", None) == "list-models":
+        if args.providers:
+            providers_to_list = [p.strip() for p in args.providers.split(',')]
+        else:
+            providers_to_list = None
+        list_models(
+            app_config,
+            io.console_err,
+            providers=providers_to_list,
+            limit=args.limit,
+            include_nontext=args.include_nontext
+        )
         sys.exit(0)
 
-    if getattr(args, "validate", False):
-        validate_environment(app_config, io.console_err, test_connection=getattr(args, "test_connection", False))
+    if getattr(args, "command", None) == "validate":
+        providers_to_validate = None
+        if args.providers:
+            providers_to_validate = [p.strip() for p in args.providers.split(',')]
+
+        validate_environment(
+            app_config,
+            io.console_err,
+            test_connection=getattr(args, "test_connection", False),
+            providers=providers_to_validate
+        )
         sys.exit(0)
 
-    if getattr(args, "template", None):
-        generate_template(app_config, io.console_err, args.template)
+    if getattr(args, "command", None) == "template":
+        generate_template(app_config, io.console_err, args.providers)
         sys.exit(0)
 
     if getattr(args, "command", None) == "history":
@@ -682,21 +649,13 @@ def main() -> None:
             )
             if result:
                 final_prompt, task_type = result
-                # In quiet mode or with specific output formats, write the final output to stdout
-                output_format = getattr(args, "output_format", "markdown")
-                if io.quiet_output or output_format != "markdown":
-                    if output_format == "json":
-                        import json
-                        io.console_out.print(json.dumps({"prompt": final_prompt, "task_type": task_type}))
-                    elif output_format == "yaml":
-                        try:
-                            import yaml
-                            io.console_out.print(yaml.dump({"prompt": final_prompt, "task_type": task_type}, default_flow_style=False))
-                        except ImportError:
-                            io.notify("[yellow]Warning: PyYAML not installed, falling back to plain text[/yellow]")
-                            io.console_out.print(final_prompt)
-                    else:  # plain
-                        io.console_out.print(final_prompt)
+                # Write the final output to stdout based on output format
+                output_format = getattr(args, "output_format", "plain")
+                if output_format == "json":
+                    import json
+                    io.console_out.print(json.dumps({"prompt": final_prompt, "task_type": task_type}))
+                else:  # plain
+                    io.console_out.print(final_prompt)
             else:
                 # process_single_prompt returned None - error occurred
                 io.notify("[red]✗[/red] Failed to process prompt")
