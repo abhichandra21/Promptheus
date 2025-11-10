@@ -333,8 +333,12 @@ def determine_question_plan(
                 else:
                     sys.stderr.write("Ask clarifying questions to refine your prompt? (Y/n): ")
                     sys.stderr.flush()
-                    response = input().strip().lower()
-                    confirm = response in ('', 'y', 'yes')
+                    try:
+                        response = input().strip().lower()
+                        confirm = response in ('', 'y', 'yes')
+                    except EOFError:
+                        notify("[yellow]stdin not interactive - skipping questions, using light refinement[/yellow]")
+                        return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
             except KeyboardInterrupt:
                 notify("[yellow]Skipping questions - performing light refinement[/yellow]")
                 return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
@@ -395,7 +399,12 @@ def ask_clarifying_questions(
                             sys.stderr.write(f"  {i}. {opt}\n")
                         sys.stderr.write(f"Choice [1-{len(options)}]: ")
                         sys.stderr.flush()
-                        choice = input().strip()
+                        try:
+                            choice = input().strip()
+                        except EOFError:
+                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
+                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
+                            return None
                         try:
                             idx = int(choice) - 1
                             if 0 <= idx < len(options):
@@ -412,7 +421,12 @@ def ask_clarifying_questions(
                             sys.stderr.write(f"  {i}. {opt}\n")
                         sys.stderr.write(f"Choices [1-{len(options)}]: ")
                         sys.stderr.flush()
-                        choices = input().strip()
+                        try:
+                            choices = input().strip()
+                        except EOFError:
+                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
+                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
+                            return None
                         try:
                             indices = [int(c.strip()) - 1 for c in choices.split(',') if c.strip()]
                             answer = [options[i] for i in indices if 0 <= i < len(options)]
@@ -424,7 +438,12 @@ def ask_clarifying_questions(
                         default_str = "Y/n" if default_bool else "y/N"
                         sys.stderr.write(f"\n{message} ({default_str}): ")
                         sys.stderr.flush()
-                        response = input().strip().lower()
+                        try:
+                            response = input().strip().lower()
+                        except EOFError:
+                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
+                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
+                            return None
                         if not response:
                             answer = default_bool
                         else:
@@ -433,7 +452,12 @@ def ask_clarifying_questions(
                         default_str = f" [{default}]" if default else ""
                         sys.stderr.write(f"\n{message}{default_str}: ")
                         sys.stderr.flush()
-                        answer = input().strip()
+                        try:
+                            answer = input().strip()
+                        except EOFError:
+                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
+                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
+                            return None
                         if not answer and default:
                             answer = str(default)
             except KeyboardInterrupt:
@@ -634,8 +658,9 @@ def main() -> None:
     console_out = Console(file=sys.stdout, color_system=None, force_terminal=False)
     console_err = Console(file=sys.stderr)
 
-    # Define notify to gate informational messages (only show if not quiet)
-    notify: MessageSink = console_err.print if not quiet_output else (lambda *args, **kwargs: None)
+    # Notify ALWAYS writes to stderr - errors must never be silenced
+    # For cosmetic messages in quiet mode, check quiet_output before calling notify
+    notify: MessageSink = console_err.print
 
     plain_mode = False
 
@@ -755,8 +780,9 @@ def main() -> None:
     if initial_prompt is None or not initial_prompt:
         # Cannot enter interactive mode in quiet mode without a prompt
         if quiet_output:
-            console_err.print("[red]✗[/red] Error: Cannot enter interactive mode with --quiet-output or when stdout is not a TTY")
-            console_err.print("[dim]Provide a prompt as an argument, via --file, stdin, or use --force-interactive[/dim]")
+            console_err.print("[red]✗[/red] Error: Cannot enter interactive mode when stdout is not a TTY")
+            console_err.print("[dim]Provide a prompt as an argument, via --file, or from stdin[/dim]")
+            console_err.print("[dim]Example: promptheus \"your prompt here\" | cat[/dim]")
             sys.exit(1)
 
         interactive_mode(
@@ -793,6 +819,10 @@ def main() -> None:
                             console_out.print(final_prompt)
                     else:  # plain
                         console_out.print(final_prompt)
+            else:
+                # process_single_prompt returned None - error occurred
+                notify("[red]✗[/red] Failed to process prompt")
+                sys.exit(1)
         except PromptCancelled as exc:
             notify(f"\n[yellow]{exc}[/yellow]\n")
             sys.exit(130)

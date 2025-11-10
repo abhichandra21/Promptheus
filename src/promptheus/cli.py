@@ -68,11 +68,6 @@ Examples:
         action="store_true",
         help="Force clarifying questions even for analysis tasks",
     )
-    behavior_group.add_argument(
-        "--force-interactive",
-        action="store_true",
-        help="(Deprecated: questions are now always asked based on LLM decision regardless of output mode)",
-    )
 
     # Output handling arguments
     output_group = parser.add_argument_group("Output Handling")
