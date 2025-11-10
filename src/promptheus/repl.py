@@ -23,13 +23,14 @@ import pyperclip
 from promptheus.config import Config
 from promptheus.constants import VERSION, GITHUB_REPO, GITHUB_ISSUES
 from promptheus.history import get_history
+from promptheus.io_context import IOContext
 from promptheus.providers import LLMProvider, get_provider
 from promptheus.utils import sanitize_error_message
 from promptheus.exceptions import PromptCancelled
 
 MessageSink = Callable[[str], None]
 ProcessPromptFn = Callable[
-    [LLMProvider, str, Namespace, bool, bool, MessageSink, Config, bool, Optional[Console], Optional[Console]],
+    [LLMProvider, str, Namespace, bool, bool, IOContext, Config],
     Optional[Tuple[str, str]],
 ]
 
@@ -511,10 +512,8 @@ def interactive_mode(
     args: Namespace,
     debug_enabled: bool,
     plain_mode: bool,
-    notify: MessageSink,
-    console: Console,
+    io: IOContext,
     process_prompt: ProcessPromptFn,
-    quiet_output: bool = False,
 ) -> None:
     """
     Interactive REPL mode with rich inline prompt.
@@ -528,9 +527,12 @@ def interactive_mode(
     - In-session commands to change provider, model, and modes
     """
     # Should not enter interactive mode in quiet mode (guarded in main.py)
-    if quiet_output:
-        console.print("[red]✗[/red] Cannot enter interactive mode in quiet mode")
+    if io.quiet_output:
+        io.console_err.print("[red]✗[/red] Cannot enter interactive mode in quiet mode")
         return
+
+    console = io.console_err
+    notify = io.notify
 
     # Welcome message
     console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
@@ -774,7 +776,7 @@ def interactive_mode(
             console.print()
             try:
                 result = process_prompt(
-                    current_provider, user_input, args, debug_enabled, plain_mode, notify, app_config, False, None, console
+                    current_provider, user_input, args, debug_enabled, plain_mode, io, app_config
                 )
             except PromptCancelled as cancel_exc:
                 console.print(f"\n[yellow]{cancel_exc}[/yellow]")

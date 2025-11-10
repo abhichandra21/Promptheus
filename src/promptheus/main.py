@@ -24,6 +24,8 @@ from rich.text import Text
 from promptheus.config import Config
 from promptheus.constants import PROMPTHEUS_DEBUG_ENV
 from promptheus.history import get_history
+from promptheus.io_context import IOContext
+from promptheus.question_prompter import create_prompter
 from promptheus.prompts import (
     ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION,
     CLARIFICATION_SYSTEM_INSTRUCTION,
@@ -115,19 +117,11 @@ def convert_json_to_question_definitions(
 
 def display_output(
     prompt: str,
+    io: IOContext,
     is_refined: bool = True,
-    quiet_output: bool = False,
-    console_out: Optional[Console] = None,
-    console_err: Optional[Console] = None,
 ) -> None:
     """Display the prompt in a panel or as plain text."""
-    # Use global console as fallback if not provided
-    if console_err is None:
-        console_err = console
-    if console_out is None:
-        console_out = console
-
-    if quiet_output:
+    if io.quiet_output:
         # In quiet mode, don't display anything here - output is handled by the caller
         return
 
@@ -138,9 +132,9 @@ def display_output(
     prompt_text = Text(prompt)
     panel = Panel(prompt_text, title=title, border_style=border_color, padding=(1, 2))
 
-    console_err.print("\n")
-    console_err.print(panel)
-    console_err.print()
+    io.console_err.print("\n")
+    io.console_err.print(panel)
+    io.console_err.print()
 
 
 def copy_to_clipboard(text: str, notify: Optional[MessageSink] = None) -> None:
@@ -183,21 +177,15 @@ def open_in_editor(text: str, notify: Optional[MessageSink] = None) -> None:
 def iterative_refinement(
     provider: LLMProvider,
     current_prompt: str,
+    io: IOContext,
     plain_mode: bool,
-    notify: MessageSink,
-    quiet_output: bool = False,
-    console_err: Optional[Console] = None,
 ) -> str:
     """
     Allow user to iteratively refine the prompt with simple tweaks.
     Returns the final accepted prompt.
     """
-    # Use global console as fallback if not provided
-    if console_err is None:
-        console_err = console
-
     # Skip iterative refinement in quiet mode
-    if quiet_output:
+    if io.quiet_output:
         return current_prompt
 
     iteration = 1
@@ -211,36 +199,36 @@ def iterative_refinement(
                     "Tweak? (Enter to accept, or describe your change)"
                 ).ask()
                 if answer is None:
-                    notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
+                    io.notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
                     return current_prompt
                 tweak_instruction = answer.strip()
         except (EOFError, KeyboardInterrupt):
-            notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
+            io.notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
             return current_prompt
 
         if not tweak_instruction:
-            notify("\n[green]✓[/green] Prompt accepted!\n")
+            io.notify("\n[green]✓[/green] Prompt accepted!\n")
             return current_prompt
 
         iteration += 1
 
-        notify(f"\n[blue]⟳[/blue] Tweaking prompt (v{iteration})...\n")
+        io.notify(f"\n[blue]⟳[/blue] Tweaking prompt (v{iteration})...\n")
 
         try:
-            with console_err.status("[bold blue]Tweaking your prompt...", spinner="dots"):
+            with io.console_err.status("[bold blue]Tweaking your prompt...", spinner="dots"):
                 current_prompt = provider.tweak_prompt(
                     current_prompt, tweak_instruction, TWEAK_SYSTEM_INSTRUCTION
                 )
 
-            display_output(current_prompt, is_refined=True, quiet_output=False, console_err=console_err)
+            display_output(current_prompt, io, is_refined=True)
 
         except KeyboardInterrupt:
-            notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
+            io.notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
             return current_prompt
         except Exception as exc:
             sanitized = sanitize_error_message(str(exc))
-            notify(f"[bold red]Error:[/bold red] Failed to tweak prompt: {sanitized}")
-            notify("[yellow]Keeping previous version[/yellow]\n")
+            io.notify(f"[bold red]Error:[/bold red] Failed to tweak prompt: {sanitized}")
+            io.notify("[yellow]Keeping previous version[/yellow]\n")
             logger.exception("Prompt tweak failed")
 
 
@@ -249,30 +237,24 @@ def determine_question_plan(
     initial_prompt: str,
     args: Namespace,
     debug_enabled: bool,
-    notify: MessageSink,
+    io: IOContext,
     app_config: Config,
-    quiet_output: bool = False,
-    console_err: Optional[Console] = None,
 ) -> QuestionPlan:
     """
     Decide whether to ask clarifying questions and prepare them if needed.
     """
-    # Use global console as fallback if not provided
-    if console_err is None:
-        console_err = console
-
     if getattr(args, "static", False):
-        notify("\n[bold]Using static questions (MVP mode)[/bold]\n")
+        io.notify("\n[bold]Using static questions (MVP mode)[/bold]\n")
         questions, mapping = get_static_questions()
         return QuestionPlan(skip_questions=False, task_type="generation", questions=questions, mapping=mapping)
 
     if getattr(args, "quick", False):
-        notify("\n[bold blue]✓[/bold blue] Quick mode - using original prompt without modification\n")
+        io.notify("\n[bold blue]✓[/bold blue] Quick mode - using original prompt without modification\n")
         return QuestionPlan(skip_questions=True, task_type="analysis", questions=[], mapping={})
 
     try:
-        if not quiet_output:
-            with console_err.status("[bold blue]Analyzing your prompt...", spinner="dots"):
+        if not io.quiet_output:
+            with io.console_err.status("[bold blue]Analyzing your prompt...", spinner="dots"):
                 result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
         else:
             result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
@@ -283,91 +265,83 @@ def determine_question_plan(
         current_provider = app_config.provider or ""
         provider_display = current_provider.title() if current_provider else "Provider"
         provider_label = current_provider or "default"
-        notify(
+        io.notify(
             f"\n[bold yellow]⚠ {provider_display} is taking a break![/bold yellow] "
             f"[dim](set {PROMPTHEUS_DEBUG_ENV}=1 to print debug output)[/dim]"
         )
-        notify(f"[dim]Reason: Your {provider_display} provider couldn't respond or sent something unexpected.[/dim]")
-        notify("[dim]We need a working AI to generate questions for your prompt.[/dim]")
+        io.notify(f"[dim]Reason: Your {provider_display} provider couldn't respond or sent something unexpected.[/dim]")
+        io.notify("[dim]We need a working AI to generate questions for your prompt.[/dim]")
 
         available_providers = app_config.get_configured_providers()
 
         other_providers = [p for p in available_providers if p != current_provider]
 
         if other_providers:
-            notify(f"[dim]💡 Current provider: '[cyan]{provider_label}[/cyan]'. Perhaps try a different one?[/dim]")
+            io.notify(f"[dim]💡 Current provider: '[cyan]{provider_label}[/cyan]'. Perhaps try a different one?[/dim]")
             for p in other_providers:
-                notify(f"[dim]  - [cyan]promptheus --provider {p} ...[/cyan][/dim]")
+                io.notify(f"[dim]  - [cyan]promptheus --provider {p} ...[/cyan][/dim]")
         else:
-            notify("[dim]💡 Double-check your credentials, or use '--static' for offline questions.[/dim]")
-        notify("") # Add an empty line for better readability
+            io.notify("[dim]💡 Double-check your credentials, or use '--static' for offline questions.[/dim]")
+        io.notify("") # Add an empty line for better readability
         raise RuntimeError("AI provider unavailable for question generation")
 
     task_type = result.get("task_type", "generation")
     questions_json = result.get("questions", [])
 
     if debug_enabled:
-        notify(
+        io.notify(
             f"[dim]Debug: task_type={task_type}, questions={len(questions_json)}, refine={args.refine}[/dim]"
         )
 
     if task_type == "analysis" and not args.refine:
-        notify("\n[bold blue]✓[/bold blue] Analysis task detected - performing light refinement")
-        notify("[dim]  (Use --quick to skip, or --refine to force questions)[/dim]\n")
+        io.notify("\n[bold blue]✓[/bold blue] Analysis task detected - performing light refinement")
+        io.notify("[dim]  (Use --quick to skip, or --refine to force questions)[/dim]\n")
         return QuestionPlan(True, task_type, [], {})
 
     if not questions_json:
-        notify("\n[bold blue]✓[/bold blue] No clarifying questions needed\n")
+        io.notify("\n[bold blue]✓[/bold blue] No clarifying questions needed\n")
         return QuestionPlan(True, task_type, [], {})
 
     if task_type == "generation" and not args.refine:
-            notify(
-                f"\n[bold green]✓[/bold green] Creative task detected with {len(questions_json)} clarifying questions"
+        io.notify(
+            f"\n[bold green]✓[/bold green] Creative task detected with {len(questions_json)} clarifying questions"
+        )
+        try:
+            # Create appropriate prompter based on I/O context
+            prompter = create_prompter(io)
+            confirm = prompter.prompt_confirmation(
+                "Ask clarifying questions to refine your prompt?", default=True
             )
-            try:
-                # Use simple prompt if stdout is piped, otherwise use questionary
-                if sys.stdin.isatty() and sys.stdout.isatty():
-                    confirm = questionary.confirm(
-                        "Ask clarifying questions to refine your prompt?", default=True
-                    ).ask()
-                else:
-                    sys.stderr.write("Ask clarifying questions to refine your prompt? (Y/n): ")
-                    sys.stderr.flush()
-                    try:
-                        response = input().strip().lower()
-                        confirm = response in ('', 'y', 'yes')
-                    except EOFError:
-                        notify("[yellow]stdin not interactive - skipping questions, using light refinement[/yellow]")
-                        return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
-            except KeyboardInterrupt:
-                notify("[yellow]Skipping questions - performing light refinement[/yellow]")
-                return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
-            if not confirm:
-                notify("\n[bold]Skipping questions - performing light refinement\n")
-                return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
+        except EOFError:
+            io.notify("[yellow]stdin not interactive - skipping questions, using light refinement[/yellow]")
+            return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
+        except KeyboardInterrupt:
+            io.notify("[yellow]Skipping questions - performing light refinement[/yellow]")
+            return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
+        if not confirm:
+            io.notify("\n[bold]Skipping questions - performing light refinement\n")
+            return QuestionPlan(True, task_type, [], {}, use_light_refinement=True)
 
     questions, mapping = convert_json_to_question_definitions(questions_json)
     if args.refine:
-        notify(f"[bold green]✓[/bold green] Refine mode - {len(questions)} questions generated\n")
+        io.notify(f"[bold green]✓[/bold green] Refine mode - {len(questions)} questions generated\n")
     return QuestionPlan(False, task_type, questions, mapping)
 
 
 def ask_clarifying_questions(
     plan: QuestionPlan,
-    notify: MessageSink,
-    quiet_output: bool = False,
+    io: IOContext,
 ) -> Optional[Dict[str, Any]]:
     """Prompt the user with clarifying questions and return their answers."""
     if plan.skip_questions or not plan.questions:
         return {}
 
-    notify("[bold]Please answer the following questions to refine your prompt:[/bold]\n")
+    io.notify("[bold]Please answer the following questions to refine your prompt:[/bold]\n")
 
     answers: Dict[str, Any] = {}
 
-    # Check if we can use fancy questionary prompts
-    # Questionary needs both stdin and stdout to be TTYs for terminal control codes to work
-    use_questionary = sys.stdin.isatty() and sys.stdout.isatty()
+    # Create appropriate prompter based on I/O context
+    prompter = create_prompter(io)
 
     for question in plan.questions:
         key = question["key"]
@@ -379,95 +353,24 @@ def ask_clarifying_questions(
 
         while True:
             try:
-                if use_questionary:
-                    # Use fancy questionary prompts when both stdin/stdout are TTYs
-                    if qtype == "radio" and options:
-                        answer = questionary.select(message, choices=options).ask()
-                    elif qtype == "checkbox" and options:
-                        answer = questionary.checkbox(message, choices=options).ask()
-                    elif qtype == "confirm":
-                        default_bool = bool(default) if isinstance(default, bool) else True
-                        answer = questionary.confirm(message, default=default_bool).ask()
-                    else:
-                        answer = questionary.text(message, default=str(default)).ask()
+                if qtype == "radio" and options:
+                    answer = prompter.prompt_radio(message, options)
+                elif qtype == "checkbox" and options:
+                    answer = prompter.prompt_checkbox(message, options)
+                elif qtype == "confirm":
+                    default_bool = bool(default) if isinstance(default, bool) else True
+                    answer = prompter.prompt_confirmation(message, default_bool)
                 else:
-                    # Fall back to simple input() when stdout is piped
-                    # Write prompts to stderr so they're visible
-                    if qtype == "radio" and options:
-                        sys.stderr.write(f"\n{message}\n")
-                        for i, opt in enumerate(options, 1):
-                            sys.stderr.write(f"  {i}. {opt}\n")
-                        sys.stderr.write(f"Choice [1-{len(options)}]: ")
-                        sys.stderr.flush()
-                        try:
-                            choice = input().strip()
-                        except EOFError:
-                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
-                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
-                            return None
-                        try:
-                            idx = int(choice) - 1
-                            if 0 <= idx < len(options):
-                                answer = options[idx]
-                            else:
-                                sys.stderr.write("Invalid choice. Please try again.\n")
-                                continue
-                        except ValueError:
-                            sys.stderr.write("Invalid input. Please try again.\n")
-                            continue
-                    elif qtype == "checkbox" and options:
-                        sys.stderr.write(f"\n{message} (comma-separated numbers)\n")
-                        for i, opt in enumerate(options, 1):
-                            sys.stderr.write(f"  {i}. {opt}\n")
-                        sys.stderr.write(f"Choices [1-{len(options)}]: ")
-                        sys.stderr.flush()
-                        try:
-                            choices = input().strip()
-                        except EOFError:
-                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
-                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
-                            return None
-                        try:
-                            indices = [int(c.strip()) - 1 for c in choices.split(',') if c.strip()]
-                            answer = [options[i] for i in indices if 0 <= i < len(options)]
-                        except ValueError:
-                            sys.stderr.write("Invalid input. Please try again.\n")
-                            continue
-                    elif qtype == "confirm":
-                        default_bool = bool(default) if isinstance(default, bool) else True
-                        default_str = "Y/n" if default_bool else "y/N"
-                        sys.stderr.write(f"\n{message} ({default_str}): ")
-                        sys.stderr.flush()
-                        try:
-                            response = input().strip().lower()
-                        except EOFError:
-                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
-                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
-                            return None
-                        if not response:
-                            answer = default_bool
-                        else:
-                            answer = response in ('y', 'yes')
-                    else:
-                        default_str = f" [{default}]" if default else ""
-                        sys.stderr.write(f"\n{message}{default_str}: ")
-                        sys.stderr.flush()
-                        try:
-                            answer = input().strip()
-                        except EOFError:
-                            notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
-                            notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
-                            return None
-                        if not answer and default:
-                            answer = str(default)
+                    answer = prompter.prompt_text(message, str(default))
+            except EOFError:
+                io.notify("[red]Error: stdin is not interactive but questions need to be answered[/red]")
+                io.notify("[dim]Use --quick to skip questions or provide input via interactive terminal[/dim]")
+                return None
             except KeyboardInterrupt:
-                notify("[yellow]Cancelled.[/yellow]")
+                io.notify("[yellow]Cancelled.[/yellow]")
                 return None
 
-            if answer is None:
-                notify("[yellow]Cancelled.[/yellow]")
-                return None
-
+            # Normalize answer
             normalized = answer
             if isinstance(normalized, str):
                 normalized = normalized.strip()
@@ -482,7 +385,7 @@ def ask_clarifying_questions(
                 missing_response = len(normalized) == 0
 
             if required and missing_response and qtype != "confirm":
-                notify("[yellow]This answer is required. Please provide a response.[/yellow]")
+                io.notify("[yellow]This answer is required. Please provide a response.[/yellow]")
                 continue
 
             if not required and missing_response:
@@ -499,21 +402,15 @@ def generate_final_prompt(
     initial_prompt: str,
     answers: Dict[str, Any],
     mapping: Dict[str, str],
-    notify: MessageSink,
-    quiet_output: bool = False,
-    console_err: Optional[Console] = None,
+    io: IOContext,
 ) -> Tuple[str, bool]:
     """Generate the refined prompt (or return original if no answers)."""
-    # Use global console as fallback if not provided
-    if console_err is None:
-        console_err = console
-
     if not answers:
         return initial_prompt, False
 
     try:
-        if not quiet_output:
-            with console_err.status("[bold blue]Generating your refined prompt...", spinner="dots"):
+        if not io.quiet_output:
+            with io.console_err.status("[bold blue]Generating your refined prompt...", spinner="dots"):
                 final_prompt = provider.refine_from_answers(
                     initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
                 )
@@ -526,7 +423,7 @@ def generate_final_prompt(
         raise PromptCancelled("Refinement cancelled") from exc
     except Exception as exc:
         sanitized = sanitize_error_message(str(exc))
-        notify(f"[bold red]Error:[/bold red] Failed to generate refined prompt: {sanitized}")
+        io.notify(f"[bold red]Error:[/bold red] Failed to generate refined prompt: {sanitized}")
         logger.exception("Failed to generate refined prompt")
         raise
 
@@ -537,11 +434,8 @@ def process_single_prompt(
     args: Namespace,
     debug_enabled: bool,
     plain_mode: bool,
-    notify: MessageSink,
+    io: IOContext,
     app_config: Config,
-    quiet_output: bool = False,
-    console_out: Optional[Console] = None,
-    console_err: Optional[Console] = None,
 ) -> Optional[Tuple[str, str]]:
     """
     Process a single prompt through the refinement pipeline.
@@ -549,14 +443,8 @@ def process_single_prompt(
     Returns:
         Tuple of (final_prompt, task_type) if successful, None otherwise
     """
-    # Use global console as fallback if not provided
-    if console_err is None:
-        console_err = console
-    if console_out is None:
-        console_out = console
-
     try:
-        plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, notify, app_config, quiet_output, console_err)
+        plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, io, app_config)
 
         # This is the main logic branching
         is_light_refinement = (
@@ -566,8 +454,8 @@ def process_single_prompt(
 
         if is_light_refinement:
             try:
-                if not quiet_output:
-                    with console_err.status("[bold blue]Performing light refinement...", spinner="dots"):
+                if not io.quiet_output:
+                    with io.console_err.status("[bold blue]Performing light refinement...", spinner="dots"):
                         final_prompt = provider.light_refine(
                             initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
                         )
@@ -580,40 +468,40 @@ def process_single_prompt(
                 raise PromptCancelled("Light refinement cancelled") from exc
             except Exception as exc:
                 logger.warning("Light refinement failed: %s", sanitize_error_message(str(exc)))
-                notify("[yellow]Warning: Light refinement failed. Using original prompt.[/yellow]")
+                io.notify("[yellow]Warning: Light refinement failed. Using original prompt.[/yellow]")
                 final_prompt = initial_prompt
                 is_refined = False
         else:
             # The standard flow: ask questions if needed, then generate
-            answers = ask_clarifying_questions(plan, notify, quiet_output)
+            answers = ask_clarifying_questions(plan, io)
             if answers is None:
                 return None
             final_prompt, is_refined = generate_final_prompt(
-                provider, initial_prompt, answers, plan.mapping, notify, quiet_output, console_err
+                provider, initial_prompt, answers, plan.mapping, io
             )
 
     except Exception as exc:
         sanitized = sanitize_error_message(str(exc))
-        notify(f"[red]✗[/red] Something went wrong: {sanitized}")
+        io.notify(f"[red]✗[/red] Something went wrong: {sanitized}")
         if debug_enabled:
-            notify(f"[dim]Enable --verbose for full error details[/dim]")
+            io.notify(f"[dim]Enable --verbose for full error details[/dim]")
         logger.exception("Failed to process prompt")
         return None
 
-    display_output(final_prompt, is_refined=is_refined, quiet_output=quiet_output, console_out=console_out, console_err=console_err)
+    display_output(final_prompt, io, is_refined=is_refined)
 
     # Skip interactive tweaks in quiet mode
-    interactive_tweaks = sys.stdin.isatty() and not args.quick and not quiet_output
+    interactive_tweaks = io.stdin_is_tty and not args.quick and not io.quiet_output
     if interactive_tweaks:
-        final_prompt = iterative_refinement(provider, final_prompt, plain_mode, notify, quiet_output, console_err)
+        final_prompt = iterative_refinement(provider, final_prompt, io, plain_mode)
     else:
         if args.quick:
-            notify("[dim]Skipping interactive tweaking (quick mode)[/dim]\n")
-        elif quiet_output:
+            io.notify("[dim]Skipping interactive tweaking (quick mode)[/dim]\n")
+        elif io.quiet_output:
             # Don't notify in quiet mode
             pass
         else:
-            notify("[dim]Skipping interactive tweaking (stdin is not a TTY)[/dim]\n")
+            io.notify("[dim]Skipping interactive tweaking (stdin is not a TTY)[/dim]\n")
 
     # Save to history
     try:
@@ -628,12 +516,12 @@ def process_single_prompt(
         logger.warning(f"Failed to save prompt to history: {sanitize_error_message(str(exc))}")
 
     # Skip clipboard and editor in quiet mode
-    if not quiet_output:
+    if not io.quiet_output:
         if getattr(args, "copy", False):
-            copy_to_clipboard(final_prompt, notify)
+            copy_to_clipboard(final_prompt, io.notify)
 
         if getattr(args, "edit", False):
-            open_in_editor(final_prompt, notify)
+            open_in_editor(final_prompt, io.notify)
 
     return final_prompt, plan.task_type
 
@@ -649,33 +537,25 @@ def main() -> None:
         os.environ[PROMPTHEUS_DEBUG_ENV] = "1"
         configure_logging(logging.DEBUG)
 
-    # Determine quiet mode behavior
-    # Quiet mode only affects output routing (stdout/stderr), not prompt processing
-    stdout_is_tty = sys.stdout.isatty()
-    quiet_output = (not stdout_is_tty) or getattr(args, "quiet_output", False)
-
-    # Create dual consoles: console_out for payloads (stdout), console_err for UI (stderr)
-    console_out = Console(file=sys.stdout, color_system=None, force_terminal=False)
-    console_err = Console(file=sys.stderr)
-
-    # Notify ALWAYS writes to stderr - errors must never be silenced
-    # For cosmetic messages in quiet mode, check quiet_output before calling notify
-    notify: MessageSink = console_err.print
+    # Create I/O context with appropriate settings
+    quiet_output_flag = getattr(args, "quiet_output", False)
+    plain_mode_flag = False  # Could be extended to support --plain in the future
+    io = IOContext.create(quiet_output_flag=quiet_output_flag, plain_mode=plain_mode_flag)
 
     plain_mode = False
 
     # Handle utility commands that exit immediately
     if getattr(args, "list_models", False):
         providers_to_list = [args.provider] if args.provider else None
-        list_models(app_config, console_err, providers=providers_to_list)
+        list_models(app_config, io.console_err, providers=providers_to_list)
         sys.exit(0)
 
     if getattr(args, "validate", False):
-        validate_environment(app_config, console_err, test_connection=getattr(args, "test_connection", False))
+        validate_environment(app_config, io.console_err, test_connection=getattr(args, "test_connection", False))
         sys.exit(0)
 
     if getattr(args, "template", None):
-        generate_template(app_config, console_err, args.template)
+        generate_template(app_config, io.console_err, args.template)
         sys.exit(0)
 
     if getattr(args, "command", None) == "history":
@@ -686,16 +566,16 @@ def main() -> None:
             ).ask()
             if confirm:
                 get_history().clear()
-                notify("[green]✓[/green] History cleared")
+                io.notify("[green]✓[/green] History cleared")
             else:
-                notify("[yellow]Cancelled[/yellow]")
+                io.notify("[yellow]Cancelled[/yellow]")
         else:
-            display_history(console_err, notify, limit=args.limit)
+            display_history(io.console_err, io.notify, limit=args.limit)
         sys.exit(0)
 
     # Show provider status in a friendly way
     for message in app_config.consume_status_messages():
-        notify(f"[cyan]●[/cyan] {message}")
+        io.notify(f"[cyan]●[/cyan] {message}")
 
     if args.provider:
         app_config.set_provider(args.provider)
@@ -703,21 +583,21 @@ def main() -> None:
         app_config.set_model(args.model)
 
     for message in app_config.consume_status_messages():
-        notify(f"[cyan]●[/cyan] {message}")
+        io.notify(f"[cyan]●[/cyan] {message}")
 
     # Friendly error handling
     if not app_config.validate():
-        notify("")
+        io.notify("")
         for message in app_config.consume_error_messages():
             # Split multi-line messages and format nicely
             lines = message.split('\n')
             if len(lines) == 1:
-                notify(f"[red]✗[/red] {message}")
+                io.notify(f"[red]✗[/red] {message}")
             else:
-                notify(f"[red]✗[/red] {lines[0]}")
+                io.notify(f"[red]✗[/red] {lines[0]}")
                 for line in lines[1:]:
-                    notify(f"  {line}")
-        notify("")
+                    io.notify(f"  {line}")
+        io.notify("")
         sys.exit(1)
 
     # Get initial prompt from file, stdin, or argument
@@ -727,13 +607,13 @@ def main() -> None:
         try:
             with open(args.file, "r", encoding="utf-8") as file_handle:
                 initial_prompt = file_handle.read().strip()
-            notify(f"[green]✓[/green] Loaded prompt from {args.file}")
+            io.notify(f"[green]✓[/green] Loaded prompt from {args.file}")
         except FileNotFoundError:
-            notify(f"[red]✗[/red] Couldn't find file: {args.file}")
+            io.notify(f"[red]✗[/red] Couldn't find file: {args.file}")
             sys.exit(1)
         except Exception as exc:  # pragma: no cover - file I/O
             sanitized = sanitize_error_message(str(exc))
-            notify(f"[red]✗[/red] Failed to read file: {sanitized}")
+            io.notify(f"[red]✗[/red] Failed to read file: {sanitized}")
             sys.exit(1)
 
     elif args.prompt and args.prompt.startswith("@"):
@@ -741,19 +621,19 @@ def main() -> None:
         try:
             with open(filename, "r", encoding="utf-8") as file_handle:
                 initial_prompt = file_handle.read().strip()
-            notify(f"[green]✓[/green] Loaded prompt from {filename}")
+            io.notify(f"[green]✓[/green] Loaded prompt from {filename}")
         except FileNotFoundError:
-            notify(f"[red]✗[/red] Couldn't find file: {filename}")
+            io.notify(f"[red]✗[/red] Couldn't find file: {filename}")
             sys.exit(1)
         except Exception as exc:  # pragma: no cover - file I/O
             sanitized = sanitize_error_message(str(exc))
-            notify(f"[red]✗[/red] Failed to read file: {sanitized}")
+            io.notify(f"[red]✗[/red] Failed to read file: {sanitized}")
             sys.exit(1)
 
-    elif not sys.stdin.isatty():
+    elif not io.stdin_is_tty:
         initial_prompt = sys.stdin.read().strip()
         if initial_prompt:
-            notify("[green]✓[/green] Got prompt from stdin")
+            io.notify("[green]✓[/green] Got prompt from stdin")
 
     else:
         initial_prompt = args.prompt
@@ -764,13 +644,13 @@ def main() -> None:
     except Exception as exc:
         error_msg = str(exc)
         sanitized = sanitize_error_message(error_msg)
-        notify(f"[red]✗[/red] Couldn't connect to AI provider: {sanitized}\n")
+        io.notify(f"[red]✗[/red] Couldn't connect to AI provider: {sanitized}\n")
 
         # Provide helpful context for common errors
         if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
-            notify(f"[yellow]Authentication Failed:[/yellow] Check your API key for {provider_name}\n")
+            io.notify(f"[yellow]Authentication Failed:[/yellow] Check your API key for {provider_name}\n")
         elif "404" in error_msg:
-            notify(f"[yellow]Model Not Found:[/yellow] The model may not exist or be available\n")
+            io.notify(f"[yellow]Model Not Found:[/yellow] The model may not exist or be available\n")
 
         logger.exception("Provider initialization failure")
         sys.exit(1)
@@ -779,10 +659,10 @@ def main() -> None:
 
     if initial_prompt is None or not initial_prompt:
         # Cannot enter interactive mode in quiet mode without a prompt
-        if quiet_output:
-            console_err.print("[red]✗[/red] Error: Cannot enter interactive mode when stdout is not a TTY")
-            console_err.print("[dim]Provide a prompt as an argument, via --file, or from stdin[/dim]")
-            console_err.print("[dim]Example: promptheus \"your prompt here\" | cat[/dim]")
+        if io.quiet_output:
+            io.console_err.print("[red]✗[/red] Error: Cannot enter interactive mode when stdout is not a TTY")
+            io.console_err.print("[dim]Provide a prompt as an argument, via --file, or from stdin[/dim]")
+            io.console_err.print("[dim]Example: promptheus \"your prompt here\" | cat[/dim]")
             sys.exit(1)
 
         interactive_mode(
@@ -791,43 +671,41 @@ def main() -> None:
             args,
             debug_enabled,
             plain_mode,
-            notify,
-            console_err,
+            io,
             process_single_prompt,
-            quiet_output,
         )
     else:
-        notify(f"[dim]Using provider: {provider_name} | Model: {app_config.get_model()}[/dim]\n")
+        io.notify(f"[dim]Using provider: {provider_name} | Model: {app_config.get_model()}[/dim]\n")
         try:
             result = process_single_prompt(
-                provider, initial_prompt, args, debug_enabled, plain_mode, notify, app_config, quiet_output, console_out, console_err
+                provider, initial_prompt, args, debug_enabled, plain_mode, io, app_config
             )
             if result:
                 final_prompt, task_type = result
                 # In quiet mode or with specific output formats, write the final output to stdout
                 output_format = getattr(args, "output_format", "markdown")
-                if quiet_output or output_format != "markdown":
+                if io.quiet_output or output_format != "markdown":
                     if output_format == "json":
                         import json
-                        console_out.print(json.dumps({"prompt": final_prompt, "task_type": task_type}))
+                        io.console_out.print(json.dumps({"prompt": final_prompt, "task_type": task_type}))
                     elif output_format == "yaml":
                         try:
                             import yaml
-                            console_out.print(yaml.dump({"prompt": final_prompt, "task_type": task_type}, default_flow_style=False))
+                            io.console_out.print(yaml.dump({"prompt": final_prompt, "task_type": task_type}, default_flow_style=False))
                         except ImportError:
-                            notify("[yellow]Warning: PyYAML not installed, falling back to plain text[/yellow]")
-                            console_out.print(final_prompt)
+                            io.notify("[yellow]Warning: PyYAML not installed, falling back to plain text[/yellow]")
+                            io.console_out.print(final_prompt)
                     else:  # plain
-                        console_out.print(final_prompt)
+                        io.console_out.print(final_prompt)
             else:
                 # process_single_prompt returned None - error occurred
-                notify("[red]✗[/red] Failed to process prompt")
+                io.notify("[red]✗[/red] Failed to process prompt")
                 sys.exit(1)
         except PromptCancelled as exc:
-            notify(f"\n[yellow]{exc}[/yellow]\n")
+            io.notify(f"\n[yellow]{exc}[/yellow]\n")
             sys.exit(130)
         except KeyboardInterrupt:
-            notify("\n[yellow]Cancelled by user[/yellow]\n")
+            io.notify("\n[yellow]Cancelled by user[/yellow]\n")
             sys.exit(130)
 
 
