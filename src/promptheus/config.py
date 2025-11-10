@@ -281,17 +281,21 @@ class Config:
             self._record_error(self._missing_key_instructions())
             return False
 
-        # Skip strict format validation for custom endpoints (like Z.ai)
-        # If a custom base_url is set, trust that the user knows what they're doing
-        has_custom_endpoint = (
-            self.provider == "anthropic" and provider_config.get("base_url")
-        )
-
-        if not has_custom_endpoint and not self._validate_api_key_format(self.provider or "", api_key):
-            sanitized = sanitize_error_message(api_key)
-            self._record_error(f"Hmm, that API key doesn't look quite right (starts with '{sanitized[:4]}...')")
-            self._record_error(self._missing_key_instructions())
-            return False
+        # Always validate the API key format.
+        if not self._validate_api_key_format(self.provider or "", api_key):
+            has_custom_endpoint = (
+                self.provider == "anthropic" and provider_config.get("base_url")
+            )
+            
+            # For custom endpoints, show a warning but allow proceeding.
+            if has_custom_endpoint:
+                self._record_status(f"Warning: API key for {friendly_name} does not match the standard format, but proceeding due to custom endpoint.")
+            else:
+                # For standard endpoints, this is an error.
+                sanitized = sanitize_error_message(api_key)
+                self._record_error(f"Hmm, that API key for {friendly_name} doesn't look quite right (starts with '{sanitized[:4]}...').")
+                self._record_error(self._missing_key_instructions())
+                return False
 
         return True
 
