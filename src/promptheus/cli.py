@@ -7,24 +7,37 @@ from typing import List, Optional, Sequence
 PROVIDER_CHOICES = ["gemini", "anthropic", "openai", "groq", "qwen", "glm"]
 
 
-def build_parser(include_history: bool = True) -> argparse.ArgumentParser:
+def build_parser(include_subcommands: bool = True) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Promptheus - AI-powered prompt engineering CLI tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  promptheus "Write a blog post"              # Single-shot mode (process and exit)
-  promptheus                                   # Interactive mode (continuous loop)
-  promptheus --list-models                     # List available models from configured providers
-  promptheus --validate --test-connection      # Check environment and test API keys
-  promptheus --template openai > .env         # Generate an environment file template
-  promptheus history                          # View prompt history
+  promptheus "Write a blog post"                        # Single-shot mode (process and exit)
+  promptheus                                             # Interactive mode (continuous loop)
+  promptheus list-models --provider openai               # List available models from a specific provider
+  promptheus validate --test-connection                  # Check environment and test API keys
+  promptheus template openai,gemini                      # Generate env template for multiple providers
+  promptheus --skip-questions "Explain Docker"          # Skip questions, improve prompt directly
+  promptheus -o json "Create API schema"                # Output in JSON format
+  promptheus history                                     # View prompt history
+
+Interactive Mode Commands (available when running without arguments):
+  /help           Show all interactive commands
+  /set            Change provider or model
+  /toggle         Toggle refine/skip-questions modes
+  /status         Show current settings
+  /history        View prompt history
+  /load <n>       Load prompt by number
+  /copy           Copy last result
+  /about          Show version info
+  /exit           Exit interactive mode
 """,
     )
 
     # Main prompt refinement arguments
     main_group = parser.add_argument_group("Main Prompting Arguments")
-    if not include_history:
+    if not include_subcommands:
         parser.set_defaults(command=None)
         main_group.add_argument(
             "prompt",
@@ -49,20 +62,14 @@ Examples:
 
     # Behavior modification arguments
     behavior_group = parser.add_argument_group("Behavior Customization")
-    behavior_group.add_argument(
-        "--static",
-        "--mvp",
+    mode_group = behavior_group.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "-s",
+        "--skip-questions",
         action="store_true",
-        dest="static",
-        help="Use static questions instead of dynamic AI-generated questions",
+        help="Skip clarifying questions and improve prompt directly (basic analysis mode)",
     )
-    behavior_group.add_argument(
-        "-q",
-        "--quick",
-        action="store_true",
-        help="Skip all questions, run prompt directly (for analysis/research tasks)",
-    )
-    behavior_group.add_argument(
+    mode_group.add_argument(
         "-r",
         "--refine",
         action="store_true",
@@ -72,51 +79,17 @@ Examples:
     # Output handling arguments
     output_group = parser.add_argument_group("Output Handling")
     output_group.add_argument(
-        "--quiet-output",
-        action="store_true",
-        help="Suppress UI messages on stdout; only print refined prompt (useful for piping)",
-    )
-    output_group.add_argument(
         "-o",
         "--output-format",
-        choices=["markdown", "plain", "json", "yaml"],
-        default="markdown",
-        help="Output format for the refined prompt (default: markdown)",
+        choices=["plain", "json"],
+        default="plain",
+        help="Output format for the refined prompt (default: plain)",
     )
     output_group.add_argument(
         "-c",
         "--copy",
         action="store_true",
         help="Copy the refined prompt to clipboard",
-    )
-    output_group.add_argument(
-        "-e",
-        "--edit",
-        action="store_true",
-        help="Open the refined prompt in your default editor",
-    )
-
-    # Utility commands that usually exit immediately
-    utility_group = parser.add_argument_group("Utility Commands")
-    utility_group.add_argument(
-        "--list-models",
-        action="store_true",
-        help="List available models from configured providers and exit.",
-    )
-    utility_group.add_argument(
-        "--validate",
-        action="store_true",
-        help="Validate environment configuration and exit.",
-    )
-    utility_group.add_argument(
-        "--test-connection",
-        action="store_true",
-        help="Test API connection for configured providers (use with --validate).",
-    )
-    utility_group.add_argument(
-        "--template",
-        choices=PROVIDER_CHOICES,
-        help="Generate a .env file template for a specific provider and exit.",
     )
 
     # General arguments
@@ -128,10 +101,18 @@ Examples:
         help="Enable verbose debug output",
     )
 
-    if include_history:
-        subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    if include_subcommands:
+        subparsers = parser.add_subparsers(
+            dest="command",
+            title="commands",
+            description="Available subcommands for managing Promptheus",
+            metavar="COMMAND",
+            help="Use 'promptheus COMMAND --help' for more info"
+        )
         subparsers.required = False
         parser.set_defaults(command=None)
+
+        # history subcommand
         history_parser = subparsers.add_parser(
             "history",
             help="View and manage prompt history",
@@ -149,22 +130,82 @@ Examples:
             help="Number of history entries to display (default: 20)",
         )
 
+        # list-models subcommand
+        list_models_parser = subparsers.add_parser(
+            "list-models",
+            help="List available models from providers",
+            description="List available models from configured providers.",
+        )
+        list_models_parser.add_argument(
+            "--providers",
+            type=str,
+            help="Optional: Comma-separated list of providers to query",
+        )
+        list_models_parser.add_argument(
+            "--limit",
+            type=int,
+            default=20,
+            help="Number of models to display (default: 20, use 0 for all)",
+        )
+        list_models_parser.add_argument(
+            "--include-nontext",
+            action="store_true",
+            help="Include non-text models (e.g., for vision, embedding) in the list",
+        )
+
+        # validate subcommand
+        validate_parser = subparsers.add_parser(
+            "validate",
+            help="Validate environment configuration",
+            description="Validate environment configuration and optionally test API connections.",
+        )
+        validate_parser.add_argument(
+            "--test-connection",
+            action="store_true",
+            help="Test API connection for configured providers.",
+        )
+        validate_parser.add_argument(
+            "--providers",
+            type=str,
+            help="Optional: Comma-separated list of providers to validate (e.g., openai,gemini)",
+        )
+
+        # template subcommand
+        template_parser = subparsers.add_parser(
+            "template",
+            help="Generate a .env file template",
+            description="Generate a .env file template for one or more providers.",
+        )
+        template_parser.add_argument(
+            "--providers",
+            type=str,
+            required=True,
+            help="Comma-separated list of providers (e.g., openai,gemini)",
+        )
+
+        # Add verbose flag to all subcommands for convenience
+        for sub in [history_parser, list_models_parser, validate_parser, template_parser]:
+            sub.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug output")
+
     return parser
 
 
 def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    """Parse CLI arguments while supporting both history command and standard prompts."""
-    argv_list = list(sys.argv[1:] if argv is None else argv)
+    """Parse CLI arguments, building the correct parser for the context."""
+    argv_list = sys.argv[1:] if argv is None else list(argv)
 
-    if any(arg in {"-h", "--help"} for arg in argv_list):
-        parser = build_parser(include_history=True)
-        return parser.parse_args(argv_list)
-
-    if argv_list and argv_list[0] == "history":
-        parser = build_parser(include_history=True)
+    known_subcommands = {"history", "list-models", "validate", "template"}
+    
+    # If no args, or the first arg is a known subcommand or help, use the full parser.
+    if not argv_list or argv_list[0] in known_subcommands or any(arg in {"-h", "--help"} for arg in argv_list):
+        parser = build_parser(include_subcommands=True)
         args = parser.parse_args(argv_list)
-        args.prompt = None
+        # The subcommand parser doesn't have a `prompt` positional argument.
+        # We need to ensure the attribute exists for the main logic.
+        if not hasattr(args, "prompt"):
+            setattr(args, "prompt", None)
         return args
 
-    parser = build_parser(include_history=False)
+    # Otherwise, assume we are in prompting mode. Build the simpler parser.
+    parser = build_parser(include_subcommands=False)
     return parser.parse_args(argv_list)

@@ -21,28 +21,149 @@ Promptheus keeps the fun parts of prompt crafting while the AI handles the house
 - `@path/to/prompt.txt` – shortcut syntax (alternative to `-f`).
 - Standard input piping for scripted flows.
 
+## Pipe Integration & Command Substitution
+
+Promptheus supports clean stdout/stderr separation, making it perfect for Unix pipelines and command substitution:
+
+### Basic Piping
+```bash
+# Auto-quiet mode when piping
+promptheus "Write a story" | cat
+promptheus "Explain Docker" | less
+
+# Save to file (questions still appear on stderr)
+promptheus "Write docs" > output.txt
+
+# Chain with other AI tools
+promptheus "Create a haiku" | claude exec
+promptheus "Write code" | codex run
+```
+
+### Command Substitution
+```bash
+# Feed refined prompt to another tool
+claude "$(promptheus 'Write a technical prompt')"
+codex "$(promptheus 'Generate function spec')"
+
+# Use in scripts
+REFINED=$(promptheus "Optimize this query")
+echo "$REFINED" | mysql -u user -p
+```
+
+### Unix Utilities Integration
+```bash
+# tee: Save and display simultaneously
+promptheus "Long explanation" | tee output.txt
+
+# grep: Filter output
+promptheus "List best practices" | grep -i "security"
+
+# wc: Count words/lines
+promptheus "Write essay" | wc -w
+
+# awk/sed: Transform output
+promptheus "Generate list" | sed 's/^/- /' > checklist.md
+
+# cat: Chain multiple files
+cat template.txt | promptheus | cat header.txt - footer.txt > final.txt
+```
+
+### JSON Processing
+```bash
+# Use jq to process JSON output
+promptheus -o json "Create API schema" | jq '.endpoints'
+promptheus -o json "Config template" | jq -r '.settings.database'
+
+# Format and beautify
+promptheus -o json "Data structure" | jq '.' > formatted.json
+```
+
+### Advanced Patterns
+```bash
+# Batch processing
+cat prompts.txt | while read line; do
+  promptheus "$line" >> results.txt
+done
+
+# Conditional execution
+if promptheus "Check status" | grep -q "success"; then
+  echo "All systems operational"
+fi
+
+# Multi-stage refinement
+promptheus "Draft outline" | \
+  promptheus "Expand this outline" | \
+  tee expanded.txt
+
+# Parallel processing (GNU parallel)
+cat prompts.txt | parallel -j 4 "promptheus {} > output_{#}.txt"
+
+# Error handling
+promptheus "Generate code" 2> errors.log > output.txt
+```
+
+### Output Format Control
+```bash
+# Plain text (no markdown)
+promptheus -o plain "Write haiku"
+
+# JSON output with metadata
+promptheus -o json "Create schema"
+
+# Plain text output (default)
+promptheus -o plain "Write story" > story.txt
+```
+
+# Subcommand System
+Promptheus now uses a subcommand architecture for utility commands:
+```bash
+# Validate environment and test connections
+promptheus validate
+promptheus validate --test-connection
+promptheus validate --providers openai,gemini
+
+# List available models
+promptheus list-models
+promptheus list-models --providers openai
+promptheus list-models --limit 10
+
+# Generate environment templates
+promptheus template openai,gemini
+promptheus template --providers openai,anthropic
+
+# Manage history
+promptheus history
+promptheus history --limit 50
+promptheus history --clear
+```
+
+**Key Behaviors:**
+- **Auto-quiet**: Piping automatically enables quiet mode
+- **stderr for UI**: All questions and status go to stderr
+- **stdout for output**: Only refined prompt on stdout
+- **Non-interactive stdin**: Questions skipped when input is piped
+
 ## Interaction Styles
 
 | Mode | Flag | When to use |
 | --- | --- | --- |
 | Adaptive (default) | – | Promptheus decides whether to ask clarifying questions or perform light refinement. |
-| Quick | `-q` / `--quick` | Bypass every AI tweak and ship the original prompt verbatim. |
+| Skip Questions | `-s` / `--skip-questions` | Skip clarifying questions and improve the prompt directly using basic analysis mode. |
 | Refine | `-r` / `--refine` | Force the full clarifying-question workflow even for analysis tasks. |
-| Static | `--static` | Use deterministic, predefined questions instead of AI-generated ones. |
 
-Mix and match with providers, models, and file input as needed, e.g. `promptheus -q -c @brief.md`.
+Mix and match with providers, models, and file input as needed, e.g. `promptheus -s -c @brief.md`.
 
 ## Provider & Model Selection
 - Auto-detects which provider to use based on the API keys you have configured.
 - Force a provider: `promptheus --provider gemini "Idea"`, `promptheus --provider anthropic "Idea"`, `promptheus --provider openai "Idea"`, `promptheus --provider groq "Idea"`, `promptheus --provider qwen "Idea"`, `promptheus --provider glm "Idea"`.
 - Pin a model: `promptheus --model gemini-1.5-pro "Idea"`, `promptheus --model claude-3-5-sonnet-20241022 "Idea"`, `promptheus --model gpt-4o "Idea"`, `promptheus --model llama-3.1-70b-versatile "Idea"`, etc.
 - Available providers: gemini, anthropic, openai, groq, qwen, glm
-- List available models: `python get-models.py providers` or `python get-models.py models`
+- List available models: `promptheus list-models` or `promptheus list-models --providers openai,gemini`
 
 ## Output Helpers
 - `-c` / `--copy` – copy the refined prompt to the clipboard.
-- `-e` / `--edit` – open the result in your `$EDITOR`.
-- Combine flags freely: `promptheus -c -e "Pitch deck outline"`.
+- `-o` / `--output-format` – specify output format (`plain` or `json`).
+- Combine flags freely: `promptheus -s -c -o json "Pitch deck outline"`.
 
 ## Session History
 - CLI commands: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`.
@@ -74,22 +195,25 @@ Ask clarifying questions to refine your prompt? (Y/n): y
 ╰─────────────────────────────────────────────────╯
 ```
 
-### Quick Technical Scan
+### Skip Questions for Quick Analysis
 ```
-$ promptheus -q "Analyze the main.py file and explain the key functions"
-✓ Quick mode – using original prompt without modification
-╭─ Your Prompt ──────────────────────────────────╮
-│ Analyze the main.py file and explain the key   │
-│ functions                                      │
+$ promptheus -s "Analyze the main.py file and explain the key functions"
+✓ Skip questions mode - improving prompt directly
+╭─ Refined Prompt ───────────────────────────────╮
+│ [Improved prompt shown here]                   │
 ╰────────────────────────────────────────────────╯
 ```
 
-## Editor Preferences
+## Environment Template Generation
 
-Promptheus opens editors via the `EDITOR` environment variable. Set it once and forget it:
+Generate environment file templates for one or more providers:
 
 ```bash
-export EDITOR="code --wait"  # or nano, vim, emacs, etc.
+# Single provider
+promptheus template openai > .env
+
+# Multiple providers (comma-separated)
+promptheus template openai,gemini,anthropic > .env
 ```
 
 ## Python 3.14 Compatibility
@@ -126,7 +250,7 @@ In interactive mode, you can use these slash commands:
 - `/set provider <name>` - Change AI provider mid-session
 - `/set model <name>` - Change model mid-session
 - `/toggle refine` - Toggle refine mode on/off
-- `/toggle quick` - Toggle quick mode on/off
+- `/toggle skip-questions` - Toggle skip-questions mode on/off
 
 **Utility:**
 - `/copy` - Copy the last refined result to clipboard

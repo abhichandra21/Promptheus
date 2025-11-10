@@ -24,20 +24,23 @@ python -m promptheus.main "Your prompt here"
 # Interactive mode (REPL-style)
 promptheus
 
-# Quick mode (skip questions)
-promptheus -q "Your prompt"
+# Skip questions mode (improve prompt directly)
+promptheus -s "Your prompt"
+promptheus --skip-questions "Your prompt"
 
 # Refine mode (force questions)
 promptheus -r "Your prompt"
 
-# Quiet mode (clean stdout/stderr separation)
-promptheus --quiet-output "Your prompt" > output.txt
-promptheus "Your prompt" | cat  # Auto-quiet when piping, questions still asked
-
 # Different output formats
-promptheus -o plain "Your prompt"
-promptheus -o json "Your prompt"
-promptheus -o yaml "Your prompt"
+promptheus -o plain "Your prompt"   # Default: plain text
+promptheus -o json "Your prompt"    # JSON output
+
+# Pipe integration examples
+promptheus "Write a story" | claude exec           # Chain with other AI tools
+claude "$(promptheus 'Create a haiku')"            # Command substitution
+promptheus "Explain Docker" | tee output.txt       # Save and display (auto-quiet)
+echo "topic" | promptheus | cat > result.txt       # Chain transformations
+promptheus -o json "schema" | jq '.prompt'         # JSON processing
 ```
 
 ### Testing
@@ -46,8 +49,8 @@ promptheus -o yaml "Your prompt"
 pytest -q
 
 # Manual smoke tests
-promptheus --static "Test prompt"
-python -m promptheus.main --static "Smoke test"
+promptheus --skip-questions "Test prompt"
+python -m promptheus.main --skip-questions "Smoke test"
 
 # Test different input methods
 promptheus -f test_prompt.txt
@@ -55,8 +58,8 @@ promptheus @test_prompt.txt
 cat test_prompt.txt | promptheus
 
 # Environment validation
-python env_validator.py --provider gemini
-python env_validator.py --test-connection
+promptheus validate --providers gemini
+promptheus validate --test-connection
 ```
 
 ### Development Utilities
@@ -118,11 +121,11 @@ python -m mypy src/promptheus/
 - `src/promptheus/exceptions.py`: Custom exception types (e.g., `PromptCancelled`)
 - `src/promptheus/cli.py`: Argument parsing and CLI interface
 
-**Environment Validator (`env_validator.py`)**
-- Standalone utility for testing provider configurations
+**Environment Validation**
+- Integrated validation through `promptheus validate` subcommand
 - Validates API keys and tests provider connections
-- Generates environment file templates for each provider
-- Supports connection testing with actual API calls
+- Generates environment file templates with `promptheus template` subcommand
+- Supports connection testing with actual API calls via `--test-connection`
 
 **Model Information Helper (`get-models.py`)**
 - Helper script to list all available providers and their supported models
