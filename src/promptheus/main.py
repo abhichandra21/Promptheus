@@ -36,6 +36,7 @@ from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
 from promptheus.exceptions import PromptCancelled, ProviderAPIError
 from promptheus.commands import list_models, validate_environment, generate_template, generate_completion_script, handle_completion_request
+from promptheus.ascii_art import PROMPHEUS_LOGO
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -476,6 +477,25 @@ def process_single_prompt(
     return final_prompt, plan.task_type
 
 
+def display_logo(io: IOContext) -> None:
+    """Display the Promptheus logo if terminal is wide enough."""
+    try:
+        # Get terminal width
+        terminal_width = io.console_err.width
+
+        # Calculate logo width (find longest line)
+        logo_lines = PROMPHEUS_LOGO.strip().split('\n')
+        logo_width = max(len(line) for line in logo_lines)
+
+        # Only display logo if terminal is wide enough (add some padding)
+        if terminal_width >= logo_width + 4:
+            io.console_err.print(f"[bold blue]{PROMPHEUS_LOGO}[/bold blue]")
+            io.console_err.print("")  # Add spacing after logo
+    except Exception:
+        # Silently skip logo display if there's any issue
+        pass
+
+
 def main() -> None:
     """Main entry point for Promptheus."""
     configure_logging()
@@ -568,6 +588,9 @@ def main() -> None:
 
     for message in app_config.consume_status_messages():
         io.notify(f"[cyan]●[/cyan] {message}")
+
+    # Display logo if appropriate
+    display_logo(io)
 
     # Friendly error handling
     if not app_config.validate():
