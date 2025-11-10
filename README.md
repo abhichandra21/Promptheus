@@ -32,6 +32,25 @@ ZAI_API_KEY=your_glm_key_here          # for GLM
 
 Promptheus will auto-detect which provider to use based on your available keys. You can override this with flags or environment variables if you prefer.
 
+### Optional: Shell Completion
+
+Enable tab completion for better CLI experience:
+
+```bash
+# Automatic installation (recommended)
+./completions/install_completion.sh
+
+# Then restart your shell or source the completion file as instructed
+```
+
+The completion works with Poetry environments and supports:
+- Provider and model completion
+- Subcommand completion (history, list-models, validate, template)
+- All flags and options
+- Context-aware suggestions
+
+See `completions/COMPLETION_INSTALL.md` for alternative setup methods.
+
 ### Basic Usage
 
 ```bash
@@ -41,8 +60,8 @@ promptheus
 # Single prompt
 promptheus "Write a technical blog post about microservices"
 
-# Quick mode (skip refinement)
-promptheus -q "Explain how kubernetes works"
+# Skip questions mode (skip refinement)
+promptheus -s "Explain how kubernetes works"
 
 # Force refinement with questions
 promptheus -r "Draft a product announcement"
@@ -67,7 +86,7 @@ Promptheus automatically detects what kind of task you're working on:
 - **Analysis tasks** (research, code review, exploration): Skips unnecessary questions by default—you already know what you want
 - **Generation tasks** (writing, creating, design): Offers clarifying questions to help you think through requirements
 
-You can override this with `-q` (quick) or `-r` (refine) flags.
+You can override this with `-s` (skip-questions) or `-r` (refine) flags.
 
 ### Six AI Providers, One Interface
 
@@ -89,7 +108,7 @@ When Promptheus detects a generation task, it can ask you clarifying questions t
 <img width="685" height="225" alt="image" src="https://github.com/user-attachments/assets/b55615b5-a34c-4a1f-9744-b900ac509f77" />
 
 
-The AI generates contextual questions based on your initial prompt, or you can use static predefined questions with the `--static` flag.
+The AI generates contextual questions based on your initial prompt. Use `--skip-questions` to bypass questions and directly improve your prompt.
 
 ### Iterative Tweaking
 
@@ -121,8 +140,56 @@ History includes timestamps, task types, and both original and refined versions 
 ### Output Helpers
 
 - **Copy to clipboard**: `-c` / `--copy` — refined prompt goes straight to your clipboard
-- **Open in editor**: `-e` / `--edit` — opens the result in your `$EDITOR` for further tweaking
-- **Combine them**: `promptheus -c -e "Draft a proposal"` — copy and edit at the same time
+
+### Piping & Output Formatting
+
+Promptheus automatically detects when output is piped and adjusts its behavior accordingly:
+
+```bash
+# Auto-quiet: automatically enabled when piping
+promptheus "Explain Docker" | cat
+
+# Questions are still asked (on stderr), final output on stdout
+promptheus "Draft a report" | tee result.txt
+
+# If stdin is not interactive, questions are automatically skipped
+echo "Write a story" | promptheus | cat
+
+# Different output formats
+promptheus -o plain "Write a haiku"        # Plain text (default)
+promptheus -o json "Create a function"     # JSON format with metadata
+```
+
+**Piping Behavior:**
+- **Auto-quiet**: When stdout is not a TTY (piping), quiet mode is automatically enabled
+- **Prompt processing unchanged**: Questions are still asked based on LLM's decision when stdin is interactive
+- **Non-interactive stdin**: When stdin is not a TTY (piped input), questions are automatically skipped and light refinement is used
+- **Clean separation**: All UI messages (status, warnings, progress, questions) go to stderr; only the final refined prompt goes to stdout
+- **No interactive tweaks**: Clipboard (`--copy`) is disabled in quiet mode
+- **Error handling**: Errors always appear on stderr with non-zero exit codes
+
+### Pipe Integration
+
+Promptheus works seamlessly with Unix pipes and command substitution:
+
+```bash
+# Chain with other AI tools
+promptheus "Write a story" | codex exec
+claude "$(promptheus 'Create a haiku')"
+
+# Standard Unix utilities
+promptheus "Explain Docker" | tee output.txt       # Save and display
+promptheus "Ideas" | grep -i "docker" > ideas.txt  # Filter results
+echo "topic" | promptheus | cat > result.txt       # Chain transformations
+
+# JSON processing
+promptheus -o json "API schema" | jq '.endpoints'
+
+# Batch processing
+cat prompts.txt | while read line; do
+  promptheus "$line" >> results.txt
+done
+```
 
 ### Interactive Mode (REPL)
 
@@ -152,11 +219,10 @@ Mix and match with flags as needed.
 
 | Flag | Description |
 |------|-------------|
-| `-q`, `--quick` | Skip all refinement, use original prompt as-is |
+| `-s`, `--skip-questions` | Skip clarifying questions and improve prompt directly |
 | `-r`, `--refine` | Force clarifying questions even for analysis tasks |
-| `--static` | Use predefined questions instead of AI-generated ones |
+| `-o`, `--output-format` | Output format: `plain` (default) or `json` |
 | `-c`, `--copy` | Copy refined prompt to clipboard |
-| `-e`, `--edit` | Open refined prompt in your text editor |
 
 ### Provider Selection
 
@@ -199,7 +265,7 @@ Mix and match with flags as needed.
 | `/set provider <name>` | Change AI provider mid-session |
 | `/set model <name>` | Change model mid-session |
 | `/toggle refine` | Toggle refine mode on/off |
-| `/toggle quick` | Toggle quick mode on/off |
+| `/toggle skip-questions` | Toggle skip-questions mode on/off |
 
 ### Utility Commands
 
@@ -223,9 +289,6 @@ export PROMPTHEUS_MODEL=gemini-2.0-flash-exp
 
 # Enable debug logging
 export PROMPTHEUS_DEBUG=1
-
-# Set your preferred editor for -e flag
-export EDITOR="code --wait"
 ```
 
 ### Configuration Hierarchy
@@ -308,7 +371,7 @@ Test your API keys and provider connections:
 
 ```bash
 # Validate providers
-promptheus --validate --test-connection
+promptheus validate --test-connection
 ```
 <img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/5706b57e-f96d-4b53-b0ce-5495e4f8cfe9" />
 
@@ -318,7 +381,7 @@ See all available providers and models:
 
 ```bash
 # List all providers and models
-promptheus --list-models
+promptheus list-models
 ```
 <img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/b96eae2a-7963-4b2f-af36-4a837eb3f7ae" />
 
@@ -356,7 +419,7 @@ env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI)'
 promptheus --provider gemini "Test"
 
 # Validate provider setup
-python env_validator.py --provider gemini
+promptheus validate --providers gemini
 ```
 
 ### Clipboard Not Working

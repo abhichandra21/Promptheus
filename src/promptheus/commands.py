@@ -168,6 +168,8 @@ def _test_provider_connection(provider_name: str, config: Config) -> Tuple[bool,
         provider._generate_text("ping", "", max_tokens=8)
         return True, ""
     except Exception as exc:
+        if provider_name == "gemini" and "did not include text content" in str(exc):
+            return False, "Connection failed. Note: Standard Gemini API keys may have limitations."
         return False, sanitize_error_message(str(exc))
     finally:
         # Restore original provider setting
@@ -177,11 +179,20 @@ def _test_provider_connection(provider_name: str, config: Config) -> Tuple[bool,
             config.reset()
 
 
-def validate_environment(config: Config, console: Console, test_connection: bool = False) -> None:
+def validate_environment(config: Config, console: Console, test_connection: bool = False, providers: Optional[List[str]] = None) -> None:
     """Check environment for required API keys and optionally test connections."""
     console.print("[bold]Promptheus Environment Validator[/bold]")
-    provider_data = config._ensure_provider_config().get("providers", {})
+    all_provider_data = config._ensure_provider_config().get("providers", {})
     provider_aliases = config._ensure_provider_config().get("provider_aliases", {})
+
+    # If specific providers are requested, filter the data
+    if providers:
+        provider_data = {p: all_provider_data[p] for p in providers if p in all_provider_data}
+        invalid_providers = [p for p in providers if p not in all_provider_data]
+        if invalid_providers:
+            console.print(f"[yellow]Warning: Unknown provider(s) specified: {', '.join(invalid_providers)}[/yellow]")
+    else:
+        provider_data = all_provider_data
 
     table = Table(title="Environment Validation Results")
     table.add_column("Provider", style="cyan", no_wrap=True)
@@ -189,6 +200,12 @@ def validate_environment(config: Config, console: Console, test_connection: bool
     table.add_column("API Key Status", style="yellow")
     if test_connection:
         table.add_column("Connection", style="green")
+
+    if not provider_data:
+        console.print("[yellow]No providers to validate.[/yellow]")
+        return
+
+    ready_providers = []
 
     for name, info in sorted(provider_data.items()):
         display_name = provider_aliases.get(name, name.capitalize())
@@ -200,7 +217,8 @@ def validate_environment(config: Config, console: Console, test_connection: bool
         key_status = "[green]Set[/green]" if key_found else f"[dim]Missing {keys[0] if keys else 'N/A'}[/dim]"
 
         row = [display_name, status, key_status]
-
+        
+        connection_passed = False
         if test_connection:
             if not key_found:
                 row.append("[dim]Skipped[/dim]")
@@ -209,49 +227,82 @@ def validate_environment(config: Config, console: Console, test_connection: bool
                     connected, error = _test_provider_connection(name, config)
                 if connected:
                     row.append("[green]✓ Connected[/green]")
+                    connection_passed = True
                 else:
                     row.append(f"[red]✗ Failed: {error}[/red]")
         table.add_row(*row)
+
+        # Logic for adding to recommendations
+        if test_connection:
+            if connection_passed:
+                ready_providers.append(name)
+        elif key_found:
+            ready_providers.append(name)
 
     console.print(table)
 
     # Provide recommendations
     console.print("\n[bold]Recommendations:[/bold]")
-    configured_providers = config.get_configured_providers()
-    if not configured_providers:
-        console.print("[yellow]No providers configured. Use 'promptheus --template <provider>' to get started.[/yellow]")
+    if not ready_providers:
+        if providers:
+            console.print("[yellow]None of the specified providers are ready.[/yellow]")
+        else:
+            console.print("[yellow]No providers configured. Use 'promptheus template <provider>' to get started.[/yellow]")
     else:
-        console.print("[green]✓ Ready to use providers:[/green] " + ", ".join(f"[cyan]{p}[/cyan]" for p in configured_providers))
+        console.print("[green]✓ Ready to use providers:[/green] " + ", ".join(f"[cyan]{p}[/cyan]" for p in ready_providers))
 
 
-def generate_template(config: Config, console: Console, provider_name: str) -> None:
-    """Generate and print an environment file template for a specific provider."""
+def generate_template(config: Config, console: Console, providers_input: str) -> None:
+    """Generate and print an environment file template for one or more providers."""
+    provider_names = [p.strip() for p in providers_input.split(',')]
     provider_data = config._ensure_provider_config().get("providers", {})
-    provider_info = provider_data.get(provider_name)
+    provider_aliases = config._ensure_provider_config().get("provider_aliases", {})
 
-    if not provider_info:
-        console.print(f"[red]Unknown provider: {provider_name}[/red]")
-        return
+    invalid_providers = [p for p in provider_names if p not in provider_data]
+    if invalid_providers:
+        print(f"Error: Unknown provider(s): {', '.join(invalid_providers)}", file=sys.stderr)
+        print(f"Valid providers: {', '.join(provider_data.keys())}", file=sys.stderr)
+        sys.exit(1)
 
-    display_name = config._ensure_provider_config().get("provider_aliases", {}).get(provider_name, provider_name.capitalize())
-    
-    template_lines = [f"# {display_name} Environment Configuration", ""]
+    all_template_lines = []
 
-    api_key_env = provider_info.get("api_key_env")
-    keys = api_key_env if isinstance(api_key_env, list) else [api_key_env]
-    template_lines.append("# Required Variables")
-    for key in keys:
-        if key:
-            template_lines.append(f"{key}='YOUR_{key.upper()}_HERE'")
+    for idx, provider_name in enumerate(provider_names):
+        provider_info = provider_data[provider_name]
+        display_name = provider_aliases.get(provider_name, provider_name.capitalize())
 
-    optional_vars = [v for k, v in provider_info.items() if k.endswith("_env") and k not in ["api_key_env", "model_env"]]
-    if optional_vars:
-        template_lines.append("\n# Optional Variables")
-        for var in optional_vars:
-            if var:
-                template_lines.append(f"#{var}=")
+        template_lines = []
+        if idx > 0:
+            template_lines.append("")
 
-    template_content = '\n'.join(template_lines)
-    panel = Panel(template_content, title=f"{display_name} .env Template", border_style="green")
-    console.print(panel)
-    console.print(f"[dim]Copy the text above into a .env file to get started.[/dim]")
+        template_lines.append(f"# {display_name} Environment Configuration")
+        template_lines.append("")
+
+        api_key_env = provider_info.get("api_key_env")
+        keys = api_key_env if isinstance(api_key_env, list) else [api_key_env]
+
+        # Handle multiple API keys with proper comments
+        if len(keys) > 1:
+            template_lines.append("# Required Variables (only one is needed)")
+            for key in keys:
+                if key:
+                    template_lines.append(f"# {key}='YOUR_{key.upper()}_HERE'")
+            # Uncomment the first one as the primary suggestion
+            if keys[0]:
+                template_lines[-1] = template_lines[-1].replace("# ", "")
+        else:
+            template_lines.append("# Required Variables")
+            for key in keys:
+                if key:
+                    template_lines.append(f"{key}='YOUR_{key.upper()}_HERE'")
+
+        optional_vars = [v for k, v in provider_info.items() if k.endswith("_env") and k not in ["api_key_env", "model_env"]]
+        if optional_vars:
+            template_lines.append("")
+            template_lines.append("# Optional Variables")
+            for var in optional_vars:
+                if var:
+                    template_lines.append(f"#{var}=")
+
+        all_template_lines.extend(template_lines)
+
+    print('\n'.join(all_template_lines))
