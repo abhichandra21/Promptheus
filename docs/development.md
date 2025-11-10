@@ -9,9 +9,9 @@ cp .env.example .env              # drop in provider keys
 
 ## Manual Smoke Tests
 - Standard CLI: `promptheus "Draft a release note"`.
-- Module entry point: `python -m promptheus.main --static "Smoke test"`.
-- Provider sanity checks: `python env_validator.py --provider gemini`.
-- API connectivity test: `python env_validator.py --test-connection`.
+- Module entry point: `python -m promptheus.main --skip-questions "Smoke test"`.
+- Provider sanity checks: `promptheus validate --providers gemini`.
+- API connectivity test: `promptheus validate --test-connection`.
 
 ## Automated Tests
 ```bash

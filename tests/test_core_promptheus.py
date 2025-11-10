@@ -11,7 +11,6 @@ from promptheus.main import (
     ask_clarifying_questions,
     generate_final_prompt,
     iterative_refinement,
-    get_static_questions,
     convert_json_to_question_definitions
 )
 from promptheus.config import Config
@@ -63,17 +62,6 @@ def mock_notify():
     return Mock()
 
 
-def test_get_static_questions():
-    """Test that static questions are returned correctly."""
-    questions, mapping = get_static_questions()
-    
-    assert len(questions) == 4  # goal, audience, tone, format
-    assert all('key' in q and 'message' in q for q in questions)
-    assert len(mapping) == 4
-    assert 'goal' in mapping
-    assert 'audience' in mapping
-
-
 def test_convert_json_to_question_definitions():
     """Test conversion of JSON questions to internal format."""
     json_questions = [
@@ -99,27 +87,13 @@ def test_convert_json_to_question_definitions():
     assert not questions[1]['required']  # optional since required=False
 
 
-def test_determine_question_plan_static_mode(mock_provider, mock_config, mock_notify):
-    """Test question plan determination in static mode."""
+def test_determine_question_plan_skip_questions_mode(mock_provider, mock_config, mock_notify):
+    """Test question plan determination in skip-questions mode."""
     from promptheus.main import QuestionPlan
-    
-    args = Namespace(static=True, quick=False, refine=False)
-    plan = determine_question_plan(mock_provider, "test prompt", args, False, mock_notify, mock_config)
-    
-    assert isinstance(plan, QuestionPlan)
-    assert not plan.skip_questions
-    assert plan.task_type == "generation"
-    assert len(plan.questions) > 0
-    assert len(plan.mapping) > 0
 
-
-def test_determine_question_plan_quick_mode(mock_provider, mock_config, mock_notify):
-    """Test question plan determination in quick mode."""
-    from promptheus.main import QuestionPlan
-    
-    args = Namespace(static=False, quick=True, refine=False)
+    args = Namespace(skip_questions=True, refine=False)
     plan = determine_question_plan(mock_provider, "test prompt", args, False, mock_notify, mock_config)
-    
+
     assert isinstance(plan, QuestionPlan)
     assert plan.skip_questions
     assert plan.task_type == "analysis"

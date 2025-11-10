@@ -23,13 +23,13 @@ export PROMPTHEUS_PROVIDER=gemini
 
 **Unsure whether your keys work?**
 ```bash
-python env_validator.py --provider gemini
-python env_validator.py --provider anthropic
-python env_validator.py --provider openai
-python env_validator.py --provider groq
-python env_validator.py --provider qwen
-python env_validator.py --provider glm
-python env_validator.py --test-connection  # to test actual API connectivity
+promptheus validate --providers gemini
+promptheus validate --providers anthropic
+promptheus validate --providers openai
+promptheus validate --providers groq
+promptheus validate --providers qwen
+promptheus validate --providers glm
+promptheus validate --test-connection  # to test actual API connectivity
 ```
 
 ## Installation & Runtime
@@ -76,6 +76,6 @@ promptheus -f ./relative/path/prompt.txt
 - Use `/status` to see current provider/model settings
 - Change provider in session: `/set provider gemini`
 - Change model in session: `/set model gpt-4o`
-- Toggle modes: `/toggle refine` or `/toggle quick`
+- Toggle modes: `/toggle refine` or `/toggle skip-questions`
 
 Still stuck? Open an issue with the command you ran, the flags you used, and any stack trace so we can reproduce it quickly.

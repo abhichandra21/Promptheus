@@ -5,3 +5,7 @@ class PromptCancelled(KeyboardInterrupt):
 
     def __init__(self, message: str = "Prompt cancelled by user") -> None:
         super().__init__(message)
+
+class ProviderAPIError(Exception):
+    """Raised when an LLM provider API call fails."""
+    pass

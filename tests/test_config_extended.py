@@ -201,21 +201,29 @@ def test_get_configured_providers(monkeypatch, config):
     assert "anthropic" in configured
 
 
-def test_validate_no_api_key(monkeypatch, config):
+def test_validate_no_api_key():
     """Validation should fail loudly when the API key is missing."""
-    # Remove all API keys
-    for key in ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-                "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZAI_API_KEY"]:
-        monkeypatch.delenv(key, raising=False)
+    # Save original os.getenv
+    original_getenv = os.getenv
 
-    # Reset config to clear any previous messages
-    config.reset()
-    config.set_provider("gemini")  # Set a provider to validate
-    is_valid = config.validate()
+    # Define a custom getenv that returns None for API keys
+    def mock_getenv(key, default=None):
+        api_keys = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+                    "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZAI_API_KEY"]
+        if key in api_keys:
+            return None
+        return original_getenv(key, default)
 
-    assert not is_valid
-    error_messages = config.consume_error_messages()
-    assert any("No API key" in msg or "To use Gemini" in msg for msg in error_messages)
+    # Patch os.getenv in the config module where it's actually used
+    with patch('promptheus.config.os.getenv', side_effect=mock_getenv):
+        # Create a fresh config instance with mocked getenv
+        config = Config()
+        config.set_provider("gemini")  # Set a provider to validate
+        is_valid = config.validate()
+
+        assert not is_valid
+        error_messages = config.consume_error_messages()
+        assert any("No API key" in msg or "To use Gemini" in msg for msg in error_messages)
 
 
 def test_validate_with_api_key(monkeypatch, config):

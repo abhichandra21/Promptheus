@@ -6,6 +6,7 @@ from datetime import datetime
 import pytest
 from argparse import Namespace
 
+from promptheus.io_context import IOContext
 from promptheus.repl import (
     interactive_mode,
     display_history,
@@ -81,6 +82,22 @@ def sample_history_entries():
     ]
 
 
+
+
+def create_mock_io(notify=None, console=None):
+    """Create a mock IOContext for testing."""
+    from unittest.mock import Mock
+    io = Mock(spec=IOContext)
+    io.notify = notify if notify else Mock()
+    io.console_err = console if console else Mock()
+    io.console_out = Mock()
+    io.stdin_is_tty = True
+    io.stdout_is_tty = True
+    io.quiet_output = False
+    io.is_fully_interactive = True
+    return io
+
+
 @patch('promptheus.repl.get_history')
 def test_display_history_no_entries(mock_get_history, mock_console, mock_notify):
     """Test display_history when no entries exist."""
@@ -121,15 +138,7 @@ def test_interactive_mode_plain_mode_exit(mock_input, mock_get_history,
 
     args = Namespace()
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     toolbar_message = format_toolbar_text("test", "test-model")
@@ -155,15 +164,7 @@ def test_interactive_mode_plain_mode_quit_command(mock_input, mock_get_history,
 
         args = Namespace()
 
-        interactive_mode(
-            mock_provider,
-            mock_config,
-            args,
-            False,  # debug_enabled
-            True,   # plain_mode
-            mock_notify,
-            mock_console,
-            Mock()  # process_prompt function
+        interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
         )
 
         toolbar_message = format_toolbar_text("test", "test-model")
@@ -186,15 +187,7 @@ def test_interactive_mode_history_command(mock_input, mock_get_history,
     args = Namespace()
 
     with patch('promptheus.repl.display_history') as mock_display:
-        interactive_mode(
-            mock_provider,
-            mock_config,
-            args,
-            False,  # debug_enabled
-            True,   # plain_mode
-            mock_notify,
-            mock_console,
-            Mock()  # process_prompt function
+        interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
         )
 
         mock_display.assert_called_once_with(mock_console, mock_notify)
@@ -221,16 +214,7 @@ def test_interactive_mode_load_command_valid(mock_input, mock_get_history, mock_
     args = Namespace()
     mock_process_prompt = Mock(return_value=("processed", "task"))
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        mock_process_prompt
-    )
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), mock_process_prompt)
 
     # Should show success message with new format
     mock_console.print.assert_any_call("[green]✓[/green] Loaded prompt #1 from history:\n")
@@ -253,15 +237,7 @@ def test_interactive_mode_load_command_invalid(mock_input, mock_get_history,
 
     args = Namespace()
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     mock_console.print.assert_any_call("[yellow]No history entry found at index 999[/yellow]")
@@ -281,15 +257,7 @@ def test_interactive_mode_clear_history_confirmed(mock_confirm, mock_input, mock
 
     args = Namespace()
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     mock_history.clear.assert_called_once()
@@ -308,15 +276,7 @@ def test_interactive_mode_unknown_command(mock_input, mock_get_history,
 
     args = Namespace()
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     mock_console.print.assert_any_call("[yellow]Unknown command: /unknown[/yellow]")
@@ -336,16 +296,7 @@ def test_interactive_mode_process_prompt_cancelled(mock_input, mock_get_history,
     args = Namespace()
     mock_process_prompt = Mock(side_effect=PromptCancelled("Analysis cancelled"))
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        mock_process_prompt
-    )
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), mock_process_prompt)
 
     mock_console.print.assert_any_call("\n[yellow]Analysis cancelled[/yellow]")
     mock_process_prompt.assert_called_once()
@@ -365,16 +316,7 @@ def test_interactive_mode_keyboard_interrupt_during_processing(mock_input, mock_
     # First call raises KeyboardInterrupt, simulating Ctrl+C during processing
     mock_process_prompt = Mock(side_effect=KeyboardInterrupt())
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        mock_process_prompt
-    )
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), mock_process_prompt)
 
     # Should show cancelled message and continue to next prompt
     mock_console.print.assert_any_call("\n[yellow]Cancelled[/yellow]")
@@ -394,15 +336,7 @@ def test_interactive_mode_empty_input(mock_input, mock_get_history,
 
     args = Namespace()
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     toolbar_message = format_toolbar_text("test", "test-model")
@@ -425,15 +359,7 @@ def test_interactive_mode_keyboard_interrupt(mock_input, mock_get_history,
 
     args = Namespace()
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     # Should show cancelled message on first Ctrl+C
@@ -455,15 +381,7 @@ def test_interactive_mode_keyboard_interrupt_reset(mock_input, mock_get_history,
 
     args = Namespace()
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     # Should show cancelled message twice (counter reset after typing /help)
@@ -513,33 +431,33 @@ def test_handle_repl_command_toggle_refine(mock_config, mock_console, mock_notif
     mock_notify.assert_called_with("[green]✓[/green] Refine mode is now OFF")
 
 
-def test_handle_repl_command_toggle_quick(mock_config, mock_console, mock_notify):
-    """Test /toggle quick command."""
-    args = Namespace(quick=False, refine=True, static=False)
+def test_handle_repl_command_toggle_skip_questions(mock_config, mock_console, mock_notify):
+    """Test /toggle skip-questions command."""
+    args = Namespace(skip_questions=False, refine=True)
 
-    # Toggle quick on (should turn refine off)
-    result = handle_repl_command("/toggle quick", mock_config, args, mock_console, mock_notify)
+    # Toggle skip-questions on (should turn refine off)
+    result = handle_repl_command("/toggle skip-questions", mock_config, args, mock_console, mock_notify)
 
     assert result == "handled"
-    assert args.quick is True
+    assert args.skip_questions is True
     assert args.refine is False  # Mutually exclusive
-    mock_notify.assert_called_with("[green]✓[/green] Quick mode is now ON")
+    mock_notify.assert_called_with("[green]✓[/green] Skip-questions mode is now ON")
 
 
 def test_handle_repl_command_toggle_mutual_exclusion(mock_config, mock_console, mock_notify):
-    """Test that quick and refine are mutually exclusive."""
-    args = Namespace(quick=True, refine=False, static=False)
+    """Test that skip-questions and refine are mutually exclusive."""
+    args = Namespace(skip_questions=True, refine=False)
 
-    # Enable refine (should disable quick)
+    # Enable refine (should disable skip-questions)
     handle_repl_command("/toggle refine", mock_config, args, mock_console, mock_notify)
 
     assert args.refine is True
-    assert args.quick is False
+    assert args.skip_questions is False
 
-    # Enable quick (should disable refine)
-    handle_repl_command("/toggle quick", mock_config, args, mock_console, mock_notify)
+    # Enable skip-questions (should disable refine)
+    handle_repl_command("/toggle skip-questions", mock_config, args, mock_console, mock_notify)
 
-    assert args.quick is True
+    assert args.skip_questions is True
     assert args.refine is False
 
 
@@ -591,12 +509,12 @@ def test_handle_repl_command_set_invalid_usage(mock_config, mock_console, mock_n
 
 def test_handle_repl_command_toggle_invalid_usage(mock_config, mock_console, mock_notify):
     """Test /toggle with invalid usage (missing arguments)."""
-    args = Namespace(quick=False, refine=False, static=False)
+    args = Namespace(skip_questions=False, refine=False)
 
     result = handle_repl_command("/toggle", mock_config, args, mock_console, mock_notify)
 
     assert result == "handled"
-    mock_notify.assert_called_with("[yellow]Usage: /toggle refine or /toggle quick[/yellow]")
+    mock_notify.assert_called_with("[yellow]Usage: /toggle refine or /toggle skip-questions[/yellow]")
 
 
 def test_handle_repl_command_unknown_session_command(mock_config, mock_console, mock_notify):
@@ -625,15 +543,7 @@ def test_interactive_mode_set_provider_command(mock_input, mock_get_history,
     with patch('promptheus.repl.reload_provider_instance') as mock_reload:
         mock_reload.return_value = mock_provider
 
-        interactive_mode(
-            mock_provider,
-            mock_config,
-            args,
-            False,  # debug_enabled
-            True,   # plain_mode
-            mock_notify,
-            mock_console,
-            Mock()  # process_prompt function
+        interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
         )
 
         # Should attempt to reload provider
@@ -653,15 +563,7 @@ def test_interactive_mode_toggle_command(mock_input, mock_get_history,
 
     args = Namespace(quick=False, refine=False, static=False)
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     # Should toggle refine mode
@@ -682,15 +584,7 @@ def test_interactive_mode_status_command(mock_input, mock_get_history,
 
     args = Namespace(quick=False, refine=True, static=False)
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     # Should display status (multiple console.print calls)
@@ -716,15 +610,7 @@ def test_interactive_mode_ctrl_c_then_invalid_command(mock_input, mock_get_histo
 
     args = Namespace(quick=False, refine=False, static=False)
 
-    interactive_mode(
-        mock_provider,
-        mock_config,
-        args,
-        False,  # debug_enabled
-        True,   # plain_mode
-        mock_notify,
-        mock_console,
-        Mock()  # process_prompt function
+    interactive_mode(mock_provider, mock_config, args, False, True, create_mock_io(mock_notify, mock_console), Mock()  # process_prompt function
     )
 
     # Should see two "Cancelled" messages, not one "Cancelled" then "Goodbye"
