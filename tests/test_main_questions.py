@@ -1,4 +1,6 @@
+from unittest.mock import Mock
 from promptheus.main import QuestionPlan, ask_clarifying_questions
+from promptheus.io_context import IOContext
 
 
 class _StaticPrompt:
@@ -11,6 +13,18 @@ class _StaticPrompt:
         return self._reply
 
 
+def create_mock_io():
+    """Create a mock IOContext for testing."""
+    io = Mock(spec=IOContext)
+    io.messages = []
+    io.notify = lambda msg: io.messages.append(msg)
+    io.stdin_is_tty = True
+    io.stdout_is_tty = True
+    io.is_fully_interactive = True
+    io.quiet_output = False
+    return io
+
+
 def test_required_question_reprompts_until_answer(monkeypatch):
     """Ensure required questions are re-asked when empty responses are provided."""
     replies = iter(["   ", "", "Ship it"])
@@ -20,7 +34,7 @@ def test_required_question_reprompts_until_answer(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.text", fake_text)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -37,10 +51,10 @@ def test_required_question_reprompts_until_answer(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     assert answers["goal"] == "Ship it"
-    assert any("required" in msg.lower() for msg in messages)
+    assert any("required" in msg.lower() for msg in io.messages)
 
 
 def test_radio_question_with_selection(monkeypatch):
@@ -50,7 +64,7 @@ def test_radio_question_with_selection(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.select", fake_select)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -67,7 +81,7 @@ def test_radio_question_with_selection(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     assert answers["tone"] == "professional"
 
@@ -79,7 +93,7 @@ def test_radio_question_with_default_selection(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.select", fake_select)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -96,7 +110,7 @@ def test_radio_question_with_default_selection(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     # Should return None when user cancels
     assert answers is None
@@ -109,7 +123,7 @@ def test_checkbox_question_single_selection(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.checkbox", fake_checkbox)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -126,7 +140,7 @@ def test_checkbox_question_single_selection(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     assert answers["audience"] == ["developers"]
 
@@ -138,7 +152,7 @@ def test_checkbox_question_multiple_selections(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.checkbox", fake_checkbox)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -155,7 +169,7 @@ def test_checkbox_question_multiple_selections(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     assert answers["audience"] == ["developers", "designers"]
 
@@ -169,7 +183,7 @@ def test_checkbox_question_no_selections_for_required(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.checkbox", fake_checkbox)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -186,10 +200,10 @@ def test_checkbox_question_no_selections_for_required(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     assert answers["audience"] == ["developers"]
-    assert any("required" in msg.lower() for msg in messages)
+    assert any("required" in msg.lower() for msg in io.messages)
 
 
 def test_checkbox_question_optional_no_selections(monkeypatch):
@@ -199,7 +213,7 @@ def test_checkbox_question_optional_no_selections(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.checkbox", fake_checkbox)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -216,7 +230,7 @@ def test_checkbox_question_optional_no_selections(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     assert answers["audience"] == []
 
@@ -240,7 +254,7 @@ def test_mixed_question_types(monkeypatch):
     monkeypatch.setattr("promptheus.main.questionary.select", fake_select)
     monkeypatch.setattr("promptheus.main.questionary.checkbox", fake_checkbox)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -281,7 +295,7 @@ def test_mixed_question_types(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     assert answers["goal"] == "Write documentation"
     assert answers["tone"] == "technical"
@@ -298,7 +312,7 @@ def test_optional_text_question_with_empty_answer(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.text", fake_text)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -315,7 +329,7 @@ def test_optional_text_question_with_empty_answer(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     # Optional question should accept empty answer without reprompting
     assert answers.get("additional_notes") == ""
@@ -328,7 +342,7 @@ def test_question_with_default_value_text(monkeypatch):
 
     monkeypatch.setattr("promptheus.main.questionary.text", fake_text)
 
-    messages = []
+    io = create_mock_io()
     plan = QuestionPlan(
         skip_questions=False,
         task_type="generation",
@@ -345,7 +359,7 @@ def test_question_with_default_value_text(monkeypatch):
         mapping={},
     )
 
-    answers = ask_clarifying_questions(plan, messages.append)
+    answers = ask_clarifying_questions(plan, io)
 
     # For optional questions with empty response, should return empty string
     assert answers["urgency"] == ""
