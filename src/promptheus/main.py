@@ -35,7 +35,7 @@ from promptheus.utils import configure_logging, sanitize_error_message
 from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
 from promptheus.exceptions import PromptCancelled, ProviderAPIError
-from promptheus.commands import list_models, validate_environment, generate_template
+from promptheus.commands import list_models, validate_environment, generate_template, generate_completion_script, handle_completion_request
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ def iterative_refinement(
         io.notify(f"\n[blue]⟳[/blue] Tweaking prompt (v{iteration})...\n")
 
         try:
-            with io.console_err.status("[bold blue]Tweaking your prompt...", spinner="dots"):
+            with io.console_err.status("[bold cyan]✨ Sprinkling some refinement magic...", spinner="bouncingBall"):
                 current_prompt = provider.tweak_prompt(
                     current_prompt, tweak_instruction, TWEAK_SYSTEM_INSTRUCTION
                 )
@@ -197,7 +197,7 @@ def determine_question_plan(
 
     try:
         if not io.quiet_output:
-            with io.console_err.status("[bold blue]Analyzing your prompt...", spinner="dots"):
+            with io.console_err.status("[bold magenta]🔍 Analyzing your prompt and crafting questions...", spinner="arc"):
                 result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
         else:
             result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
@@ -363,7 +363,7 @@ def generate_final_prompt(
 
     try:
         if not io.quiet_output:
-            with io.console_err.status("[bold blue]Generating your refined prompt...", spinner="dots"):
+            with io.console_err.status("[bold green]🎨 Crafting your refined prompt...", spinner="moon"):
                 final_prompt = provider.refine_from_answers(
                     initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
                 )
@@ -408,7 +408,7 @@ def process_single_prompt(
         if is_light_refinement:
             try:
                 if not io.quiet_output:
-                    with io.console_err.status("[bold blue]Performing light refinement...", spinner="dots"):
+                    with io.console_err.status("[bold blue]⚡ Performing light refinement...", spinner="simpleDots"):
                         final_prompt = provider.light_refine(
                             initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
                         )
@@ -483,15 +483,26 @@ def main() -> None:
 
     args = parse_arguments()
 
+    # Create I/O context for terminal handling
+    io = IOContext.create()
+
     if args.verbose:
         os.environ[PROMPTHEUS_DEBUG_ENV] = "1"
         configure_logging(logging.DEBUG)
 
-    # Create I/O context with appropriate settings
-    # IOContext auto-detects when stdout is piped for quiet mode
-    io = IOContext.create()
+    # Handle utility commands that exit immediately
+    if getattr(args, "command", None) == "completion":
+        if getattr(args, "install", False):
+            from promptheus.commands import install_completion
+            install_completion(args.shell, io.console_err)
+        else:
+            generate_completion_script(args.shell)
+        sys.exit(0)
 
-    plain_mode = False
+    if getattr(args, "command", None) == "__complete":
+        # Note: __complete is a hidden command used by the shell completion scripts
+        handle_completion_request(app_config, args)
+        sys.exit(0)
 
     # Handle utility commands that exit immediately
     if getattr(args, "command", None) == "list-models":
@@ -499,9 +510,11 @@ def main() -> None:
             providers_to_list = [p.strip() for p in args.providers.split(',')]
         else:
             providers_to_list = None
+        # Create a simple console for output
+        utility_console = Console()
         list_models(
             app_config,
-            io.console_err,
+            utility_console,
             providers=providers_to_list,
             limit=args.limit,
             include_nontext=args.include_nontext
@@ -513,16 +526,20 @@ def main() -> None:
         if args.providers:
             providers_to_validate = [p.strip() for p in args.providers.split(',')]
 
+        # Create a simple console for output
+        utility_console = Console()
         validate_environment(
             app_config,
-            io.console_err,
+            utility_console,
             test_connection=getattr(args, "test_connection", False),
             providers=providers_to_validate
         )
         sys.exit(0)
 
     if getattr(args, "command", None) == "template":
-        generate_template(app_config, io.console_err, args.providers)
+        # Create a simple console for output
+        utility_console = Console()
+        generate_template(app_config, utility_console, args.providers)
         sys.exit(0)
 
     if getattr(args, "command", None) == "history":
@@ -623,6 +640,7 @@ def main() -> None:
         sys.exit(1)
 
     debug_enabled = args.verbose or os.getenv(PROMPTHEUS_DEBUG_ENV, "").lower() in {"1", "true", "yes", "on"}
+    plain_mode = io.plain_mode
 
     if initial_prompt is None or not initial_prompt:
         # Cannot enter interactive mode in quiet mode without a prompt

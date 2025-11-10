@@ -183,8 +183,47 @@ Interactive Mode Commands (available when running without arguments):
             help="Comma-separated list of providers (e.g., openai,gemini)",
         )
 
+        # completion subcommand
+        completion_parser = subparsers.add_parser(
+            "completion",
+            help="Generate shell completion script",
+            description="Generate shell completion script for bash or zsh",
+        )
+        completion_parser.add_argument(
+            "shell",
+            nargs="?",
+            choices=["bash", "zsh"],
+            help="Shell type (bash or zsh, auto-detected if not specified)",
+        )
+        completion_parser.add_argument(
+            "--install",
+            action="store_true",
+            help="Automatically install completion by updating shell config",
+        )
+        # verbose flag will be added by the loop below
+
+        # __complete subcommand (hidden, for internal use)
+        complete_parser = subparsers.add_parser(
+            "__complete",
+            help=argparse.SUPPRESS,  # Hide from help
+            description=argparse.SUPPRESS,
+            add_help=False,  # Don't add help to hidden command
+        )
+        complete_parser.add_argument(
+            "type",
+            choices=["providers", "models"],
+            help=argparse.SUPPRESS,
+        )
+        complete_parser.add_argument(
+            "--provider",
+            help=argparse.SUPPRESS,
+        )
+        complete_parser.add_argument(
+            "-v", "--verbose", action="store_true", help=argparse.SUPPRESS
+        )
+
         # Add verbose flag to all subcommands for convenience
-        for sub in [history_parser, list_models_parser, validate_parser, template_parser]:
+        for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser]:
             sub.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug output")
 
     return parser
@@ -194,7 +233,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     """Parse CLI arguments, building the correct parser for the context."""
     argv_list = sys.argv[1:] if argv is None else list(argv)
 
-    known_subcommands = {"history", "list-models", "validate", "template"}
+    known_subcommands = {"history", "list-models", "validate", "template", "completion", "__complete"}
     
     # If no args, or the first arg is a known subcommand or help, use the full parser.
     if not argv_list or argv_list[0] in known_subcommands or any(arg in {"-h", "--help"} for arg in argv_list):

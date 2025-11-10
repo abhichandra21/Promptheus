@@ -190,6 +190,7 @@ def display_history(console: Console, notify: MessageSink, limit: int = 20) -> N
     """Display recent history entries."""
     history = get_history()
     entries = history.get_recent(limit)
+    logger.debug("Displaying %d history entries (limit was %d)", len(entries), limit)
 
     if not entries:
         notify("[yellow]No history entries found.[/yellow]")
@@ -494,7 +495,7 @@ def reload_provider_instance(
     model_name = app_config.get_model()
 
     try:
-        with console.status(f"[bold blue]Initializing {provider_name}...", spinner="dots"):
+        with console.status(f"[bold blue]🚀 Initializing {provider_name}...", spinner="aesthetic"):
             new_provider = get_provider(provider_name, app_config, model_name)
         notify(f"[green]✓[/green] Successfully initialized {provider_name} with model {model_name}")
         return new_provider
