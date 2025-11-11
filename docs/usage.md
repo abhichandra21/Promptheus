@@ -135,6 +135,11 @@ promptheus template --providers openai,anthropic
 promptheus history
 promptheus history --limit 50
 promptheus history --clear
+
+# Generate shell completion
+promptheus completion bash          # Generate bash completion script
+promptheus completion zsh           # Generate zsh completion script
+promptheus completion --install     # Automatically install completion
 ```
 
 **Key Behaviors:**

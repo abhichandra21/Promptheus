@@ -78,4 +78,20 @@ promptheus -f ./relative/path/prompt.txt
 - Change model in session: `/set model gpt-4o`
 - Toggle modes: `/toggle refine` or `/toggle skip-questions`
 
+## Shell Completion
+
+**Completion not working after installation**
+```bash
+# Verify installation
+promptheus completion bash  # Should print completion script
+which promptheus           # Verify promptheus is in PATH
+
+# Reload shell configuration
+source ~/.bashrc           # For bash
+source ~/.zshrc            # For zsh
+
+# Check if alias is needed for virtual environments
+alias promptheus='poetry run promptheus'  # If using Poetry
+```
+
 Still stuck? Open an issue with the command you ran, the flags you used, and any stack trace so we can reproduce it quickly.
