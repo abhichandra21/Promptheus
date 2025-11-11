@@ -16,6 +16,13 @@ You're working with AI and you want better results. You know prompts matter, but
 pip install -e .
 ```
 
+### Verify Installation
+
+```bash
+promptheus --version
+# Should output: Promptheus v0.1.0
+```
+
 ### Set Up Your API Keys
 
 Create a `.env` file in your project directory (or use the provided `.env.example` as a template):
@@ -127,7 +134,7 @@ Just describe what you want changed in natural language. Hit Enter when you're h
 
 ### Session History
 
-Every refined prompt is saved automatically. You can revisit past prompts, load them for reuse, or clear history when needed.
+Every refined prompt is saved automatically for future reference. You can revisit past prompts, load them for reuse, or clear history when needed.
 
 ```bash
 # View history from CLI
@@ -140,6 +147,33 @@ promptheus history --clear
 /load 3
 /clear-history
 ```
+
+#### History Privacy & Security
+
+**Smart Auto-Detection**: Promptheus automatically detects your usage context to protect privacy:
+
+- **Interactive terminal sessions** (like `promptheus` without arguments): History enabled by default
+- **Non-interactive usage** (pipelines, scripts, automation): History disabled by default
+- **Batch processing**: History disabled to prevent accidental logging of sensitive prompts
+
+**Manual Control**: Override auto-detection with the `PROMPTHEUS_ENABLE_HISTORY` environment variable:
+
+```bash
+# Force enable history (useful for CI/CD with manual review)
+PROMPTHEUS_ENABLE_HISTORY=1 promptheus "analyze this data"
+
+# Force disable history (for maximum privacy)
+PROMPTHEUS_ENABLE_HISTORY=0 promptheus "secret project plan"
+
+# Alternative values supported: true/yes/on, false/no/off
+PROMPTHEUS_ENABLE_HISTORY=true promptheus "confidential analysis"
+```
+
+**Security Considerations**:
+- History is stored locally in your home directory (`~/.promptheus/` or `%APPDATA%/promptheus`)
+- No data is transmitted to external services
+- Prompts with special characters (newlines, backslashes) are safely escaped
+- Uses efficient JSONL format for O(1) append operations
 
 History includes timestamps, task types, and both original and refined versions so you can track what worked.
 
@@ -291,14 +325,31 @@ Mix and match with flags as needed.
 You can control Promptheus behavior via environment variables:
 
 ```bash
-# Force a specific provider
-export PROMPTHEUS_PROVIDER=gemini
+# Provider Selection
+export PROMPTHEUS_PROVIDER=gemini        # Override auto-detection
+# Available: gemini, anthropic, openai, groq, qwen, glm
 
-# Force a specific model
+# Model Selection
 export PROMPTHEUS_MODEL=gemini-2.0-flash-exp
+# Examples: claude-3-5-sonnet-20241022, gpt-4o, llama-3.1-405b
 
-# Enable debug logging
-export PROMPTHEUS_DEBUG=1
+# History Persistence
+export PROMPTHEUS_ENABLE_HISTORY=1      # Force enable history
+export PROMPTHEUS_ENABLE_HISTORY=0      # Force disable history
+# Values: 1/0, true/false, yes/no, on/off
+# Default: Smart auto-detection (interactive=enabled, pipes=disabled)
+
+# Debug and Logging
+export PROMPTHEUS_DEBUG=1               # Enable verbose debug output
+export PROMPTHEUS_LOG_LEVEL=INFO        # Override log level
+# Values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+export PROMPTHEUS_LOG_FORMAT=json       # JSON structured logs
+# Values: "json" or custom format string
+# Default: "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+export PROMPTHEUS_LOG_FILE=app.log      # Log to file instead of console
+# Values: Any valid file path
 ```
 
 ### Configuration Hierarchy
@@ -319,6 +370,45 @@ Promptheus searches upward from your current directory for a `.env` file, stoppi
 - `setup.py` (Python project marker)
 
 This lets you have project-specific configurations without polluting global settings.
+
+### Advanced Logging Configuration
+
+For development and debugging, Promptheus offers comprehensive logging controls:
+
+```bash
+# Basic debug mode (enables DEBUG level and detailed output)
+PROMPTHEUS_DEBUG=1 promptheus "test prompt"
+
+# Fine-grained log level control
+PROMPTHEUS_LOG_LEVEL=DEBUG promptheus "analyze this"
+
+# JSON structured logs for parsing and monitoring
+PROMPTHEUS_LOG_FORMAT=json promptheus "generate code"
+
+# Log to file for audit trails
+PROMPTHEUS_LOG_FILE=/var/log/promptheus.log promptheus "important task"
+
+# Custom log format
+PROMPTHEUS_LOG_FORMAT="%(levelname)s: %(message)s" promptheus "simple format"
+```
+
+**Logging Behavior**:
+- **Default**: Minimal console output (clean user experience)
+- **Debug mode**: Detailed verbose output with full stack traces
+- **File logging**: All logs written to specified file, console stays clean
+- **JSON format**: Structured logs ideal for log aggregation systems
+
+**Common Use Cases**:
+```bash
+# CI/CD pipeline with structured logs
+PROMPTHEUS_LOG_FORMAT=json PROMPTHEUS_LOG_FILE=ci.log promptheus --version
+
+# Development debugging
+PROMPTHEUS_DEBUG=1 PROMPTHEUS_LOG_FILE=debug.log promptheus
+
+# Production monitoring with silent console
+PROMPTHEUS_LOG_LEVEL=WARNING PROMPTHEUS_LOG_FILE=production.log promptheus
+```
 
 ## Documentation
 

@@ -43,7 +43,7 @@ def test_prompt_history_initialization():
         history = PromptHistory(history_dir=history_dir)
         
         assert history.history_dir == history_dir
-        assert history.history_file == history_dir / "history.json"
+        assert history.history_file == history_dir / "history.jsonl"
         assert history.prompt_history_file == history_dir / "prompt_history.txt"
         
         # Directory should be created
@@ -219,18 +219,24 @@ def test_prompt_history_file_creation():
 
 def test_history_file_corruption_handling():
     """Test handling of corrupted history file."""
+    from unittest.mock import Mock
+    from promptheus.config import Config
+
     with tempfile.TemporaryDirectory() as tmpdir:
         history_dir = Path(tmpdir)
-        history = PromptHistory(history_dir=history_dir)
-        
+        # Create a mock config that enables history
+        config = Mock()
+        config.history_enabled = True
+        history = PromptHistory(history_dir=history_dir, config=config)
+
         # Create a corrupted history file
         with open(history.history_file, 'w', encoding='utf-8') as f:
-            f.write("invalid json content")
-        
+            f.write("invalid json content\n")
+
         # Should return empty list instead of crashing
         entries = history.get_all()
         assert entries == []
-        
+
         # Should still be able to add new entries
         history.save_entry("New Prompt", "Refined New", "generation")
         entries = history.get_all()
@@ -311,19 +317,51 @@ def test_large_history():
     with tempfile.TemporaryDirectory() as tmpdir:
         history_dir = Path(tmpdir)
         history = PromptHistory(history_dir=history_dir)
-        
+
         # Add many entries
         num_entries = 100
         for i in range(num_entries):
             history.save_entry(f"Prompt {i}", f"Refined {i}", "generation")
-        
+
         # Get all entries - should be in reverse order
         all_entries = history.get_all()
         assert len(all_entries) == num_entries
         assert all_entries[0].original_prompt == f"Prompt {num_entries-1}"
         assert all_entries[-1].original_prompt == "Prompt 0"
-        
+
         # Get recent with reasonable limit
         recent_entries = history.get_recent(10)
         assert len(recent_entries) == 10
         assert recent_entries[0].original_prompt == f"Prompt {num_entries-1}"
+
+
+def test_prompt_history_escaping():
+    """Test that prompts with special characters are properly escaped in prompt history file."""
+    from unittest.mock import Mock
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        history_dir = Path(tmpdir)
+        config = Mock()
+        config.history_enabled = True
+        history = PromptHistory(history_dir=history_dir, config=config)
+
+        # Test prompts with various special characters
+        test_cases = [
+            ("Simple prompt", "Simple prompt"),
+            ("Multi-line\nprompt", "Multi-line\\nprompt"),
+            ("Prompt with\\backslash", "Prompt with\\\\backslash"),
+            ("Mixed\\nand\nreal", "Mixed\\\\nand\\nreal"),
+            ("Control chars\r\nhere", "Control chars\\r\\nhere"),
+            ("Tab\tand newline\n", "Tab\tand newline\\n"),
+        ]
+
+        for original_prompt, expected_escaped in test_cases:
+            history.save_entry(original_prompt, f"Refined: {original_prompt}", "test")
+
+        # Verify the prompt history file contains properly escaped content
+        with open(history.prompt_history_file, 'r') as f:
+            lines = [line.rstrip('\n') for line in f.readlines()]
+
+        assert len(lines) == len(test_cases)
+        for i, (original, expected) in enumerate(test_cases):
+            assert lines[i] == expected, f"Line {i+1}: expected {expected!r}, got {lines[i]!r}"

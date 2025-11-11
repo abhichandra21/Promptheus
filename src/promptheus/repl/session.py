@@ -142,6 +142,9 @@ def display_clean_header(console, app_config: Config, args: Namespace) -> None:
     console.print("/status - show current session")
     console.print("/set - change provider or model")
     console.print("/toggle - toggle refine or skip-questions mode")
+    console.print("/copy - copy last result to clipboard")
+    console.print("/history - view prompt history")
+    console.print("/load <n> - load prompt by number")
     console.print()
 
 

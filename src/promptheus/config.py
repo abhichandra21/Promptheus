@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -333,6 +334,31 @@ class Config:
                 "Optionally set ZAI_BASE_URL for self-hosted gateways."
             )
         return "Set the appropriate API key for the selected provider."
+
+    # ------------------------------------------------------------------ #
+    # History configuration
+    # ------------------------------------------------------------------ #
+    @property
+    def history_enabled(self) -> bool:
+        """
+        Determine if history persistence should be enabled.
+
+        Auto-detection strategy:
+        - Interactive mode (sys.stdin.isatty() == True): Default to True
+        - Non-interactive mode (sys.stdin.isatty() == False): Default to False
+        - PROMPTHEUS_ENABLE_HISTORY environment variable overrides auto-detection
+
+        This prevents silent persistence of sensitive prompts in batch scripts
+        while maintaining a good default experience for interactive use.
+        """
+        # Explicit environment variable takes precedence
+        explicit_setting = os.getenv("PROMPTHEUS_ENABLE_HISTORY")
+        if explicit_setting is not None:
+            return explicit_setting.lower() in ("1", "true", "yes", "on")
+
+        # Auto-detect based on TTY status
+        is_interactive = sys.stdin.isatty()
+        return is_interactive
 
 
 # Global config instance
