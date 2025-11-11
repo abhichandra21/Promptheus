@@ -45,6 +45,7 @@ class HistoryEntry:
     original_prompt: str
     refined_prompt: str
     task_type: Optional[str] = None
+    persona: Optional[str] = None
 
     def to_dict(self):
         """Convert to dictionary."""
@@ -98,7 +99,8 @@ class PromptHistory:
         self,
         original_prompt: str,
         refined_prompt: str,
-        task_type: Optional[str] = None
+        task_type: Optional[str] = None,
+        persona: Optional[str] = None
     ) -> None:
         """
         Save a history entry.
@@ -107,12 +109,14 @@ class PromptHistory:
             original_prompt: The original user prompt
             refined_prompt: The final refined/accepted prompt
             task_type: Type of task (analysis, generation, etc.)
+            persona: The persona used for refinement (if any)
         """
         entry = HistoryEntry(
             timestamp=datetime.now().isoformat(),
             original_prompt=original_prompt,
             refined_prompt=refined_prompt,
-            task_type=task_type
+            task_type=task_type,
+            persona=persona
         )
 
         try:

@@ -42,6 +42,10 @@ def display_history(console: Console, notify, limit: int = 20) -> None:
         refined = refined.replace("\n", " ")
 
         task_type = entry.task_type or "unknown"
+        # Include persona in type column if available
+        if hasattr(entry, 'persona') and entry.persona:
+            task_type = f"{task_type}\n[dim](Persona: {entry.persona})[/dim]"
+
         combined = f"[white]{original}[/white]\n[dim]→[/dim] [yellow]{refined}[/yellow]"
 
         table.add_row(str(idx), timestamp_str, task_type, combined)

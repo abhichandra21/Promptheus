@@ -20,6 +20,49 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT_MARKERS = (".git", "pyproject.toml", "setup.py")
 
 
+def load_personas() -> Dict[str, Dict[str, str]]:
+    """
+    Load personas from built-in and custom locations.
+
+    Returns a dictionary where each key is a persona name and the value contains
+    'description' and 'prompt' fields.
+
+    Custom personas (from ~/.config/promptheus/personas/) override built-in personas
+    with the same name.
+    """
+    personas: Dict[str, Dict[str, str]] = {}
+
+    # Load built-in personas
+    builtin_path = Path(__file__).parent / "personas.json"
+    if builtin_path.exists():
+        try:
+            with open(builtin_path, 'r', encoding='utf-8') as f:
+                builtin_personas = json.load(f)
+                personas.update(builtin_personas)
+                logger.debug(f"Loaded {len(builtin_personas)} built-in personas")
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.error(f"Failed to load built-in personas: {sanitize_error_message(str(exc))}")
+
+    # Load custom personas from user directory
+    custom_dir = Path.home() / ".config" / "promptheus" / "personas"
+    if custom_dir.exists() and custom_dir.is_dir():
+        custom_count = 0
+        for json_file in custom_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    custom_personas = json.load(f)
+                    personas.update(custom_personas)
+                    custom_count += len(custom_personas)
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning(
+                    f"Failed to load custom personas from {json_file}: {sanitize_error_message(str(exc))}"
+                )
+        if custom_count > 0:
+            logger.debug(f"Loaded {custom_count} custom personas from {custom_dir}")
+
+    return personas
+
+
 def _is_project_root(directory: Path) -> bool:
     """Return True when the directory looks like the project root."""
     return any((directory / marker).exists() for marker in _PROJECT_ROOT_MARKERS)
@@ -59,6 +102,7 @@ class Config:
     def __init__(self) -> None:
         self._provider: Optional[str] = None
         self.model: Optional[str] = None
+        self.persona: Optional[str] = None
         self._status_messages: List[str] = []
         self._error_messages: List[str] = []
         self._provider_config: Optional[Dict[str, Any]] = None
@@ -78,6 +122,7 @@ class Config:
         """Reset provider/model selections and clear messages."""
         self._provider = None
         self.model = None
+        self.persona = None
         self._status_messages.clear()
         self._error_messages.clear()
         self._provider_config = None
@@ -176,6 +221,27 @@ class Config:
         """Manually set the model (e.g., from CLI flag)."""
         self.model = model
         self._record_status(f"Using model: {self.model}")
+
+    def set_persona(self, persona: str) -> None:
+        """Manually set the persona (e.g., from CLI flag)."""
+        self.persona = persona
+        self._record_status(f"Using persona: {self.persona}")
+
+    def get_persona(self) -> Optional[str]:
+        """
+        Get the persona to use, following a specific override hierarchy.
+        Hierarchy: CLI flag > Environment Variable
+        """
+        # 1. CLI flag (--persona)
+        if self.persona:
+            return self.persona
+
+        # 2. Environment variable (PROMPTHEUS_PERSONA)
+        env_persona = os.getenv("PROMPTHEUS_PERSONA")
+        if env_persona:
+            return env_persona
+
+        return None
 
     def get_model(self) -> str:
         """

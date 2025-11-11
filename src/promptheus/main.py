@@ -19,7 +19,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from promptheus.config import Config
+from promptheus.config import Config, load_personas
 from promptheus.constants import PROMPTHEUS_DEBUG_ENV
 from promptheus.history import get_history
 from promptheus.io_context import IOContext
@@ -35,7 +35,7 @@ from promptheus.utils import configure_logging, sanitize_error_message
 from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
 from promptheus.exceptions import PromptCancelled, ProviderAPIError
-from promptheus.commands import list_models, validate_environment, generate_template, generate_completion_script, handle_completion_request
+from promptheus.commands import list_models, list_personas, validate_environment, generate_template, generate_completion_script, handle_completion_request
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -356,20 +356,24 @@ def generate_final_prompt(
     answers: Dict[str, Any],
     mapping: Dict[str, str],
     io: IOContext,
+    system_instruction: Optional[str] = None,
 ) -> Tuple[str, bool]:
     """Generate the refined prompt (or return original if no answers)."""
     if not answers:
         return initial_prompt, False
 
+    if system_instruction is None:
+        system_instruction = GENERATION_SYSTEM_INSTRUCTION
+
     try:
         if not io.quiet_output:
             with io.console_err.status("[bold green]🎨 Crafting your refined prompt...", spinner="moon"):
                 final_prompt = provider.refine_from_answers(
-                    initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
+                    initial_prompt, answers, mapping, system_instruction
                 )
         else:
             final_prompt = provider.refine_from_answers(
-                initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
+                initial_prompt, answers, mapping, system_instruction
             )
         return final_prompt, True
     except KeyboardInterrupt as exc:
@@ -396,6 +400,28 @@ def process_single_prompt(
     Returns:
         Tuple of (final_prompt, task_type) if successful, None otherwise
     """
+    # Determine and apply persona
+    persona_name = app_config.get_persona()
+    persona_prompt = None
+
+    if persona_name:
+        all_personas = load_personas()
+        if persona_name in all_personas:
+            persona_prompt = all_personas[persona_name]['prompt']
+            if debug_enabled:
+                io.notify(f"[dim]Debug: Applying persona '{persona_name}'[/dim]")
+        else:
+            io.notify(f"[yellow]Warning: Persona '{persona_name}' not found. Proceeding without a persona.[/yellow]")
+            persona_name = None
+
+    # Prepare system instructions with persona
+    analysis_instruction = ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+    generation_instruction = GENERATION_SYSTEM_INSTRUCTION
+
+    if persona_prompt:
+        analysis_instruction = f"{persona_prompt}\n\n{ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION}"
+        generation_instruction = f"{persona_prompt}\n\n{GENERATION_SYSTEM_INSTRUCTION}"
+
     try:
         plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, io, app_config)
 
@@ -410,11 +436,11 @@ def process_single_prompt(
                 if not io.quiet_output:
                     with io.console_err.status("[bold blue]⚡ Performing light refinement...", spinner="simpleDots"):
                         final_prompt = provider.light_refine(
-                            initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+                            initial_prompt, analysis_instruction
                         )
                 else:
                     final_prompt = provider.light_refine(
-                        initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+                        initial_prompt, analysis_instruction
                     )
                 is_refined = True
             except KeyboardInterrupt as exc:
@@ -430,7 +456,7 @@ def process_single_prompt(
             if answers is None:
                 return None
             final_prompt, is_refined = generate_final_prompt(
-                provider, initial_prompt, answers, plan.mapping, io
+                provider, initial_prompt, answers, plan.mapping, io, generation_instruction
             )
 
     except Exception as exc:
@@ -462,7 +488,8 @@ def process_single_prompt(
         history.save_entry(
             original_prompt=initial_prompt,
             refined_prompt=final_prompt,
-            task_type=plan.task_type
+            task_type=plan.task_type,
+            persona=persona_name
         )
         logger.debug("Saved prompt to history")
     except Exception as exc:
@@ -557,6 +584,10 @@ def main() -> None:
             display_history(io.console_err, io.notify, limit=args.limit)
         sys.exit(0)
 
+    if getattr(args, "command", None) == "list-personas":
+        list_personas()
+        sys.exit(0)
+
     # Show provider status in a friendly way
     for message in app_config.consume_status_messages():
         io.notify(f"[cyan]●[/cyan] {message}")
@@ -565,6 +596,8 @@ def main() -> None:
         app_config.set_provider(args.provider)
     if args.model:
         app_config.set_model(args.model)
+    if getattr(args, "persona", None):
+        app_config.set_persona(args.persona)
 
     for message in app_config.consume_status_messages():
         io.notify(f"[cyan]●[/cyan] {message}")
