@@ -59,7 +59,7 @@ class HistoryEntry:
 class PromptHistory:
     """Manages prompt history storage and retrieval."""
 
-    def __init__(self, history_dir: Optional[Path] = None):
+    def __init__(self, history_dir: Optional[Path] = None, config=None):
         """
         Initialize history manager.
 
@@ -67,16 +67,26 @@ class PromptHistory:
             history_dir: Directory to store history files. Defaults to platform-specific location:
                 - Unix/Linux/Mac: ~/.promptheus
                 - Windows: %APPDATA%/promptheus
+            config: Configuration object to check if history is enabled
         """
         if history_dir is None:
             history_dir = get_default_history_dir()
 
         self.history_dir = history_dir
-        self.history_file = self.history_dir / "history.json"
+        self.history_file = self.history_dir / "history.jsonl"  # JSONL format
         self.prompt_history_file = self.history_dir / "prompt_history.txt"
+        self.config = config
 
         # Create directory if it doesn't exist
         self._ensure_directory()
+
+    @property
+    def enabled(self) -> bool:
+        """Check if history persistence is enabled."""
+        if self.config is None:
+            # Fallback to enabled if no config provided (backward compatibility)
+            return True
+        return self.config.history_enabled
 
     def _ensure_directory(self) -> None:
         """Create history directory if it doesn't exist."""
@@ -101,13 +111,18 @@ class PromptHistory:
         task_type: Optional[str] = None
     ) -> None:
         """
-        Save a history entry.
+        Save a history entry in O(1) time using append-only JSONL format.
 
         Args:
             original_prompt: The original user prompt
             refined_prompt: The final refined/accepted prompt
             task_type: Type of task (analysis, generation, etc.)
         """
+        # Check if history is enabled
+        if not self.enabled:
+            logger.debug("History persistence is disabled - skipping save")
+            return
+
         entry = HistoryEntry(
             timestamp=datetime.now().isoformat(),
             original_prompt=original_prompt,
@@ -116,14 +131,12 @@ class PromptHistory:
         )
 
         try:
-            # Load existing history
-            history = self._load_history()
-
-            # Add new entry
-            history.append(entry)
-
-            # Save updated history
-            self._save_history(history)
+            # Append entry to JSONL file (O(1) operation)
+            # Use append mode which should be atomic on most systems
+            with open(self.history_file, 'a', encoding='utf-8') as f:
+                json.dump(entry.to_dict(), f)
+                f.write('\n')
+                f.flush()  # Ensure data is written immediately
 
             # Also save to prompt history file for arrow key navigation
             self._append_to_prompt_history(original_prompt)
@@ -134,21 +147,24 @@ class PromptHistory:
             logger.error("Failed to save history entry: %s", sanitize_error_message(str(exc)))
 
     def _load_history(self) -> List[HistoryEntry]:
-        """Load history from file."""
+        """Load history from JSONL file."""
         if not self.history_file.exists():
             return []
 
         try:
+            history = []
             with open(self.history_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return [HistoryEntry.from_dict(entry) for entry in data]
-        except json.JSONDecodeError as exc:
-            logger.error(
-                "History file is corrupted (%s): %s",
-                self.history_file,
-                sanitize_error_message(str(exc)),
-            )
-            return []
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry_data = json.loads(line)
+                        history.append(HistoryEntry.from_dict(entry_data))
+                    except json.JSONDecodeError as exc:
+                        logger.warning(f"Failed to parse history line {line_num}: {exc}")
+                        continue
+            return history
         except OSError as exc:
             logger.error(
                 "Failed to read history file (%s): %s",
@@ -157,24 +173,18 @@ class PromptHistory:
             )
             return []
 
-    def _save_history(self, history: List[HistoryEntry]) -> None:
-        """Save history to file."""
-        try:
-            with open(self.history_file, 'w', encoding='utf-8') as f:
-                json.dump([entry.to_dict() for entry in history], f, indent=2)
-        except OSError as exc:
-            logger.error(
-                "Failed to save history file (%s): %s",
-                self.history_file,
-                sanitize_error_message(str(exc)),
-            )
-
     def _append_to_prompt_history(self, prompt: str) -> None:
         """Append a prompt to the prompt history file for arrow key navigation."""
+        # Check if history is enabled
+        if not self.enabled:
+            logger.debug("History persistence is disabled - skipping prompt history append")
+            return
+
         try:
             with open(self.prompt_history_file, 'a', encoding='utf-8') as f:
-                # Write prompt on a single line, escaping newlines
-                sanitized = prompt.replace('\n', '\\n')
+                # Write prompt on a single line with proper escaping
+                # Escape control characters that would break the one-line-per-entry format
+                sanitized = prompt.replace('\\', '\\\\').replace('\r', '\\r').replace('\n', '\\n')
                 f.write(f"{sanitized}\n")
         except OSError as exc:
             logger.error(
@@ -211,10 +221,36 @@ class PromptHistory:
         Returns:
             History entry or None if index is out of range
         """
-        history = self.get_all()
-        if 1 <= index <= len(history):
-            return history[index - 1]
-        return None
+        if not self.history_file.exists():
+            return None
+
+        try:
+            # For JSONL format, we can read line by line to find the target index
+            # We need to read from the beginning and keep track of line count
+            current_index = 0
+            lines = []
+
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    current_index += 1
+                    lines.append(line)
+
+                    # Keep only the most recent entries up to the target index
+                    if len(lines) > index:
+                        lines.pop(0)  # Remove oldest line to maintain size
+
+            if 1 <= index <= len(lines):
+                target_line = lines[-index]  # Get the line from end (most recent)
+                entry_data = json.loads(target_line)
+                return HistoryEntry.from_dict(entry_data)
+
+            return None
+        except (OSError, json.JSONDecodeError, IndexError) as exc:
+            logger.warning(f"Failed to get history entry by index {index}: {exc}")
+            return None
 
     def clear(self) -> None:
         """Clear all history."""
@@ -239,9 +275,17 @@ class PromptHistory:
 _history_instance: Optional[PromptHistory] = None
 
 
-def get_history() -> PromptHistory:
-    """Get the global history instance."""
+def get_history(config=None) -> PromptHistory:
+    """
+    Get the global history instance.
+
+    Args:
+        config: Optional configuration object to check history settings
+
+    Returns:
+        PromptHistory instance with config applied if provided
+    """
     global _history_instance
-    if _history_instance is None:
-        _history_instance = PromptHistory()
+    if _history_instance is None or config is not None:
+        _history_instance = PromptHistory(config=config)
     return _history_instance

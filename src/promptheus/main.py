@@ -20,7 +20,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from promptheus.config import Config
-from promptheus.constants import PROMPTHEUS_DEBUG_ENV
+from promptheus.constants import PROMPTHEUS_DEBUG_ENV, VERSION
 from promptheus.history import get_history
 from promptheus.io_context import IOContext
 from promptheus.question_prompter import create_prompter
@@ -34,7 +34,7 @@ from promptheus.providers import LLMProvider, get_provider
 from promptheus.utils import configure_logging, sanitize_error_message
 from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
-from promptheus.exceptions import PromptCancelled, ProviderAPIError
+from promptheus.exceptions import PromptCancelled, ProviderAPIError, InvalidProviderError
 from promptheus.commands import list_models, validate_environment, generate_template, generate_completion_script, handle_completion_request
 
 console = Console()
@@ -458,7 +458,7 @@ def process_single_prompt(
 
     # Save to history
     try:
-        history = get_history()
+        history = get_history(app_config)
         history.save_entry(
             original_prompt=initial_prompt,
             refined_prompt=final_prompt,
@@ -482,6 +482,11 @@ def main() -> None:
     app_config = Config()
 
     args = parse_arguments()
+
+    # Handle version flag first (before any setup)
+    if args.version:
+        console.print(f"Promptheus v{VERSION}")
+        sys.exit(0)
 
     # Create I/O context for terminal handling
     io = IOContext.create()
@@ -539,7 +544,12 @@ def main() -> None:
     if getattr(args, "command", None) == "template":
         # Create a simple console for output
         utility_console = Console()
-        generate_template(app_config, utility_console, args.providers)
+        try:
+            template = generate_template(app_config, utility_console, args.providers)
+            utility_console.print(template)
+        except Exception as exc:
+            utility_console.print(f"[red]Error generating template:[/red] {exc}")
+            sys.exit(1)
         sys.exit(0)
 
     if getattr(args, "command", None) == "history":
@@ -549,7 +559,7 @@ def main() -> None:
                 default=False,
             ).ask()
             if confirm:
-                get_history().clear()
+                get_history(app_config).clear()
                 io.notify("[green]✓[/green] History cleared")
             else:
                 io.notify("[yellow]Cancelled[/yellow]")
@@ -650,6 +660,11 @@ def main() -> None:
             io.console_err.print("[dim]Provide a prompt as an argument, via --file, or from stdin[/dim]")
             io.console_err.print("[dim]Example: promptheus \"your prompt here\" | cat[/dim]")
             sys.exit(1)
+
+        # Warn if history is disabled in interactive mode
+        if not app_config.history_enabled:
+            io.notify("[yellow]⚠[/yellow] History persistence is disabled. Your prompts won't be saved.\n")
+            io.notify("[dim]Enable with: export PROMPTHEUS_ENABLE_HISTORY=1[/dim]\n")
 
         interactive_mode(
             provider,

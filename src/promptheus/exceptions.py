@@ -9,3 +9,18 @@ class PromptCancelled(KeyboardInterrupt):
 class ProviderAPIError(Exception):
     """Raised when an LLM provider API call fails."""
     pass
+
+
+class TemplateError(Exception):
+    """Base class for template generation errors."""
+    pass
+
+
+class InvalidProviderError(TemplateError):
+    """Raised when an invalid provider is specified for template generation."""
+    pass
+
+
+class FileWriteError(TemplateError):
+    """Raised when template file writing fails."""
+    pass

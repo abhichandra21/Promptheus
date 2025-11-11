@@ -1,6 +1,6 @@
 """Tests for utility commands (validate, list models, etc.)."""
 
-from promptheus.commands import _select_test_model, _test_provider_connection
+from promptheus._provider_data import _select_test_model, _test_provider_connection
 from promptheus.config import Config
 
 
@@ -47,8 +47,8 @@ def test_test_provider_connection_uses_selected_model(monkeypatch):
         captured["model_name"] = model_name
         return DummyProvider()
 
-    monkeypatch.setattr("promptheus.commands._select_test_model", lambda name, cfg: "health-model")
-    monkeypatch.setattr("promptheus.commands.get_provider", fake_get_provider)
+    monkeypatch.setattr("promptheus._provider_data._select_test_model", lambda name, cfg: "health-model")
+    monkeypatch.setattr("promptheus._provider_data.get_provider", fake_get_provider)
 
     success, error = _test_provider_connection("openai", config)
 
