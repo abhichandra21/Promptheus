@@ -23,6 +23,7 @@ from .repl.commands import (
 # Use shared copy_to_clipboard function from utils
 from promptheus.utils import copy_to_clipboard
 from .repl.session import format_toolbar_text, create_bottom_toolbar
+from promptheus.history import get_history
 
 # Re-export types for compatibility
 from .repl.session import MessageSink, ProcessPromptFn
@@ -32,6 +33,7 @@ __all__ = [
     "interactive_mode",
     "handle_repl_command",
     "display_history",
+    "get_history",
 
     # Completer
     "CommandCompleter",
