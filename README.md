@@ -2,7 +2,7 @@
 
 **AI-powered prompt engineering for humans who'd rather spend their time on ideas than housekeeping.**
 
-Promptheus is a CLI tool that takes your rough prompt ideas and helps refine them into something worth sending to an AI. Think of it as a pre-flight checklist for your prompts—ask the right questions upfront, tweak until it feels right, and keep a history of what worked.
+Promptheus is a CLI tool that takes your rough prompt ideas and helps refine them into something worth sending to an AI. Think of it as a pre-flight checklist for your prompts—ask the right questions upfront, tweak until it feels right, and keep a history of what worked. When your terminal is wide enough, Promptheus displays an ASCII art logo for a more visually appealing experience.
 
 ## Why This Exists
 
@@ -37,19 +37,25 @@ Promptheus will auto-detect which provider to use based on your available keys. 
 Enable tab completion for better CLI experience:
 
 ```bash
-# Automatic installation (recommended)
-./completions/install_completion.sh
+# Generate and install completion automatically
+promptheus completion --install
 
-# Then restart your shell or source the completion file as instructed
+# Or generate completion script for your shell
+promptheus completion bash > ~/.bash_completion.d/promptheus.bash
+# or
+promptheus completion zsh > ~/.zsh/completions/_promptheus
+
+# Then restart your shell or source the completion file
+source ~/.bash_completion.d/promptheus.bash
+# or
+source ~/.zshrc
 ```
 
 The completion works with Poetry environments and supports:
 - Provider and model completion
-- Subcommand completion (history, list-models, validate, template)
+- Subcommand completion (history, list-models, validate, template, completion)
 - All flags and options
 - Context-aware suggestions
-
-See `completions/COMPLETION_INSTALL.md` for alternative setup methods.
 
 ### Basic Usage
 
@@ -273,6 +279,10 @@ Mix and match with flags as needed.
 |---------|-------------|
 | `promptheus --help` | Show help message |
 | `promptheus --version` | Show version info |
+| `promptheus completion` | Generate shell completion script |
+| `promptheus completion --install` | Automatically install shell completion |
+| `promptheus completion bash` | Generate bash completion script |
+| `promptheus completion zsh` | Generate zsh completion script |
 
 ## Configuration
 
