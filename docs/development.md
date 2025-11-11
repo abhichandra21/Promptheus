@@ -32,6 +32,19 @@ When developing for multiple Python versions:
 - Some provider libraries may have compatibility limitations with Python 3.14 
 - Consider using virtual environments to manage different Python versions during development
 
+## Architecture Notes
+The codebase follows a modular architecture:
+- **CLI layer**: `src/promptheus/cli.py` handles argument parsing
+- **Core logic**: `src/promptheus/main.py` contains the main processing logic
+- **REPL module**: `src/promptheus/repl/` contains the interactive mode functionality split into:
+  - `session.py`: Main REPL loop and session management
+  - `commands.py`: Slash command handling (`/set`, `/toggle`, etc.)
+  - `completer.py`: Command completion for slash commands
+  - `history_view.py`: History display functionality
+- **Providers**: `src/promptheus/providers.py` contains provider-specific implementations
+- **Configuration**: `src/promptheus/config.py` handles configuration and environment
+- **Utilities**: `src/promptheus/utils.py` contains shared utility functions
+
 ## Contribution Tips
 1. Keep changes focused (feature vs refactor vs docs).
 2. Use short, imperative commit messages (`Add static mode docs`).

@@ -16,6 +16,7 @@ from rich.markdown import Markdown
 from rich.text import Text
 
 from promptheus.config import Config
+from promptheus.constants import VERSION
 from promptheus.history import get_history
 from promptheus.io_context import IOContext
 from promptheus.providers import LLMProvider
@@ -99,6 +100,51 @@ def create_bottom_toolbar(provider: str, model: str) -> HTML:
     )
 
 
+def display_clean_header(console, app_config: Config, args: Namespace) -> None:
+    """Display a clean, minimal header similar to OpenAI Codex."""
+    provider_name = app_config.provider or "auto"
+    model_name = app_config.get_model() or "default"
+    skip_qs_status = "ON" if getattr(args, 'skip_questions', False) else "OFF"
+
+    # Fixed width for perfect alignment (matching OpenAI Codex style)
+    box_width = 48
+
+    # Create perfectly aligned header lines
+    line1 = f" >_ Promptheus (v{VERSION})"
+    line2 = ""
+    line3 = f" model:     {model_name.ljust(17)} /model to change"
+    line4 = f" provider:  {provider_name.ljust(17)} /provider"
+    line5 = f" skip Qs:   {skip_qs_status.ljust(17)} /toggle"
+
+    # Pad each line to exact box width
+    header_lines = [
+        line1.ljust(box_width),
+        line2.ljust(box_width),
+        line3.ljust(box_width),
+        line4.ljust(box_width),
+        line5.ljust(box_width),
+    ]
+
+    # Print the top of the box
+    console.print("╭" + "─" * box_width + "╮")
+
+    # Print each line inside the box
+    for line in header_lines:
+        console.print(f"│{line}│")
+
+    # Print the bottom of the box
+    console.print("╰" + "─" * box_width + "╯")
+
+    # Print the getting started text
+    console.print()
+    console.print("To get started, provide a prompt or try one of these commands:")
+    console.print("/help - show available commands")
+    console.print("/status - show current session")
+    console.print("/set - change provider or model")
+    console.print("/toggle - toggle refine or skip-questions mode")
+    console.print()
+
+
 def interactive_mode(
     provider: LLMProvider,
     app_config: Config,
@@ -127,9 +173,8 @@ def interactive_mode(
     console = io.console_err
     notify = io.notify
 
-    # Welcome message
-    console.print("[bold cyan]Welcome to Promptheus![/bold cyan]")
-    console.print("[dim]Interactive mode ready. Type / for commands.[/dim]\n")
+    # Display clean header
+    display_clean_header(console, app_config, args)
 
     prompt_count = 1
     last_ctrl_c_time = [0.0]  # Track time of last Ctrl+C for graceful exit
