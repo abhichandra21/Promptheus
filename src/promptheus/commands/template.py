@@ -1,18 +1,31 @@
 """Template generation functionality."""
 
 import logging
-import sys
 from typing import List
 
 from rich.console import Console
 
 from promptheus.config import Config
+from promptheus.exceptions import InvalidProviderError
 
 logger = logging.getLogger(__name__)
 
 
-def generate_template(config: Config, console: Console, providers_input: str) -> None:
-    """Generate and print an environment file template for one or more providers."""
+def generate_template(config: Config, console: Console, providers_input: str) -> str:
+    """
+    Generate an environment file template for one or more providers.
+
+    Args:
+        config: Configuration object containing provider information
+        console: Console object for output
+        providers_input: Comma-separated list of provider names
+
+    Returns:
+        The generated template as a string
+
+    Raises:
+        InvalidProviderError: When unknown providers are specified
+    """
     provider_names = [p.strip() for p in providers_input.split(',')]
     logger.debug("Generating .env template for providers: %s", provider_names)
     provider_data = config._ensure_provider_config().get("providers", {})
@@ -20,9 +33,14 @@ def generate_template(config: Config, console: Console, providers_input: str) ->
 
     invalid_providers = [p for p in provider_names if p not in provider_data]
     if invalid_providers:
-        print(f"Error: Unknown provider(s): {', '.join(invalid_providers)}", file=sys.stderr)
-        print(f"Valid providers: {', '.join(provider_data.keys())}", file=sys.stderr)
-        sys.exit(1)
+        error_msg = f"Unknown provider(s): {', '.join(invalid_providers)}"
+        valid_msg = f"Valid providers: {', '.join(provider_data.keys())}"
+
+        # Use the provided console for error output
+        console.print(f"[red]Error:[/red] {error_msg}")
+        console.print(f"[dim]Valid providers: {valid_msg}[/dim]")
+
+        raise InvalidProviderError(error_msg)
 
     all_template_lines = []
 
@@ -65,4 +83,4 @@ def generate_template(config: Config, console: Console, providers_input: str) ->
 
         all_template_lines.extend(template_lines)
 
-    print('\n'.join(all_template_lines))
+    return '\n'.join(all_template_lines)
