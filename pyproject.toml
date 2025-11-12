@@ -1,17 +1,12 @@
-[build-system]
-requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "promptheus"
-version = "0.1.0"
+version = "0.1.1"
 description = "AI-powered prompt engineering CLI tool"
+authors = ["Promptheus Contributors"]
+license = "MIT"
 readme = "README.md"
-requires-python = ">=3.8"
-license = {text = "MIT"}
-authors = [
-    {name = "Promptheus Contributors"}
-]
+homepage = "https://github.com/abhichandra21/Promptheus"
+repository = "https://github.com/abhichandra21/Promptheus"
 keywords = ["ai", "prompt-engineering", "cli", "gemini", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -25,33 +20,34 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+packages = [{include = "promptheus", from = "src"}]
 
-dependencies = [
-    "anthropic>=0.70.0",
-    "google-genai>=1.49.0",
-    "openai>=1.51.0",
-    "prompt_toolkit>=3.0.52",
-    "pyperclip>=1.11.0",
-    "python-dotenv>=1.2.0",
-    "questionary>=2.1.0",
-    "rich>=14.0.0",
-]
+[tool.poetry.dependencies]
+python = ">=3.10"
+anthropic = ">=0.70.0"
+google-genai = ">=1.49.0"
+openai = ">=1.51.0"
+prompt_toolkit = ">=3.0.52"
+pyperclip = ">=1.11.0"
+python-dotenv = ">=1.2.0"
+questionary = ">=2.1.0"
+rich = ">=14.0.0"
+filelock = ">=3.20.0,<4.0.0"
 
-[project.urls]
-Homepage = "https://github.com/abhichandra21/Promptheus"
-Repository = "https://github.com/abhichandra21/Promptheus"
+[tool.poetry.group.dev.dependencies]
+pytest = "~=8.4.0"
 
-[project.optional-dependencies]
-dev = [
-    "pytest~=8.4.0",
-]
-
-[project.scripts]
+[tool.poetry.scripts]
 promptheus = "promptheus.main:main"
 
-[tool.setuptools]
-packages = ["promptheus"]
-package-dir = {"" = "src"}
+[[tool.poetry.source]]
+name = "testpypi"
+url = "https://test.pypi.org/legacy/"
+priority = "supplemental"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 filterwarnings = [

@@ -95,6 +95,11 @@ Interactive Mode Commands (available when running without arguments):
     # General arguments
     general_group = parser.add_argument_group("General")
     general_group.add_argument(
+        "--version",
+        action="store_true",
+        help="Show version information and exit",
+    )
+    general_group.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -222,9 +227,10 @@ Interactive Mode Commands (available when running without arguments):
             "-v", "--verbose", action="store_true", help=argparse.SUPPRESS
         )
 
-        # Add verbose flag to all subcommands for convenience
+        # Add verbose and version flags to all subcommands for convenience
         for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser]:
             sub.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug output")
+            sub.add_argument("--version", action="store_true", help="Show version information and exit")
 
     return parser
 
