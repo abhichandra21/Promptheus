@@ -12,7 +12,17 @@ You're working with AI and you want better results. You know prompts matter, but
 
 ### Installation
 
+Promptheus is available on PyPI. Install it with a single command:
+
 ```bash
+pip install promptheus
+```
+
+For development or contributing, install from source:
+
+```bash
+git clone https://github.com/abhichandra21/Promptheus.git
+cd Promptheus
 pip install -e .
 ```
 
@@ -440,17 +450,13 @@ For more detailed guides, check the `docs/` directory:
 - Python 3.8 or higher (Python 3.14 supported for Gemini provider)
 - At least one AI provider API key (Gemini, Claude, OpenAI, Groq, Qwen, or GLM)
 
-## Installation from Source
+## Development Setup
+
+For contributing or development work:
 
 ```bash
 git clone https://github.com/abhichandra21/Promptheus.git
 cd Promptheus
-pip install -e .
-```
-
-For development:
-
-```bash
 pip install -e ".[dev]"
 pytest -q
 ```
