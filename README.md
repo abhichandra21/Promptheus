@@ -1,8 +1,8 @@
 # Promptheus
 
-**AI-powered prompt engineering for humans who'd rather spend their time on ideas than housekeeping.**
+**For everyone who loves ideas but hates prompt-fiddling.**
 
-Promptheus is a CLI tool that takes your rough prompt ideas and helps refine them into something worth sending to an AI. Think of it as a pre-flight checklist for your prompts—ask the right questions upfront, tweak until it feels right, and keep a history of what worked.
+Promptheus is a little CLI tool that cleans up your messy, brilliant thoughts before you hand them off to an AI. Think of it as a quick sparring partner for your prompts—it asks smart questions to add detail, lets you make tiny tweaks until it’s just right, and saves every version so you can remember what actually worked.
 
 ## Why This Exists
 
