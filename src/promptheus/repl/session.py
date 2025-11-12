@@ -210,16 +210,28 @@ def interactive_mode(
     session: Optional[PromptSession] = None
     if use_prompt_toolkit:
         try:
-            history_file = get_history().get_prompt_history_file()
-            session = PromptSession(
-                history=FileHistory(str(history_file)),
-                multiline=True,
-                prompt_continuation='… ',  # Continuation prompt for wrapped lines
-                key_bindings=bindings,
-                completer=completer,
-                complete_while_typing=True,  # Show completions as you type
-                enable_history_search=False,  # Disable Ctrl+R to avoid conflicts
-            )
+            # Only enable file-based history if history is enabled in config
+            if app_config.history_enabled:
+                history_file = get_history().get_prompt_history_file()
+                session = PromptSession(
+                    history=FileHistory(str(history_file)),
+                    multiline=True,
+                    prompt_continuation='… ',  # Continuation prompt for wrapped lines
+                    key_bindings=bindings,
+                    completer=completer,
+                    complete_while_typing=True,  # Show completions as you type
+                    enable_history_search=False,  # Disable Ctrl+R to avoid conflicts
+                )
+            else:
+                # History disabled: no FileHistory, no disk persistence
+                session = PromptSession(
+                    multiline=True,
+                    prompt_continuation='… ',  # Continuation prompt for wrapped lines
+                    key_bindings=bindings,
+                    completer=completer,
+                    complete_while_typing=True,  # Show completions as you type
+                    enable_history_search=False,  # Disable Ctrl+R to avoid conflicts
+                )
         except Exception as exc:
             logger.warning("Failed to initialize history: %s", sanitize_error_message(str(exc)))
             use_prompt_toolkit = False
