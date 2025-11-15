@@ -212,8 +212,11 @@ class Config:
         provider = self.provider or "gemini"
         provider_info = config_data["providers"][provider]
 
-        api_key = None
+        config = {}
+
+        # Handle API key configuration (traditional only)
         api_key_env = provider_info.get("api_key_env")
+        api_key = None
         if isinstance(api_key_env, list):
             for key_env in api_key_env:
                 if os.getenv(key_env):
@@ -222,13 +225,14 @@ class Config:
         elif api_key_env:
             api_key = os.getenv(api_key_env)
 
-        config = {"api_key": api_key}
+        config["api_key"] = api_key
 
         # Add other optional env-based fields
         optional_env_fields = {
             "base_url": provider_info.get("base_url_env"),
             "organization": provider_info.get("organization_env"),
             "project": provider_info.get("project_env"),
+            "model": provider_info.get("model_env"),
         }
         for key, env_var in optional_env_fields.items():
             if not env_var:

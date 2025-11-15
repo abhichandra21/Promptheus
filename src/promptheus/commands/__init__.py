@@ -6,6 +6,7 @@ Command implementations for utility functions like listing models and validating
 from .completion import handle_completion_request
 from .providers import list_models, validate_environment
 from .template import generate_template
+from .auth import auth_command, add_arguments as auth_add_arguments
 from promptheus.completions import generate_completion_script, install_completion
 from promptheus._provider_data import _select_test_model, _test_provider_connection
 from promptheus.providers import get_provider
@@ -23,6 +24,10 @@ __all__ = [
 
     # Template commands
     "generate_template",
+
+    # Auth commands
+    "auth_command",
+    "auth_add_arguments",
 
     # Internal test utilities (needed for tests)
     "_select_test_model",

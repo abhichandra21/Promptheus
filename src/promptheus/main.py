@@ -36,6 +36,7 @@ from promptheus.cli import parse_arguments
 from promptheus.repl import display_history, interactive_mode
 from promptheus.exceptions import PromptCancelled, ProviderAPIError, InvalidProviderError
 from promptheus.commands import list_models, validate_environment, generate_template, generate_completion_script, handle_completion_request
+import promptheus.commands.auth as auth_commands
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -565,6 +566,10 @@ def main() -> None:
                 io.notify("[yellow]Cancelled[/yellow]")
         else:
             display_history(io.console_err, io.notify, limit=args.limit)
+        sys.exit(0)
+
+    if getattr(args, "command", None) == "auth":
+        auth_commands.auth_command(args.provider, skip_validation=getattr(args, "skip_validation", False))
         sys.exit(0)
 
     # Show provider status in a friendly way

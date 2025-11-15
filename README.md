@@ -1,236 +1,258 @@
 # Promptheus
 
-**AI-powered prompt engineering for humans who'd rather spend their time on ideas than housekeeping.**
+## Overview
 
-Promptheus is a CLI tool that takes your rough prompt ideas and helps refine them into something worth sending to an AI. Think of it as a pre-flight checklist for your prompts—ask the right questions upfront, tweak until it feels right, and keep a history of what worked.
+Promptheus is a command-line interface tool for AI-powered prompt engineering. It transforms preliminary prompt concepts into structured, refined inputs suitable for large language model interactions. The tool implements an adaptive workflow that determines task requirements and applies appropriate refinement strategies.
 
-## Why This Exists
+**Core Functionality:**
+- Automated prompt analysis and enhancement
+- Multi-provider LLM integration with unified interface
+- Interactive refinement workflow with contextual questioning
+- Session history management and retrieval
+- Support for batch processing and pipeline integration
 
-You're working with AI and you want better results. You know prompts matter, but who has time to craft the perfect prompt every single time? Promptheus handles the refinement workflow so you can focus on what you're trying to build. It asks clarifying questions when needed, lets you tweak iteratively, and gets out of the way when you just want to ship something fast.
+**Primary Use Cases:**
+- **Users**: Rapid prompt development for AI-driven tasks without manual optimization overhead
+- **Developers**: Programmatic prompt engineering for applications requiring consistent LLM output quality
 
-## Quick Start
+## Installation
 
-### Installation
+### User Installation
 
-Promptheus is available on PyPI. Install it with a single command:
-
+**Standard Installation (PyPI):**
 ```bash
 pip install promptheus
 ```
 
-For development or contributing, install from source:
+**Verification:**
+```bash
+promptheus --version
+```
 
+### Developer Installation
+
+**From Source:**
 ```bash
 git clone https://github.com/abhichandra21/Promptheus.git
 cd Promptheus
-pip install -e .
+pip install -e ".[dev]"
 ```
 
-### Verify Installation
-
+**Development Dependencies:**
+The development installation includes testing frameworks and code quality tools. Execute the test suite to verify installation:
 ```bash
-promptheus --version
-# Should output: Promptheus v0.1.0
+pytest -q
 ```
 
-### Set Up Your API Keys
+## Configuration
 
-Create a `.env` file in your project directory (or use the provided `.env.example` as a template):
+### API Key Setup
+
+Create a `.env` file in your project directory. At minimum, one provider API key is required:
 
 ```bash
-# Pick one or more providers
+# Google Gemini
 GEMINI_API_KEY=your_gemini_key_here
+
+# Anthropic Claude
 ANTHROPIC_API_KEY=your_anthropic_key_here
+
+# OpenAI
 OPENAI_API_KEY=your_openai_key_here
+
+# Groq
 GROQ_API_KEY=your_groq_key_here
-DASHSCOPE_API_KEY=your_qwen_key_here  # for Qwen
-ZAI_API_KEY=your_glm_key_here          # for GLM
+
+# Alibaba Cloud Qwen
+DASHSCOPE_API_KEY=your_qwen_key_here
+
+# Zhipu AI GLM
+ZAI_API_KEY=your_glm_key_here
 ```
 
-Promptheus will auto-detect which provider to use based on your available keys. You can override this with flags or environment variables if you prefer.
+The system auto-detects available providers. Override detection using `--provider` flag or environment variables.
 
-### Optional: Shell Completion
+### Shell Completion (Optional)
 
-Enable tab completion for better CLI experience:
+**Developer Feature:** Enable command-line completion for improved workflow efficiency.
 
 ```bash
-# Generate and install completion automatically
+# Automatic installation
 promptheus completion --install
 
-# Or generate completion script for your shell
+# Manual installation - Bash
 promptheus completion bash > ~/.bash_completion.d/promptheus.bash
-# or
-promptheus completion zsh > ~/.zsh/completions/_promptheus
-
-# Then restart your shell or source the completion file
 source ~/.bash_completion.d/promptheus.bash
-# or
+
+# Manual installation - Zsh
+promptheus completion zsh > ~/.zsh/completions/_promptheus
 source ~/.zshrc
 ```
 
-The completion works with Poetry environments and supports:
-- Provider and model completion
-- Subcommand completion (history, list-models, validate, template, completion)
-- All flags and options
+**Completion Features:**
+- Provider and model name completion
+- Subcommand completion
+- Flag and option completion
 - Context-aware suggestions
 
-### Basic Usage
+## Usage
 
+### Basic Command Patterns
+
+**User-Focused Examples:**
 ```bash
-# Interactive mode (REPL-style)
+# Interactive session (REPL mode)
 promptheus
 
-# Single prompt
+# Single prompt execution
 promptheus "Write a technical blog post about microservices"
 
-# Skip questions mode (skip refinement)
+# Skip clarifying questions
 promptheus -s "Explain how kubernetes works"
 
-# Force refinement with questions
+# Force interactive refinement
 promptheus -r "Draft a product announcement"
 
-# Use a specific provider
-promptheus --provider gemini "Analyze this codebase structure"
-
-# Load prompt from file
+# File input
 promptheus -f my-prompt.txt
 promptheus @my-prompt.txt
 
-# Pipe it in
+# Standard input
 cat idea.txt | promptheus
 ```
 
-## Features
-
-### Adaptive Interaction
-
-Promptheus automatically detects what kind of task you're working on:
-
-- **Analysis tasks** (research, code review, exploration): Skips unnecessary questions by default—you already know what you want
-- **Generation tasks** (writing, creating, design): Offers clarifying questions to help you think through requirements
-
-You can override this with `-s` (skip-questions) or `-r` (refine) flags.
-
-### Six AI Providers, One Interface
-
-Promptheus supports multiple LLM providers with a consistent experience:
-
-- **Google Gemini** (gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash)
-- **Anthropic Claude** (claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus)
-- **OpenAI** (gpt-4o, gpt-4-turbo, gpt-3.5-turbo)
-- **Groq** (llama-3.3-70b-versatile, llama-3.1-70b-versatile, mixtral-8x7b)
-- **Qwen** (qwen-max, qwen-plus, qwen-turbo)
-- **GLM** (glm-4-plus, glm-4-0520, glm-4-air)
-
-Switch providers with `--provider` or pin a specific model with `--model`. The tool handles all the provider-specific quirks behind the scenes.
-
-### Clarifying Questions
-
-When Promptheus detects a generation task, it can ask you clarifying questions to flesh out your prompt:
-
-<img width="685" height="225" alt="image" src="https://github.com/user-attachments/assets/b55615b5-a34c-4a1f-9744-b900ac509f77" />
-
-
-The AI generates contextual questions based on your initial prompt. Use `--skip-questions` to bypass questions and directly improve your prompt.
-
-### Iterative Tweaking
-
-After refinement, you get a chance to make targeted edits:
-
-<img width="1272" height="450" alt="image" src="https://github.com/user-attachments/assets/f421c6c4-461e-4a88-b420-f9d17260600d" />
-
-
-Just describe what you want changed in natural language. Hit Enter when you're happy with it.
-
-### Session History
-
-Every refined prompt is saved automatically for future reference. You can revisit past prompts, load them for reuse, or clear history when needed.
-
+**Developer-Focused Examples:**
 ```bash
-# View history from CLI
+# Specify provider explicitly
+promptheus --provider gemini "Analyze this codebase structure"
+
+# Specify model explicitly
+promptheus --model gpt-4o "Generate API documentation"
+
+# JSON output for programmatic processing
+promptheus -o json "Create OpenAPI schema"
+
+# Pipeline integration
+echo "Generate test cases" | promptheus | tee output.txt
+```
+
+## Features and Capabilities
+
+### Adaptive Task Detection
+
+**User-Facing:** The system analyzes input prompts to determine task classification and applies appropriate interaction strategies.
+
+**Technical Implementation:**
+- **Analysis tasks** (research, code review, data exploration): Bypasses interactive questioning by default
+- **Generation tasks** (content creation, code generation, design): Initiates contextual question workflow
+
+Override automatic detection using `-s` (skip-questions) or `-r` (refine) flags.
+
+### Multi-Provider LLM Support
+
+**User-Facing:** Access six major LLM providers through a unified interface.
+
+**Developer-Facing:** Provider abstraction layer ensures consistent behavior across heterogeneous LLM APIs.
+
+**Supported Providers and Models:**
+- **Google Gemini**: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
+- **Anthropic Claude**: claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus
+- **OpenAI**: gpt-4o, gpt-4-turbo, gpt-3.5-turbo
+- **Groq**: llama-3.3-70b-versatile, llama-3.1-70b-versatile, mixtral-8x7b
+- **Alibaba Cloud Qwen**: qwen-max, qwen-plus, qwen-turbo
+- **Zhipu AI GLM**: glm-4-plus, glm-4-0520, glm-4-air
+
+Provider selection via `--provider` flag or `PROMPTHEUS_PROVIDER` environment variable. Model selection via `--model` flag or `PROMPTHEUS_MODEL` environment variable.
+
+### Interactive Refinement Workflow
+
+**User-Facing:** The system generates contextual questions based on task analysis to elicit requirements and constraints.
+
+**Developer-Facing:** Question generation utilizes LLM-based analysis of prompt structure and intent. Bypass this workflow using `--skip-questions` for automated processing.
+
+**Post-Refinement Iteration:**
+Natural language modification interface enables targeted adjustments to refined output. Users can request specific changes (e.g., "make it more formal", "remove technical jargon") and the system applies targeted modifications iteratively.
+
+### Session History Persistence
+
+**User-Facing:** Automatic storage of refined prompts for retrieval and reuse.
+
+**Command-Line Interface:**
+```bash
+# View history
 promptheus history
 promptheus history --limit 50
 promptheus history --clear
 
-# From interactive mode
+# Interactive mode commands
 /history
 /load 3
 /clear-history
 ```
 
-#### History Privacy & Security
+**Developer-Facing:** Privacy and security controls for history management.
 
-**Smart Auto-Detection**: Promptheus automatically detects your usage context to protect privacy:
-
-- **Interactive terminal sessions** (like `promptheus` without arguments): History enabled by default
+**Context-Aware Storage:**
+- **Interactive terminal sessions**: History enabled by default
 - **Non-interactive usage** (pipelines, scripts, automation): History disabled by default
-- **Batch processing**: History disabled to prevent accidental logging of sensitive prompts
+- **Batch processing**: History disabled to prevent unintended logging
 
-**Manual Control**: Override auto-detection with the `PROMPTHEUS_ENABLE_HISTORY` environment variable:
-
+**Programmatic Control:**
 ```bash
-# Force enable history (useful for CI/CD with manual review)
+# Enable history explicitly
 PROMPTHEUS_ENABLE_HISTORY=1 promptheus "analyze this data"
 
-# Force disable history (for maximum privacy)
+# Disable history explicitly
 PROMPTHEUS_ENABLE_HISTORY=0 promptheus "secret project plan"
 
-# Alternative values supported: true/yes/on, false/no/off
-PROMPTHEUS_ENABLE_HISTORY=true promptheus "confidential analysis"
+# Supported values: 1/0, true/false, yes/no, on/off
 ```
 
-**Security Considerations**:
-- History is stored locally in your home directory (`~/.promptheus/` or `%APPDATA%/promptheus`)
-- No data is transmitted to external services
-- Prompts with special characters (newlines, backslashes) are safely escaped
-- Uses efficient JSONL format for O(1) append operations
+**Technical Implementation:**
+- Local storage: `~/.promptheus/` (Unix) or `%APPDATA%/promptheus` (Windows)
+- No external data transmission
+- JSONL format with O(1) append complexity
+- Escaped special characters for safe storage
+- Metadata includes timestamps, task types, original and refined versions
 
-History includes timestamps, task types, and both original and refined versions so you can track what worked.
+### Pipeline Integration and Output Control
 
-### Output Helpers
-
-- **Copy to clipboard**: `-c` / `--copy` — refined prompt goes straight to your clipboard
-
-### Piping & Output Formatting
-
-Promptheus automatically detects when output is piped and adjusts its behavior accordingly:
-
+**User-Facing:** Clipboard integration for rapid workflow.
 ```bash
-# Auto-quiet: automatically enabled when piping
+# Copy refined prompt to clipboard
+promptheus -c "Generate API documentation"
+```
+
+**Developer-Facing:** Automatic detection of pipeline context with appropriate behavior adjustments.
+
+**Pipeline Behavior:**
+```bash
+# Automatic quiet mode when stdout is piped
 promptheus "Explain Docker" | cat
 
-# Questions are still asked (on stderr), final output on stdout
-promptheus "Draft a report" | tee result.txt
-
-# If stdin is not interactive, questions are automatically skipped
-echo "Write a story" | promptheus | cat
-
-# Different output formats
+# Output format control
 promptheus -o plain "Write a haiku"        # Plain text (default)
-promptheus -o json "Create a function"     # JSON format with metadata
+promptheus -o json "Create a function"     # JSON with metadata
+
+# Non-interactive stdin handling
+echo "Write a story" | promptheus | cat
 ```
 
-**Piping Behavior:**
-- **Auto-quiet**: When stdout is not a TTY (piping), quiet mode is automatically enabled
-- **Prompt processing unchanged**: Questions are still asked based on LLM's decision when stdin is interactive
-- **Non-interactive stdin**: When stdin is not a TTY (piped input), questions are automatically skipped and light refinement is used
-- **Clean separation**: All UI messages (status, warnings, progress, questions) go to stderr; only the final refined prompt goes to stdout
-- **No interactive tweaks**: Clipboard (`--copy`) is disabled in quiet mode
-- **Error handling**: Errors always appear on stderr with non-zero exit codes
+**Technical Details:**
+- **TTY Detection**: Auto-quiet when stdout is not a TTY
+- **Stream Separation**: UI messages to stderr, refined output to stdout
+- **Non-interactive stdin**: Automatic question bypass when stdin is not a TTY
+- **Error Handling**: Errors to stderr with appropriate exit codes
+- **Clipboard**: Disabled in quiet mode
 
-### Pipe Integration
-
-Promptheus works seamlessly with Unix pipes and command substitution:
-
+**Integration Examples:**
 ```bash
-# Chain with other AI tools
-promptheus "Write a story" | codex exec
+# Command substitution
 claude "$(promptheus 'Create a haiku')"
 
-# Standard Unix utilities
-promptheus "Explain Docker" | tee output.txt       # Save and display
-promptheus "Ideas" | grep -i "docker" > ideas.txt  # Filter results
-echo "topic" | promptheus | cat > result.txt       # Chain transformations
+# Standard utilities
+promptheus "Explain Docker" | tee output.txt
+echo "topic" | promptheus | cat > result.txt
 
 # JSON processing
 promptheus -o json "API schema" | jq '.endpoints'
@@ -243,217 +265,255 @@ done
 
 ### Interactive Mode (REPL)
 
-Launch `promptheus` with no arguments to enter interactive mode. Process multiple prompts in one session, reuse your provider/model/flag settings, and use built-in helpers like `/history`, arrow-key navigation, and multiline input support.
+**User-Facing:** Multi-prompt session management with persistent configuration.
 
-Interactive mode includes:
-- **Slash commands**: `/history`, `/load <n>`, `/clear-history`, `/copy`, `/status`, `/set provider <name>`, `/toggle refine`, and many more
-- **Keyboard shortcuts**: Use Shift+Enter or Option/Alt+Enter for multiline prompts
-- **Session management**: Change provider/model on the fly with `/set` commands
-- **Copy to clipboard**: Use `/copy` to copy the last refined result
+Execute `promptheus` without arguments to enter interactive mode.
 
-<img width="1272" height="450" alt="image" src="https://github.com/user-attachments/assets/ddc68d1b-2495-4926-9b74-6d1ac80b2413" />
+**Features:**
+- **Slash commands**: `/history`, `/load <n>`, `/clear-history`, `/copy`, `/status`, `/set provider <name>`, `/toggle refine`
+- **Keyboard shortcuts**: Shift+Enter or Option/Alt+Enter for multiline input
+- **Session state**: Provider and model configuration persists across prompts within session
+- **Clipboard operations**: `/copy` command for last refined result
+- **Command completion**: Tab completion for all slash commands with context-aware suggestions
 
+**Developer-Facing:** Prompt Toolkit-based TUI with custom key bindings, command completion, and session state management.
 
-### Input Methods
+### Input Method Support
 
-- **Inline**: `promptheus "Your prompt here"`
+**Supported Input Patterns:**
+- **Inline argument**: `promptheus "Your prompt here"`
 - **File flag**: `promptheus -f path/to/prompt.txt`
-- **@ shortcut**: `promptheus @path/to/prompt.txt`
-- **Stdin**: `cat prompt.txt | promptheus` or `echo "prompt" | promptheus`
+- **@ syntax**: `promptheus @path/to/prompt.txt`
+- **Standard input**: `cat prompt.txt | promptheus` or `echo "prompt" | promptheus`
 
-Mix and match with flags as needed.
+All input methods support flag combinations.
 
-## Command Reference
+## Command-Line Reference
 
-### Core Flags
+### Primary Flags
 
 | Flag | Description |
 |------|-------------|
-| `-s`, `--skip-questions` | Skip clarifying questions and improve prompt directly |
-| `-r`, `--refine` | Force clarifying questions even for analysis tasks |
+| `-s`, `--skip-questions` | Bypass interactive question workflow, apply direct prompt enhancement |
+| `-r`, `--refine` | Force interactive refinement workflow regardless of task classification |
 | `-o`, `--output-format` | Output format: `plain` (default) or `json` |
-| `-c`, `--copy` | Copy refined prompt to clipboard |
+| `-c`, `--copy` | Copy refined prompt to system clipboard |
 
-### Provider Selection
-
-| Flag | Description |
-|------|-------------|
-| `--provider <name>` | Use specific provider (gemini, anthropic, openai, groq, qwen, glm) |
-| `--model <model>` | Use specific model (overrides provider default) |
-
-### Input Methods
+### Provider and Model Selection
 
 | Flag | Description |
 |------|-------------|
-| `-f <file>` | Load prompt from file |
-| `@<file>` | Shortcut syntax for loading from file |
-| (stdin) | Pipe prompt via standard input |
+| `--provider <name>` | Specify LLM provider: gemini, anthropic, openai, groq, qwen, glm |
+| `--model <model>` | Specify model identifier (overrides provider default) |
 
-### History Commands
+### Input Source Specification
+
+| Method | Syntax | Description |
+|--------|--------|-------------|
+| Inline | `promptheus "text"` | Direct prompt as command argument |
+| File flag | `-f <path>` | Read prompt from specified file path |
+| @ syntax | `@<path>` | Shorthand for file input |
+| Standard input | (pipe) | Read prompt from stdin |
+
+### History Management
 
 | Command | Description |
 |---------|-------------|
-| `promptheus history` | View all saved prompts |
-| `promptheus history --limit N` | View last N prompts |
-| `promptheus history --clear` | Clear all history |
-| `/history` | View history (interactive mode) |
-| `/load <n>` | Load prompt #n from history (interactive mode) |
-| `/clear-history` | Clear history (interactive mode) |
+| `promptheus history` | Display all stored prompts with metadata |
+| `promptheus history --limit N` | Display last N prompts |
+| `promptheus history --clear` | Purge all history entries |
+| `/history` | View history (interactive mode only) |
+| `/load <n>` | Load prompt at index n from history (interactive mode only) |
+| `/clear-history` | Clear history (interactive mode only) |
 
 ### Interactive Mode Commands
 
 | Command | Description |
 |---------|-------------|
-| `/history` | View history |
-| `/load <n>` | Load prompt #n from history |
-| `/clear-history` | Clear all history |
-| `/copy` | Copy last refined result to clipboard |
-| `/about` | Show version and configuration info |
-| `/bug` | Submit a bug report |
-| `/help` | Show all available commands |
-| `/status` | Show current session settings |
-| `/set provider <name>` | Change AI provider mid-session |
-| `/set model <name>` | Change model mid-session |
-| `/toggle refine` | Toggle refine mode on/off |
-| `/toggle skip-questions` | Toggle skip-questions mode on/off |
+| `/history` | Display session history |
+| `/load <n>` | Load historical prompt by index |
+| `/clear-history` | Purge all history |
+| `/copy` | Copy last refined output to clipboard |
+| `/about` | Display version and configuration information |
+| `/bug` | Open bug report submission interface |
+| `/help` | Display command reference |
+| `/status` | Display current session configuration |
+| `/set provider <name>` | Modify active LLM provider |
+| `/set model <name>` | Modify active model |
+| `/toggle refine` | Toggle refinement mode |
+| `/toggle skip-questions` | Toggle question workflow bypass |
 
-### Utility Commands
+### Utility Subcommands
 
 | Command | Description |
 |---------|-------------|
-| `promptheus --help` | Show help message |
-| `promptheus --version` | Show version info |
+| `promptheus --help` | Display usage information |
+| `promptheus --version` | Display version information |
+| `promptheus list-models` | Display available providers and models |
+| `promptheus validate` | Validate API configuration and connectivity |
+| `promptheus template` | Generate environment file template |
 | `promptheus completion` | Generate shell completion script |
-| `promptheus completion --install` | Automatically install shell completion |
-| `promptheus completion bash` | Generate bash completion script |
-| `promptheus completion zsh` | Generate zsh completion script |
+| `promptheus completion --install` | Install shell completion automatically |
+| `promptheus completion bash` | Generate Bash completion script |
+| `promptheus completion zsh` | Generate Zsh completion script |
 
-## Configuration
+## Advanced Configuration
 
 ### Environment Variables
 
-You can control Promptheus behavior via environment variables:
-
+**Provider and Model Control:**
 ```bash
-# Provider Selection
-export PROMPTHEUS_PROVIDER=gemini        # Override auto-detection
-# Available: gemini, anthropic, openai, groq, qwen, glm
+# Provider selection (overrides auto-detection)
+export PROMPTHEUS_PROVIDER=gemini
+# Supported: gemini, anthropic, openai, groq, qwen, glm
 
-# Model Selection
+# Model selection (overrides provider default)
 export PROMPTHEUS_MODEL=gemini-2.0-flash-exp
 # Examples: claude-3-5-sonnet-20241022, gpt-4o, llama-3.1-405b
+```
 
-# History Persistence
-export PROMPTHEUS_ENABLE_HISTORY=1      # Force enable history
-export PROMPTHEUS_ENABLE_HISTORY=0      # Force disable history
-# Values: 1/0, true/false, yes/no, on/off
-# Default: Smart auto-detection (interactive=enabled, pipes=disabled)
+**History Management:**
+```bash
+# Enable/disable history persistence
+export PROMPTHEUS_ENABLE_HISTORY=1      # Enable
+export PROMPTHEUS_ENABLE_HISTORY=0      # Disable
+# Supported values: 1/0, true/false, yes/no, on/off
+# Default: Context-aware (interactive=enabled, non-interactive=disabled)
+```
 
-# Debug and Logging
-export PROMPTHEUS_DEBUG=1               # Enable verbose debug output
-export PROMPTHEUS_LOG_LEVEL=INFO        # Override log level
-# Values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+**Logging Configuration:**
+```bash
+# Debug mode (verbose output with stack traces)
+export PROMPTHEUS_DEBUG=1
 
-export PROMPTHEUS_LOG_FORMAT=json       # JSON structured logs
+# Log level control
+export PROMPTHEUS_LOG_LEVEL=INFO
+# Supported: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Log format
+export PROMPTHEUS_LOG_FORMAT=json
 # Values: "json" or custom format string
 # Default: "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 
-export PROMPTHEUS_LOG_FILE=app.log      # Log to file instead of console
-# Values: Any valid file path
+# Log file output
+export PROMPTHEUS_LOG_FILE=app.log
+# Accepts any valid file path
 ```
 
-### Configuration Hierarchy
+### Configuration Precedence
 
-Promptheus follows this precedence order (highest to lowest):
-
+**Resolution Order (highest to lowest priority):**
 1. Explicit CLI arguments (`--provider gemini`, `--model gpt-4o`)
 2. Environment variables (`PROMPTHEUS_PROVIDER`, `PROMPTHEUS_MODEL`)
-3. Auto-detection based on available API keys
-4. Provider-specific defaults
+3. Auto-detection based on available API keys in `.env` file
+4. Provider-specific default models
 
-### `.env` File Location
+### Environment File Discovery
 
-Promptheus searches upward from your current directory for a `.env` file, stopping at:
+**Search Pattern:**
+The system searches upward from the current working directory for `.env` files, terminating at:
+- `.git` directory (repository root)
+- `pyproject.toml` (Python project root)
+- `setup.py` (Python project root)
 
-- `.git` directory (project root)
-- `pyproject.toml` (Python project marker)
-- `setup.py` (Python project marker)
+This enables project-specific configuration isolation.
 
-This lets you have project-specific configurations without polluting global settings.
+### Logging System Configuration
 
-### Advanced Logging Configuration
+**Developer-Focused:** Comprehensive logging control for debugging and monitoring.
 
-For development and debugging, Promptheus offers comprehensive logging controls:
-
+**Debug Mode:**
 ```bash
-# Basic debug mode (enables DEBUG level and detailed output)
+# Enable verbose output with stack traces
 PROMPTHEUS_DEBUG=1 promptheus "test prompt"
 
-# Fine-grained log level control
+# Granular log level control
 PROMPTHEUS_LOG_LEVEL=DEBUG promptheus "analyze this"
-
-# JSON structured logs for parsing and monitoring
-PROMPTHEUS_LOG_FORMAT=json promptheus "generate code"
-
-# Log to file for audit trails
-PROMPTHEUS_LOG_FILE=/var/log/promptheus.log promptheus "important task"
-
-# Custom log format
-PROMPTHEUS_LOG_FORMAT="%(levelname)s: %(message)s" promptheus "simple format"
 ```
 
-**Logging Behavior**:
-- **Default**: Minimal console output (clean user experience)
-- **Debug mode**: Detailed verbose output with full stack traces
-- **File logging**: All logs written to specified file, console stays clean
-- **JSON format**: Structured logs ideal for log aggregation systems
-
-**Common Use Cases**:
+**Structured Logging:**
 ```bash
-# CI/CD pipeline with structured logs
+# JSON format for log aggregation
+PROMPTHEUS_LOG_FORMAT=json promptheus "generate code"
+
+# Custom format string
+PROMPTHEUS_LOG_FORMAT="%(levelname)s: %(message)s" promptheus "task"
+```
+
+**File Output:**
+```bash
+# Write logs to file
+PROMPTHEUS_LOG_FILE=/var/log/promptheus.log promptheus "important task"
+```
+
+**Behavior Modes:**
+- **Default**: Minimal console output
+- **Debug**: Verbose output with complete stack traces
+- **File logging**: All output to file, console remains clean
+- **JSON format**: Structured output for log aggregation systems
+
+**Production Use Cases:**
+```bash
+# CI/CD with structured logs
 PROMPTHEUS_LOG_FORMAT=json PROMPTHEUS_LOG_FILE=ci.log promptheus --version
 
 # Development debugging
 PROMPTHEUS_DEBUG=1 PROMPTHEUS_LOG_FILE=debug.log promptheus
 
-# Production monitoring with silent console
+# Production monitoring
 PROMPTHEUS_LOG_LEVEL=WARNING PROMPTHEUS_LOG_FILE=production.log promptheus
 ```
 
-## Documentation
+## Documentation Resources
 
-For more detailed guides, check the `docs/` directory:
+**Detailed documentation available in `docs/` directory:**
+- **[Architecture](docs/architecture.md)**: System architecture, data flow diagrams, and component interactions
+- **[Usage Guide](docs/usage.md)**: Comprehensive workflow examples and integration patterns
+- **[Development Guide](docs/development.md)**: Development setup, contribution guidelines, testing procedures
+- **[Troubleshooting](docs/troubleshooting.md)**: Diagnostic procedures and common issue resolution
 
-- **[Usage Guide](docs/usage.md)**: Detailed examples and workflows
-- **[Development Guide](docs/development.md)**: Contributing, testing, and architecture
-- **[Troubleshooting](docs/troubleshooting.md)**: Common issues and solutions
+## Use Case Examples
 
-## Examples
-
-### Creative Writing
-
-<img width="1273" height="666" alt="image" src="https://github.com/user-attachments/assets/be13ab3f-242c-4606-8c4c-e2f144e2ba13" />
-
+### Content Generation
+The system detects creative tasks and offers contextual questions to refine requirements. Example workflow:
+1. User provides initial prompt: "Write a blog post"
+2. System generates clarifying questions about audience, tone, length, and key topics
+3. User provides answers through interactive prompts
+4. System generates refined, detailed prompt incorporating all specifications
+5. User can iteratively tweak the output using natural language instructions
 
 ### Code Analysis
-
-<img width="1273" height="323" alt="image" src="https://github.com/user-attachments/assets/a423b031-e829-48e4-a3f7-0ad97305776f" />
-
+For analysis tasks, the system bypasses unnecessary questions and applies direct enhancement:
+1. User provides prompt: "Analyze the main.py file and explain key functions"
+2. System detects analysis task type
+3. Direct prompt enhancement applied without interactive questions
+4. Refined prompt includes specific technical requirements and output format specifications
 
 ### Interactive Session
+Multi-prompt workflow with persistent configuration:
+1. Launch interactive mode with `promptheus`
+2. Configure provider and model via `/set` commands
+3. Process multiple prompts within single session
+4. Access history with `/history` and reload previous prompts with `/load <n>`
+5. Toggle modes with `/toggle refine` or `/toggle skip-questions` as needed
 
-<img width="1273" height="323" alt="image" src="https://github.com/user-attachments/assets/2ea98af0-ce29-4438-a491-877ea407f10f" />
+## System Requirements
 
+**Runtime Dependencies:**
+- Python 3.10 or higher
+- At least one configured LLM provider API key
 
-## Requirements
+**Supported Providers:**
+- Google Gemini
+- Anthropic Claude
+- OpenAI
+- Groq
+- Alibaba Cloud Qwen
+- Zhipu AI GLM
 
-- Python 3.8 or higher (Python 3.14 supported for Gemini provider)
-- At least one AI provider API key (Gemini, Claude, OpenAI, Groq, Qwen, or GLM)
+## Development Environment Setup
 
-## Development Setup
-
-For contributing or development work:
-
+**Clone and Install:**
 ```bash
 git clone https://github.com/abhichandra21/Promptheus.git
 cd Promptheus
@@ -461,52 +521,100 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-## Python 3.14 Compatibility
+## Python Version Compatibility
 
-The Gemini provider fully supports Python 3.14 via the unified `google-genai` SDK. Other providers may have varying levels of support:
+**Python 3.14 Support:**
+- **Gemini provider**: Full support via `google-genai` SDK
+- **Other providers**: Compatibility varies by provider SDK
 
-- If you encounter compatibility issues with a specific provider on Python 3.14, consider using Python 3.13 or earlier
-- Use virtual environments to manage different Python versions as needed
-- Most providers are expected to add Python 3.14 support in upcoming SDK updates
+**Compatibility Notes:**
+- For provider-specific issues on Python 3.14, use Python 3.10-3.13
+- Manage multiple Python versions via virtual environments
+- Provider SDKs are expected to add Python 3.14 support in upcoming releases
 
-## Utilities
+## Authentication Management
 
-### Environment Validator
+### Interactive Authentication Setup
 
-Test your API keys and provider connections:
+**Command:** `promptheus auth`
+
+The authentication system provides an interactive workflow for configuring provider API keys:
 
 ```bash
-# Validate providers
+# Interactive provider selection
+promptheus auth
+
+# Direct provider specification
+promptheus auth gemini
+promptheus auth anthropic
+promptheus auth openai
+
+# Skip validation for testing
+promptheus auth openai --skip-validation
+```
+
+**Features:**
+- Interactive provider selection with priority ordering
+- API key validation before saving (optional)
+- Automatic `.env` file management
+- Support for all configured providers
+- Secure password input (keys not echoed to terminal)
+
+**Workflow:**
+1. Select provider from interactive menu or specify via command line
+2. System displays provider-specific API key URL when available
+3. User enters API key (masked input)
+4. System validates key against provider API (unless `--skip-validation` specified)
+5. Valid key saved to `.env` file with appropriate environment variable name
+
+## Validation and Diagnostic Utilities
+
+### Configuration Validation
+
+**Test API connectivity and validate configuration:**
+
+```bash
+# Basic validation
+promptheus validate
+
+# Test live API connections
 promptheus validate --test-connection
+
+# Provider-specific validation
+promptheus validate --providers gemini,anthropic
 ```
-<img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/5706b57e-f96d-4b53-b0ce-5495e4f8cfe9" />
 
-### Model Lister
+### Provider and Model Discovery
 
-See all available providers and models:
+**List available providers and supported models:**
 
 ```bash
-# List all providers and models
+# List all available models
 promptheus list-models
+
+# Provider-filtered listing
+promptheus list-models --providers openai
+
+# Limited output
+promptheus list-models --limit 10
 ```
-<img width="1273" height="256" alt="image" src="https://github.com/user-attachments/assets/b96eae2a-7963-4b2f-af36-4a837eb3f7ae" />
 
-## Contributing
+## Contributing to Promptheus
 
-Contributions are welcome. Please follow these guidelines:
+**Contribution Guidelines:**
 
-1. Keep changes focused (feature, refactor, or docs—pick one)
-2. Use short, imperative commit messages
-3. Include behavior notes and testing details in PRs
-4. Never log raw API keys
-5. Run `black .` before committing
-6. Add tests under `tests/` as `test_<module>.py`
+1. **Scope**: Maintain focused changes (single feature, refactor, or documentation update per pull request)
+2. **Commit messages**: Use imperative mood, concise descriptions
+3. **Pull requests**: Include behavior descriptions and test coverage details
+4. **Security**: Never log API keys or sensitive credentials
+5. **Code formatting**: Execute `black .` before committing
+6. **Testing**: Add test files under `tests/` following `test_<module>.py` naming convention
 
-For detailed development instructions, see [docs/development.md](docs/development.md).
+**Detailed contribution procedures:** [docs/development.md](docs/development.md)
 
-## Troubleshooting
+## Troubleshooting Common Issues
 
-### Command Not Found
+### Installation Verification
 
 ```bash
 pip install -e .
@@ -514,41 +622,57 @@ which promptheus
 python -m promptheus.main "Test prompt"
 ```
 
-### Provider Issues
+### Provider Configuration Issues
 
 ```bash
-# Check API keys
+# Verify API key configuration
 cat .env
 env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI)'
 
-# Force a specific provider
+# Test specific provider
 promptheus --provider gemini "Test"
 
-# Validate provider setup
+# Validate provider configuration
 promptheus validate --providers gemini
 ```
 
-### Clipboard Not Working
+### Clipboard Functionality
 
-- **Linux**: Install `xclip` or `xsel` (`sudo apt-get install xclip`)
-- **macOS/Windows**: Should work out of the box
-- **WSL**: May require X server for clipboard access
+**Platform-specific requirements:**
+- **Linux**: Install `xclip` or `xsel` via package manager (`sudo apt-get install xclip`)
+- **macOS/Windows**: Native clipboard support, no additional installation required
+- **WSL**: May require X server configuration for clipboard access
 
-For more troubleshooting tips, see [docs/troubleshooting.md](docs/troubleshooting.md).
+**Comprehensive troubleshooting:** [docs/troubleshooting.md](docs/troubleshooting.md)
 
-## License
+## License Information
 
-MIT License. See LICENSE file for details.
+This project is released under the MIT License. Complete license terms are available in the LICENSE file.
 
-## Project Links
+## Contact and Support
 
-- **Repository**: https://github.com/abhichandra21/Promptheus
-- **Issues**: https://github.com/abhichandra21/Promptheus/issues
+**Repository:** https://github.com/abhichandra21/Promptheus
+
+**Issue Tracking:** https://github.com/abhichandra21/Promptheus/issues
+
+**Usage:**
+- Bug reports: Submit via GitHub Issues
+- Feature requests: Submit via GitHub Issues
+- Security vulnerabilities: Report via GitHub Security Advisories
 
 ## Acknowledgments
 
-Built with:
-- [Rich](https://github.com/Textualize/rich) for terminal formatting
-- [Questionary](https://github.com/tmbo/questionary) for interactive prompts
-- [PyPerclip](https://github.com/asweigart/pyperclip) for clipboard support
-- Provider SDKs from Google, Anthropic, OpenAI, Groq, Alibaba Cloud, and Zhipu AI
+**Core Dependencies:**
+- [Rich](https://github.com/Textualize/rich): Terminal rendering and formatting
+- [Questionary](https://github.com/tmbo/questionary): Interactive CLI prompts
+- [PyPerclip](https://github.com/asweigart/pyperclip): Cross-platform clipboard operations
+- [Prompt Toolkit](https://github.com/prompt-toolkit/python-prompt-toolkit): Advanced terminal input handling
+- [python-dotenv](https://github.com/theskumar/python-dotenv): Environment configuration management
+
+**LLM Provider SDKs:**
+- Google Gemini SDK
+- Anthropic SDK
+- OpenAI SDK
+- Groq SDK
+- Alibaba Cloud DashScope SDK
+- Zhipu AI SDK
