@@ -1,55 +1,174 @@
 # Promptheus Development Guide
 
-## Local Setup
+This document outlines development environment setup, testing procedures, code standards, and architectural patterns for Promptheus contributors.
+
+## Development Environment Setup
+
+### Installation from Source
+
 ```bash
-pip install -e .
-pip install -r requirements.txt   # optional helpers for env_validator, etc.
-cp .env.example .env              # drop in provider keys
+# Clone repository
+git clone https://github.com/abhichandra21/Promptheus.git
+cd Promptheus
+
+# Install in editable mode with development dependencies
+pip install -e ".[dev]"
+
+# Configure environment
+cp .env.example .env
+# Add provider API keys to .env file
 ```
 
-## Manual Smoke Tests
-- Standard CLI: `promptheus "Draft a release note"`.
-- Module entry point: `python -m promptheus.main --skip-questions "Smoke test"`.
-- Provider sanity checks: `promptheus validate --providers gemini`.
-- API connectivity test: `promptheus validate --test-connection`.
+### Verification
 
-## Automated Tests
+```bash
+# Verify installation
+promptheus --version
+python -m promptheus.main --version
+```
+
+## Testing Procedures
+
+### Manual Testing
+
+**Standard CLI Execution:**
+```bash
+promptheus "Draft a release note"
+```
+
+**Module Entry Point:**
+```bash
+python -m promptheus.main --skip-questions "Smoke test"
+```
+
+**Provider Validation:**
+```bash
+promptheus validate --providers gemini
+promptheus validate --test-connection
+```
+
+### Automated Testing
+
+**Execute Test Suite:**
 ```bash
 pytest -q
 ```
-Add new tests under `tests/` as `test_<module>.py`. Prefer lightweight unit tests with mocked providers so the suite stays offline-friendly.
 
-## Formatting & Style
-- Python 3.8+ conventions, 4-space indent, descriptive snake_case.
-- Type hints where practical (mirror `main.py` signatures).
-- Keep modules under 300 lines; factor helpers into `src/promptheus/`.
-- Run `black .` before committing and keep imports sorted.
+**Test Development Guidelines:**
+- Add new tests to `tests/` directory following `test_<module>.py` naming convention
+- Implement lightweight unit tests with mocked providers
+- Ensure tests execute without network dependencies
+- Maintain test coverage for critical paths
 
-## Python 3.14 Compatibility Notes
-The `gemini` provider now supports Python 3.14 via the unified `google-genai` SDK.
-When developing for multiple Python versions:
-- Test with your target Python version before committing
-- Some provider libraries may have compatibility limitations with Python 3.14 
-- Consider using virtual environments to manage different Python versions during development
+## Code Standards
 
-## Architecture Notes
-The codebase follows a modular architecture:
-- **CLI layer**: `src/promptheus/cli.py` handles argument parsing
-- **Core logic**: `src/promptheus/main.py` contains the main processing logic
-- **REPL module**: `src/promptheus/repl/` contains the interactive mode functionality split into:
-  - `session.py`: Main REPL loop and session management
-  - `commands.py`: Slash command handling (`/set`, `/toggle`, etc.)
-  - `completer.py`: Command completion for slash commands
-  - `history_view.py`: History display functionality
-- **Providers**: `src/promptheus/providers.py` contains provider-specific implementations
-- **Configuration**: `src/promptheus/config.py` handles configuration and environment
-- **Utilities**: `src/promptheus/utils.py` contains shared utility functions
+### Python Conventions
 
-## Contribution Tips
-1. Keep changes focused (feature vs refactor vs docs).
-2. Use short, imperative commit messages (`Add static mode docs`).
-3. Include behavior notes and testing details when raising a PR.
-4. Never log raw API keys; stick to masked output like the validator.
-5. Adding new providers? If they expose an OpenAI-compatible endpoint, prefer extending the shared `OpenAICompatibleProvider` in `src/promptheus/providers.py` (as we do for OpenAI, Groq, Qwen, and GLM). Otherwise, follow the Gemini/Anthropic pattern with a provider-specific adapter under `providers.py`, and update the CLI/env validator/docs accordingly.
+**Language Features:**
+- Python 3.10+ syntax and features
+- Type hints for function signatures
+- 4-space indentation
+- snake_case naming convention for functions and variables
+- PascalCase for class names
 
-Questions? Open an issue with repro steps or drop a PR draft for early feedback. 🎯
+**Module Organization:**
+- Maximum module length: 300 lines
+- Extract utility functions to `src/promptheus/` modules
+- Maintain clear separation of concerns
+
+**Code Formatting:**
+```bash
+# Format code before committing
+black .
+
+# Verify import organization
+# Imports should be grouped: standard library, third-party, local
+```
+
+### Python Version Compatibility
+
+**Python 3.14 Support:**
+- Gemini provider: Full support via `google-genai` SDK
+- Other providers: Compatibility varies by SDK version
+
+**Development Recommendations:**
+- Test with target Python version before committing
+- Use virtual environments for version-specific testing
+- Document provider-specific compatibility constraints
+
+## Architectural Overview
+
+### Module Structure
+
+**Command-Line Interface Layer:**
+- `src/promptheus/cli.py`: Argument parsing and subcommand dispatch
+
+**Core Processing Logic:**
+- `src/promptheus/main.py`: Primary prompt processing orchestration
+
+**Interactive Mode (REPL):**
+- `src/promptheus/repl/session.py`: Main REPL loop and session state management
+- `src/promptheus/repl/commands.py`: Slash command implementation (`/set`, `/toggle`, etc.)
+- `src/promptheus/repl/completer.py`: Tab completion for slash commands
+- `src/promptheus/repl/history_view.py`: History display functionality
+
+**Provider Integration:**
+- `src/promptheus/providers.py`: LLM provider implementations and abstractions
+- `src/promptheus/providers.json`: Provider configurations and model definitions
+
+**Configuration and Utilities:**
+- `src/promptheus/config.py`: Environment configuration and provider detection
+- `src/promptheus/utils.py`: Shared utility functions
+- `src/promptheus/history.py`: Session history persistence
+- `src/promptheus/logging_config.py`: Logging configuration
+
+## Contribution Guidelines
+
+### Code Changes
+
+**Scope:**
+1. Maintain focused changes (single feature, refactor, or documentation update per pull request)
+2. Avoid mixing unrelated changes in a single commit
+
+**Commit Messages:**
+- Use imperative mood: "Add static mode docs" not "Added static mode docs"
+- Keep first line under 72 characters
+- Provide detailed explanation in commit body if necessary
+
+**Pull Request Requirements:**
+1. Include behavior description
+2. Document testing performed
+3. Update relevant documentation
+4. Add tests for new functionality
+
+### Security Considerations
+
+**API Key Handling:**
+- Never log raw API keys
+- Use masked output for display (as implemented in validator)
+- Sanitize error messages containing credentials
+
+### Adding New Providers
+
+**OpenAI-Compatible Providers:**
+If the provider exposes an OpenAI-compatible endpoint, extend the `OpenAICompatibleProvider` base class in `src/promptheus/providers.py` (reference implementations: OpenAI, Groq, Qwen, GLM).
+
+**Provider-Specific Implementations:**
+For providers requiring custom integration (e.g., Gemini, Anthropic):
+1. Implement provider-specific adapter in `providers.py`
+2. Add configuration to `providers.json`
+3. Update environment detection in `config.py`
+4. Update validation utilities
+5. Document provider setup in README.md
+
+## Communication Channels
+
+**Issue Reporting:**
+- Open issues at https://github.com/abhichandra21/Promptheus/issues
+- Include reproduction steps
+- Provide environment details (Python version, provider, OS)
+
+**Pull Request Feedback:**
+- Submit draft PRs for early feedback on significant changes
+- Request review before marking PR as ready
+- Respond to review comments promptly

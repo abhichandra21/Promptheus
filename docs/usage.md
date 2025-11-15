@@ -1,84 +1,128 @@
 # Promptheus Usage Guide
 
-Promptheus keeps the fun parts of prompt crafting while the AI handles the housekeeping. This guide covers the full command surface so you can stay in flow once you've memorised the quick start from the README.
+This document provides comprehensive coverage of Promptheus command-line interface patterns, operational modes, and integration workflows.
 
-## Modes at a Glance
+## Operational Modes
 
-### Interactive Loop (REPL)
-- Launch with `promptheus`.
-- Stay in one colorful session, reuse your provider/model/flags, and cruise through multiple prompts.
-- Built-in helpers:
-  - `/history`, `/load <n>`, `/clear-history`.
-  - Arrow-key recall for previous prompts.
-  - Type `exit`, `quit`, or hit `Ctrl+C` when you’re done.
+### Interactive Session (REPL)
 
-### Single-Shot
-- Provide a prompt inline (`promptheus "Write a haiku"`), from a file (`promptheus -f idea.txt` or `promptheus @idea.txt`), or via stdin (`cat idea.txt | promptheus`).
-- Perfect when you already know exactly what you want.
-
-## Input Methods
-- `-f path/to/prompt.txt` – flag-based file input.
-- `@path/to/prompt.txt` – shortcut syntax (alternative to `-f`).
-- Standard input piping for scripted flows.
-
-## Pipe Integration & Command Substitution
-
-Promptheus supports clean stdout/stderr separation, making it perfect for Unix pipelines and command substitution:
-
-### Basic Piping
+**Invocation:**
 ```bash
-# Auto-quiet mode when piping
+promptheus
+```
+
+**Characteristics:**
+- Persistent session maintaining provider, model, and flag configuration across multiple prompt executions
+- Command history with arrow-key navigation
+- Built-in session management commands: `/history`, `/load <n>`, `/clear-history`
+- Session termination via `exit`, `quit`, or `Ctrl+C`
+
+**Use Cases:**
+- Multi-prompt workflows requiring consistent configuration
+- Exploratory prompt development with iterative refinement
+- Rapid prototyping with immediate feedback
+
+### Single Execution Mode
+
+**Invocation Patterns:**
+```bash
+# Inline argument
+promptheus "Write a haiku"
+
+# File input (flag syntax)
+promptheus -f idea.txt
+
+# File input (shorthand syntax)
+promptheus @idea.txt
+
+# Standard input
+cat idea.txt | promptheus
+```
+
+**Use Cases:**
+- Automated processing pipelines
+- Script integration
+- Batch operations
+- Single-purpose prompt execution
+
+## Input Source Specification
+
+**Available Methods:**
+
+| Method | Syntax | Description |
+|--------|--------|-------------|
+| File flag | `-f <path>` | Explicit file path specification |
+| @ shorthand | `@<path>` | Abbreviated file input syntax |
+| Standard input | (pipe) | Stream-based input via stdin |
+
+## Pipeline Integration and Stream Processing
+
+Promptheus implements clean stdout/stderr stream separation for integration with Unix pipelines and command substitution workflows.
+
+### Standard Pipeline Operations
+
+**Basic Patterns:**
+```bash
+# Automatic quiet mode activation when stdout is piped
 promptheus "Write a story" | cat
 promptheus "Explain Docker" | less
 
-# Save to file (questions still appear on stderr)
+# File redirection (interactive prompts on stderr)
 promptheus "Write docs" > output.txt
 
-# Chain with other AI tools
+# Integration with external AI toolchains
 promptheus "Create a haiku" | claude exec
 promptheus "Write code" | codex run
 ```
 
-### Command Substitution
+### Command Substitution Patterns
+
+**Shell Integration:**
 ```bash
-# Feed refined prompt to another tool
+# Feed refined output to external tools
 claude "$(promptheus 'Write a technical prompt')"
 codex "$(promptheus 'Generate function spec')"
 
-# Use in scripts
+# Variable capture for scripting
 REFINED=$(promptheus "Optimize this query")
 echo "$REFINED" | mysql -u user -p
 ```
 
-### Unix Utilities Integration
+### Unix Utility Integration
+
+**Standard Utility Patterns:**
 ```bash
-# tee: Save and display simultaneously
+# Simultaneous file save and display
 promptheus "Long explanation" | tee output.txt
 
-# grep: Filter output
+# Output filtering
 promptheus "List best practices" | grep -i "security"
 
-# wc: Count words/lines
+# Metrics extraction
 promptheus "Write essay" | wc -w
 
-# awk/sed: Transform output
+# Stream transformation
 promptheus "Generate list" | sed 's/^/- /' > checklist.md
 
-# cat: Chain multiple files
+# Multi-file composition
 cat template.txt | promptheus | cat header.txt - footer.txt > final.txt
 ```
 
-### JSON Processing
+### JSON Output Processing
+
+**Structured Data Manipulation:**
 ```bash
-# Use jq to process JSON output
+# Extract specific fields
 promptheus -o json "Create API schema" | jq '.endpoints'
 promptheus -o json "Config template" | jq -r '.settings.database'
 
-# Format and beautify
+# Format and persist
 promptheus -o json "Data structure" | jq '.' > formatted.json
 ```
 
-### Advanced Patterns
+### Advanced Integration Patterns
+
+**Complex Workflow Examples:**
 ```bash
 # Batch processing
 cat prompts.txt | while read line; do
@@ -90,105 +134,258 @@ if promptheus "Check status" | grep -q "success"; then
   echo "All systems operational"
 fi
 
-# Multi-stage refinement
+# Multi-stage processing pipeline
 promptheus "Draft outline" | \
   promptheus "Expand this outline" | \
   tee expanded.txt
 
-# Parallel processing (GNU parallel)
+# Parallel execution (GNU parallel)
 cat prompts.txt | parallel -j 4 "promptheus {} > output_{#}.txt"
 
-# Error handling
+# Stream-specific error handling
 promptheus "Generate code" 2> errors.log > output.txt
 ```
 
-### Output Format Control
+### Output Format Specification
+
+**Format Control:**
 ```bash
-# Plain text (no markdown)
+# Plain text output (default)
 promptheus -o plain "Write haiku"
 
-# JSON output with metadata
+# Structured JSON output with metadata
 promptheus -o json "Create schema"
 
-# Plain text output (default)
+# Explicit plain text specification
 promptheus -o plain "Write story" > story.txt
 ```
 
-# Subcommand System
-Promptheus now uses a subcommand architecture for utility commands:
+## Authentication Management
+
+### Interactive Authentication Setup
+
+The `auth` subcommand provides an interactive workflow for configuring provider API keys:
+
 ```bash
-# Validate environment and test connections
-promptheus validate
-promptheus validate --test-connection
-promptheus validate --providers openai,gemini
+# Interactive provider selection
+promptheus auth
 
-# List available models
-promptheus list-models
-promptheus list-models --providers openai
-promptheus list-models --limit 10
+# Direct provider specification
+promptheus auth gemini
+promptheus auth anthropic
+promptheus auth openai
 
-# Generate environment templates
-promptheus template openai,gemini
-promptheus template --providers openai,anthropic
-
-# Manage history
-promptheus history
-promptheus history --limit 50
-promptheus history --clear
-
-# Generate shell completion
-promptheus completion bash          # Generate bash completion script
-promptheus completion zsh           # Generate zsh completion script
-promptheus completion --install     # Automatically install completion
+# Skip validation for testing
+promptheus auth openai --skip-validation
 ```
 
-**Key Behaviors:**
-- **Auto-quiet**: Piping automatically enables quiet mode
-- **stderr for UI**: All questions and status go to stderr
-- **stdout for output**: Only refined prompt on stdout
-- **Non-interactive stdin**: Questions skipped when input is piped
+**Authentication Workflow:**
 
-## Interaction Styles
+1. **Provider Selection**: If no provider specified, displays interactive menu with priority ordering
+2. **API Key URL**: System displays provider-specific API key acquisition URL when available
+3. **Key Input**: User enters API key via secure password prompt (input masked)
+4. **Validation**: System validates key against provider API (unless `--skip-validation` flag used)
+5. **Storage**: Valid key saved to `.env` file with appropriate environment variable
 
-| Mode | Flag | When to use |
+**Features:**
+- Automatic `.env` file creation and management
+- API key format validation
+- Live API connectivity testing
+- Support for all configured providers
+- Recommended providers highlighted in selection menu
+
+## Subcommand Architecture
+
+Promptheus implements a subcommand-based interface for utility operations:
+
+### Environment Validation
+```bash
+# Basic validation
+promptheus validate
+
+# Test live API connectivity
+promptheus validate --test-connection
+
+# Provider-specific validation
+promptheus validate --providers openai,gemini
+```
+
+### Model Discovery
+```bash
+# List all available models
+promptheus list-models
+
+# Provider-filtered listing
+promptheus list-models --providers openai
+
+# Limited output
+promptheus list-models --limit 10
+```
+
+### Environment Template Generation
+```bash
+# Generate multi-provider template
+promptheus template openai,gemini
+
+# Alternative syntax
+promptheus template --providers openai,anthropic
+```
+
+### History Management
+```bash
+# Display history
+promptheus history
+
+# Limited history display
+promptheus history --limit 50
+
+# Purge history
+promptheus history --clear
+```
+
+### Shell Completion Installation
+```bash
+# Bash completion script generation
+promptheus completion bash
+
+# Zsh completion script generation
+promptheus completion zsh
+
+# Automatic installation
+promptheus completion --install
+```
+
+### Stream Behavior Characteristics
+
+**Automatic Adjustments:**
+- **Auto-quiet**: Quiet mode activation when stdout is piped
+- **stderr routing**: UI elements (questions, status messages) directed to stderr
+- **stdout isolation**: Refined output exclusively on stdout
+- **Non-interactive detection**: Question workflow bypass when stdin is piped
+
+## Refinement Workflow Modes
+
+| Mode | Flag | Behavior |
 | --- | --- | --- |
-| Adaptive (default) | – | Promptheus decides whether to ask clarifying questions or perform light refinement. |
-| Skip Questions | `-s` / `--skip-questions` | Skip clarifying questions and improve the prompt directly using basic analysis mode. |
-| Refine | `-r` / `--refine` | Force the full clarifying-question workflow even for analysis tasks. |
+| Adaptive (default) | None | Automatic task classification determines question workflow activation |
+| Skip Questions | `-s` / `--skip-questions` | Bypass interactive questions, apply direct enhancement |
+| Refine | `-r` / `--refine` | Force interactive question workflow regardless of task type |
 
-Mix and match with providers, models, and file input as needed, e.g. `promptheus -s -c @brief.md`.
+**Flag Composition:**
+Flags may be combined. Example: `promptheus -s -c @brief.md`
 
-## Provider & Model Selection
-- Auto-detects which provider to use based on the API keys you have configured.
-- Force a provider: `promptheus --provider gemini "Idea"`, `promptheus --provider anthropic "Idea"`, `promptheus --provider openai "Idea"`, `promptheus --provider groq "Idea"`, `promptheus --provider qwen "Idea"`, `promptheus --provider glm "Idea"`.
-- Pin a model: `promptheus --model gemini-1.5-pro "Idea"`, `promptheus --model claude-3-5-sonnet-20241022 "Idea"`, `promptheus --model gpt-4o "Idea"`, `promptheus --model llama-3.1-70b-versatile "Idea"`, etc.
-- Available providers: gemini, anthropic, openai, groq, qwen, glm
-- List available models: `promptheus list-models` or `promptheus list-models --providers openai,gemini`
+## Provider and Model Selection
 
-## Output Helpers
-- `-c` / `--copy` – copy the refined prompt to the clipboard.
-- `-o` / `--output-format` – specify output format (`plain` or `json`).
-- Combine flags freely: `promptheus -s -c -o json "Pitch deck outline"`.
+### Auto-Detection
+The system auto-detects available providers based on configured API keys in the `.env` file.
 
-## Session History
-- CLI commands: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`.
-- Interactive shortcuts: `/history`, `/load <n>`, `/clear-history`, plus ↑/↓ navigation.
-- Additional interactive features: `/copy` to copy the last result, `/status` to view current settings.
-- Every refined prompt is saved automatically so you never lose that one perfect phrasing.
-- History includes timestamps, task types, and both original and refined prompts for reference.
+### Manual Override
 
-## Iterative Tweaks
-After the main refinement, Promptheus will ask if you want to tweak anything:
+**Provider Selection:**
+```bash
+promptheus --provider gemini "Idea"
+promptheus --provider anthropic "Idea"
+promptheus --provider openai "Idea"
+promptheus --provider groq "Idea"
+promptheus --provider qwen "Idea"
+promptheus --provider glm "Idea"
+```
+
+**Model Selection:**
+```bash
+promptheus --model gemini-1.5-pro "Idea"
+promptheus --model claude-3-5-sonnet-20241022 "Idea"
+promptheus --model gpt-4o "Idea"
+promptheus --model llama-3.1-70b-versatile "Idea"
+```
+
+**Supported Providers:** gemini, anthropic, openai, groq, qwen, glm
+
+**Model Discovery:**
+```bash
+promptheus list-models
+promptheus list-models --providers openai,gemini
+```
+
+## Output Control Flags
+
+| Flag | Function |
+|------|----------|
+| `-c` / `--copy` | Copy refined output to system clipboard |
+| `-o` / `--output-format` | Specify format: `plain` or `json` |
+
+**Composite Usage:**
+```bash
+promptheus -s -c -o json "Pitch deck outline"
+```
+
+## History Management System
+
+### Command-Line Interface
+```bash
+promptheus history                 # Display all history
+promptheus history --limit 50      # Display last 50 entries
+promptheus history --clear         # Purge history
+```
+
+### Interactive Mode Commands
+- `/history` - Display session history
+- `/load <n>` - Load entry at index n
+- `/clear-history` - Purge all history
+- Arrow key navigation (↑/↓) for recent prompts
+- `/copy` - Copy last refined result to clipboard
+- `/status` - Display current session configuration
+
+### Storage Characteristics
+- Automatic persistence of refined prompts
+- Metadata includes timestamps, task classifications, original and refined versions
+- Local storage with no external transmission
+
+## Iterative Refinement Interface
+
+Post-refinement, the system offers an iterative modification workflow:
 
 ```
 Tweak? (Enter to accept, or describe your change): make it punchier
 ```
 
-Use natural language (“make it more formal”, “remove the section on pricing”, “add a call-to-action”). Each tweak is a targeted AI edit. Hit Enter on an empty line to accept the current version.
+**Modification Commands:**
+- Natural language instructions: "make it more formal", "remove the section on pricing", "add a call-to-action"
+- Each modification applies targeted AI-based editing
+- Empty input (Enter) accepts current version
 
-## Example Workflows
+## Command Reference Summary
 
-### Creative Brief
+### Authentication Commands
+
+| Command | Description |
+|---------|-------------|
+| `promptheus auth` | Interactive provider selection and API key configuration |
+| `promptheus auth <provider>` | Configure specific provider |
+| `promptheus auth <provider> --skip-validation` | Skip API key validation |
+
+### Utility Commands
+
+| Command | Description |
+|---------|-------------|
+| `promptheus --help` | Display usage information |
+| `promptheus --version` | Display version information |
+| `promptheus list-models` | Display available providers and models |
+| `promptheus validate` | Validate API configuration |
+| `promptheus validate --test-connection` | Test live API connectivity |
+| `promptheus template <providers>` | Generate environment template |
+
+### History Commands
+
+| Command | Description |
+|---------|-------------|
+| `promptheus history` | Display all history |
+| `promptheus history --limit N` | Display last N entries |
+| `promptheus history --clear` | Purge history |
+
+## Workflow Examples
+
+### Content Generation with Interactive Refinement
 ```
 $ promptheus "Write a blog post"
 ✓ Creative task detected with clarifying questions
@@ -200,7 +397,7 @@ Ask clarifying questions to refine your prompt? (Y/n): y
 ╰─────────────────────────────────────────────────╯
 ```
 
-### Skip Questions for Quick Analysis
+### Analysis Task with Question Bypass
 ```
 $ promptheus -s "Analyze the main.py file and explain the key functions"
 ✓ Skip questions mode - improving prompt directly
@@ -209,55 +406,69 @@ $ promptheus -s "Analyze the main.py file and explain the key functions"
 ╰────────────────────────────────────────────────╯
 ```
 
-## Environment Template Generation
+## Environment Configuration Template Generation
 
-Generate environment file templates for one or more providers:
+Generate `.env` file templates for provider configuration:
 
 ```bash
-# Single provider
+# Single provider template
 promptheus template openai > .env
 
-# Multiple providers (comma-separated)
+# Multi-provider template
 promptheus template openai,gemini,anthropic > .env
 ```
 
-## Python 3.14 Compatibility
+## Python Version Compatibility
 
-The `gemini` provider supports Python 3.14 with the unified `google-genai` SDK.
-For other providers that may have compatibility issues:
-1. Wait for updates as newer provider SDKs support Python 3.14
-2. Use Python 3.13 or earlier if compatibility issues arise
-3. Consider using virtual environments to manage different Python versions
+### Python 3.14 Support Status
 
-## Interactive Features
+**Gemini Provider:** Full support via unified `google-genai` SDK
 
-### Keyboard Shortcuts
-- **Enter**: Submit your prompt
-- **Shift+Enter**: Add a new line in the prompt (multiline input)
-- **Option/Alt+Enter**: Alternative multiline input
-- **Ctrl+J**: Another option for multiline input
-- **↑/↓ Arrow Keys**: Navigate through previous prompts
-- **Tab**: Show command completions when typing `/`
+**Other Providers:** Compatibility status varies by SDK version
 
-### Enhanced Session Commands
-In interactive mode, you can use these slash commands:
+**Mitigation Strategies:**
+1. Monitor provider SDK updates for Python 3.14 compatibility
+2. Use Python 3.10-3.13 for providers without Python 3.14 support
+3. Utilize virtual environments for version management
 
-**Command Navigation:**
-- `/help` - Show all available commands
-- `/history` - View recent prompts
-- `/load <n>` - Load a specific prompt from history
-- `/clear-history` - Clear all history
-- `/about` - Show version and configuration info
-- `/bug` - Get help with bug reports
+## Interactive Mode Features
 
-**Session Control:**
-- `/status` - View current session settings
-- `/set provider <name>` - Change AI provider mid-session
-- `/set model <name>` - Change model mid-session
-- `/toggle refine` - Toggle refine mode on/off
-- `/toggle skip-questions` - Toggle skip-questions mode on/off
+### Keyboard Bindings
 
-**Utility:**
-- `/copy` - Copy the last refined result to clipboard
+| Key Combination | Function |
+|----------------|----------|
+| Enter | Submit prompt |
+| Shift+Enter | Insert newline (multiline mode) |
+| Option/Alt+Enter | Insert newline (alternative) |
+| Ctrl+J | Insert newline (alternative) |
+| ↑/↓ Arrow Keys | Navigate command history |
+| Tab | Display command completion suggestions |
 
-Happy prompting! 🚀
+### Slash Command Reference
+
+**Information and Navigation:**
+
+| Command | Function |
+|---------|----------|
+| `/help` | Display available commands |
+| `/history` | Display recent prompts |
+| `/load <n>` | Load prompt at index n |
+| `/clear-history` | Purge history |
+| `/about` | Display version and configuration |
+| `/bug` | Access bug report interface |
+
+**Session Configuration:**
+
+| Command | Function |
+|---------|----------|
+| `/status` | Display current settings |
+| `/set provider <name>` | Modify active provider |
+| `/set model <name>` | Modify active model |
+| `/toggle refine` | Toggle refinement mode |
+| `/toggle skip-questions` | Toggle question bypass mode |
+
+**Utility Operations:**
+
+| Command | Function |
+|---------|----------|
+| `/copy` | Copy last refined result to clipboard |

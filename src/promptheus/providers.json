@@ -10,7 +10,8 @@
       ],
       "api_key_env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
       "model_env": "GEMINI_MODEL",
-      "api_key_prefixes": ["AIza", "AQ."]
+      "api_key_prefixes": ["AIza", "AQ."],
+      "api_key_url": "https://makersuite.google.com/app/apikey"
     },
     "anthropic": {
       "display_name": "Anthropic (Claude)",
@@ -23,7 +24,8 @@
       "api_key_env": ["ANTHROPIC_API_KEY"],
       "model_env": "ANTHROPIC_MODEL",
       "base_url_env": "ANTHROPIC_BASE_URL",
-      "api_key_prefixes": ["sk-ant-"]
+      "api_key_prefixes": ["sk-ant-"],
+      "api_key_url": "https://console.anthropic.com"
     },
     "openai": {
       "display_name": "OpenAI",
@@ -38,7 +40,8 @@
       "base_url_env": "OPENAI_BASE_URL",
       "organization_env": "OPENAI_ORG_ID",
       "project_env": "OPENAI_PROJECT",
-      "api_key_prefixes": ["sk-"]
+      "api_key_prefixes": ["sk-"],
+      "api_key_url": "https://platform.openai.com/api-keys"
     },
     "groq": {
       "display_name": "Groq",
@@ -50,7 +53,8 @@
       "api_key_env": "GROQ_API_KEY",
       "model_env": "GROQ_MODEL",
       "base_url_env": "GROQ_BASE_URL",
-      "api_key_prefixes": ["gsk_"]
+      "api_key_prefixes": ["gsk_"],
+      "api_key_url": "https://console.groq.com/keys"
     },
     "qwen": {
       "display_name": "Qwen (DashScope)",
@@ -63,7 +67,8 @@
       "api_key_env": "DASHSCOPE_API_KEY",
       "model_env": "QWEN_MODEL",
       "base_url_env": "DASHSCOPE_HTTP_BASE_URL",
-      "api_key_prefixes": ["sk-"]
+      "api_key_prefixes": ["sk-"],
+      "api_key_url": "https://dashscope.aliyun.com/apiKey"
     },
     "glm": {
       "display_name": "GLM (Zhipu)",
@@ -76,7 +81,8 @@
       "api_key_env": "ZAI_API_KEY",
       "model_env": "GLM_MODEL",
       "base_url_env": "ZAI_BASE_URL",
-      "api_key_prefixes": []
+      "api_key_prefixes": [],
+      "api_key_url": "https://www.zhipuai.cn"
     }
   },
   "provider_aliases": {

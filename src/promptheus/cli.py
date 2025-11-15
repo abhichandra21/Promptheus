@@ -107,6 +107,9 @@ Interactive Mode Commands (available when running without arguments):
     )
 
     if include_subcommands:
+        # Import auth commands module to access its add_arguments function
+        from promptheus.commands import auth as auth_commands
+        
         subparsers = parser.add_subparsers(
             dest="command",
             title="commands",
@@ -116,6 +119,14 @@ Interactive Mode Commands (available when running without arguments):
         )
         subparsers.required = False
         parser.set_defaults(command=None)
+
+        # auth subcommand
+        auth_parser = subparsers.add_parser(
+            "auth",
+            help="Authentication management",
+            description="Manage authentication with providers.",
+        )
+        auth_commands.add_arguments(auth_parser)
 
         # history subcommand
         history_parser = subparsers.add_parser(
@@ -228,7 +239,7 @@ Interactive Mode Commands (available when running without arguments):
         )
 
         # Add verbose and version flags to all subcommands for convenience
-        for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser]:
+        for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser, auth_parser]:
             sub.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug output")
             sub.add_argument("--version", action="store_true", help="Show version information and exit")
 
@@ -239,7 +250,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     """Parse CLI arguments, building the correct parser for the context."""
     argv_list = sys.argv[1:] if argv is None else list(argv)
 
-    known_subcommands = {"history", "list-models", "validate", "template", "completion", "__complete"}
+    known_subcommands = {"history", "list-models", "validate", "template", "completion", "__complete", "auth"}
     
     # If no args, or the first arg is a known subcommand or help, use the full parser.
     if not argv_list or argv_list[0] in known_subcommands or any(arg in {"-h", "--help"} for arg in argv_list):

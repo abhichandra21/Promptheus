@@ -1,11 +1,16 @@
-# Promptheus Troubleshooting
+# Promptheus Troubleshooting Guide
 
-Need a quick fix? Start here before diving into a rabbit hole.
+This document provides diagnostic procedures and resolution strategies for common issues encountered during Promptheus operation.
 
-## Provider & API Keys
+## Provider Configuration Issues
 
-**Auto-detect isn’t picking anything up**
+### Provider Auto-Detection Failure
+
+**Symptom:** System fails to detect configured providers
+
+**Resolution:**
 ```bash
+# Explicitly specify provider
 promptheus --provider gemini "Prompt"
 promptheus --provider anthropic "Prompt"
 promptheus --provider openai "Prompt"
@@ -14,84 +19,170 @@ promptheus --provider qwen "Prompt"
 promptheus --provider glm "Prompt"
 ```
 
-**Wrong provider keeps showing up**
+### Incorrect Provider Selection
+
+**Symptom:** System selects unexpected provider
+
+**Diagnostic Steps:**
 ```bash
+# Verify environment configuration
 cat .env
+
+# Check environment variables
 env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI|PROMPTHEUS)'
+
+# Override provider selection
 export PROMPTHEUS_PROVIDER=gemini
 ```
 
-**Unsure whether your keys work?**
+### API Key Validation
+
+**Verification Commands:**
 ```bash
+# Validate specific provider configuration
 promptheus validate --providers gemini
 promptheus validate --providers anthropic
 promptheus validate --providers openai
 promptheus validate --providers groq
 promptheus validate --providers qwen
 promptheus validate --providers glm
-promptheus validate --test-connection  # to test actual API connectivity
+
+# Test live API connectivity
+promptheus validate --test-connection
 ```
 
-## Installation & Runtime
+## Installation and Runtime Issues
 
-**`promptheus` command not found**
+### Command Not Found Error
+
+**Symptom:** Shell reports `promptheus` command not found
+
+**Resolution:**
 ```bash
+# Reinstall in editable mode
 pip install -e .
+
+# Execute via Python module
 python -m promptheus.main "Prompt"
+
+# Verify installation
 which promptheus
 ```
 
-**Import errors or missing dependencies**
+### Dependency Resolution Errors
+
+**Symptom:** Import errors or missing module exceptions
+
+**Resolution:**
 ```bash
+# Install required dependencies
 pip install -r requirements.txt
+
+# Force reinstallation
 pip install -e . --force-reinstall
 ```
 
-## File Input
+## File Input Issues
 
-**“File not found” errors**
+### File Not Found Errors
+
+**Symptom:** File input fails with path resolution errors
+
+**Resolution:**
 ```bash
+# Use absolute path
 promptheus -f /absolute/path/to/prompt.txt
+
+# Use relative path from current directory
 promptheus -f ./relative/path/prompt.txt
 ```
 
-## Clipboard Helpers
-- Linux: install `xclip` or `xsel` (`sudo apt-get install xclip`).
-- macOS & Windows: should work out of the box.
-- WSL: may require an X server for clipboard access.
+## Clipboard Integration Issues
 
-## Interactive Mode
+### Platform-Specific Requirements
 
-**Multiline input not working**
-- Use Shift+Enter for new lines in prompts
-- Alternative: Option/Alt+Enter or Ctrl+J
-- If terminal is not responding, try plain mode: `promptheus --plain`
+**Linux:**
+- Install `xclip` or `xsel`: `sudo apt-get install xclip`
 
-**Slash commands not working**
-- All commands start with `/` (not `:` anymore)
-- Use `/help` to see all available commands
-- Use Tab for command completions
+**macOS:**
+- Native clipboard support (no additional installation required)
 
-**Session management**
-- Use `/status` to see current provider/model settings
-- Change provider in session: `/set provider gemini`
-- Change model in session: `/set model gpt-4o`
-- Toggle modes: `/toggle refine` or `/toggle skip-questions`
+**Windows:**
+- Native clipboard support (no additional installation required)
 
-## Shell Completion
+**WSL (Windows Subsystem for Linux):**
+- May require X server configuration for clipboard access
+- Verify X server is running and DISPLAY variable is set
 
-**Completion not working after installation**
+## Interactive Mode Issues
+
+### Multiline Input Problems
+
+**Symptom:** Unable to insert newlines in prompt input
+
+**Resolution:**
+- Use `Shift+Enter` for newline insertion
+- Alternative: `Option/Alt+Enter` or `Ctrl+J`
+- Fallback: Use plain mode if terminal is unresponsive
+
+### Slash Command Failures
+
+**Common Issues:**
+- Commands must begin with `/` prefix (not `:`)
+- Use `/help` to display available commands
+- Use Tab key for command completion suggestions
+
+### Session Configuration Management
+
+**Commands:**
 ```bash
-# Verify installation
-promptheus completion bash  # Should print completion script
-which promptheus           # Verify promptheus is in PATH
+# Display current session configuration
+/status
 
-# Reload shell configuration
-source ~/.bashrc           # For bash
-source ~/.zshrc            # For zsh
+# Modify provider
+/set provider gemini
 
-# Check if alias is needed for virtual environments
-alias promptheus='poetry run promptheus'  # If using Poetry
+# Modify model
+/set model gpt-4o
+
+# Toggle modes
+/toggle refine
+/toggle skip-questions
 ```
 
-Still stuck? Open an issue with the command you ran, the flags you used, and any stack trace so we can reproduce it quickly.
+## Shell Completion Issues
+
+### Completion Script Not Functional
+
+**Symptom:** Tab completion does not work after installation
+
+**Diagnostic Steps:**
+```bash
+# Verify completion script generation
+promptheus completion bash  # Should output script
+
+# Verify promptheus is in PATH
+which promptheus
+
+# Reload shell configuration
+source ~/.bashrc   # Bash
+source ~/.zshrc    # Zsh
+
+# For Poetry environments, create alias
+alias promptheus='poetry run promptheus'
+```
+
+## Reporting Issues
+
+When reporting issues, include the following information:
+
+1. **Command executed:** Full command with all flags
+2. **Error output:** Complete error message and stack trace
+3. **Environment details:**
+   - Python version (`python --version`)
+   - Operating system and version
+   - Provider and model in use
+   - Installation method (pip, source, Poetry)
+4. **Reproduction steps:** Minimal steps to reproduce the issue
+
+**Issue Tracker:** https://github.com/abhichandra21/Promptheus/issues
