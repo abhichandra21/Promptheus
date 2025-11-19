@@ -52,6 +52,24 @@ async def get_history_entries(limit: int = 50, offset: int = 0):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/history/{timestamp}")
+async def delete_history_entry(timestamp: str):
+    """Delete a specific history entry by timestamp."""
+    try:
+        app_config = Config()
+        history = get_history(app_config)
+        success = history.delete_by_timestamp(timestamp)
+
+        if not success:
+            raise HTTPException(status_code=404, detail="History entry not found")
+
+        return {"message": "History entry deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/history")
 async def clear_history():
     """Clear all history entries."""

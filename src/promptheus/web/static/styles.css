@@ -1116,6 +1116,31 @@ body::after {
     font-weight: var(--font-medium);
 }
 
+.history-card-delete {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.history-card:hover .history-card-delete {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.history-card-delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--color-error);
+    color: var(--color-error);
+    transform: scale(1.05);
+}
+
 /* History Pagination */
 .history-pagination {
     display: flex;

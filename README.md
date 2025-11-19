@@ -367,9 +367,10 @@ All input methods support flag combinations.
 export PROMPTHEUS_PROVIDER=gemini
 # Supported: gemini, anthropic, openai, groq, qwen, glm
 
-# Model selection (overrides provider default)
+# Model selection (global fallback for auto-detected provider)
 export PROMPTHEUS_MODEL=gemini-2.0-flash-exp
-# Examples: claude-3-5-sonnet-20241022, gpt-4o, llama-3.1-405b
+# When you change providers via CLI or /set provider, Promptheus falls back to that provider's default
+# unless you also pass --model or a provider-specific MODEL environment variable.
 ```
 
 **History Management:**
@@ -402,11 +403,17 @@ export PROMPTHEUS_LOG_FILE=app.log
 
 ### Configuration Precedence
 
-**Resolution Order (highest to lowest priority):**
-1. Explicit CLI arguments (`--provider gemini`, `--model gpt-4o`)
-2. Environment variables (`PROMPTHEUS_PROVIDER`, `PROMPTHEUS_MODEL`)
-3. Auto-detection based on available API keys in `.env` file
-4. Provider-specific default models
+**Provider Resolution**
+1. CLI argument (`--provider`)
+2. `PROMPTHEUS_PROVIDER` environment variable
+3. Auto-detection based on available API keys in `.env`
+4. Default fallback (`gemini` when no keys are configured)
+
+**Model Resolution**
+1. CLI argument (`--model`)
+2. Provider-specific environment variables (e.g., `OPENAI_MODEL`)
+3. `PROMPTHEUS_MODEL` when the provider was auto-detected or set via `PROMPTHEUS_PROVIDER`
+4. Provider defaults from `providers.json` (always used after manual provider switches unless you also supply `--model` or a provider-scoped model env var)
 
 ### Environment File Discovery
 

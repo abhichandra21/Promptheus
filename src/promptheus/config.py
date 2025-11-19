@@ -59,6 +59,7 @@ class Config:
 
     def __init__(self) -> None:
         self._provider: Optional[str] = None
+        self._provider_source: Optional[str] = None  # auto | env | manual
         self.model: Optional[str] = None
         self._status_messages: List[str] = []
         self._error_messages: List[str] = []
@@ -78,6 +79,7 @@ class Config:
     def reset(self) -> None:
         """Reset provider/model selections and clear messages."""
         self._provider = None
+        self._provider_source = None
         self.model = None
         self._status_messages.clear()
         self._error_messages.clear()
@@ -112,7 +114,11 @@ class Config:
             self._detect_provider()
         return self._provider
 
-    def set_provider(self, provider: str) -> None:
+    @property
+    def provider_source(self) -> Optional[str]:
+        return self._provider_source
+
+    def set_provider(self, provider: str, source: Optional[str] = None) -> None:
         """Manually set the provider (e.g., from CLI flag)."""
         config_data = self._ensure_provider_config()
         lowered = provider.lower()
@@ -121,6 +127,8 @@ class Config:
         if lowered not in SUPPORTED_PROVIDER_IDS:
             raise ValueError(f"Provider '{provider}' is not supported yet.")
         self._provider = lowered
+        self._provider_source = source or "manual"
+        self.model = None  # Clear cached model to use new provider's default
         friendly = config_data.get("provider_aliases", {}).get(lowered, lowered.title())
         self._record_status(f"Switched to {friendly}")
 
@@ -141,6 +149,7 @@ class Config:
                 self._record_error(f"Unknown provider '{explicit_provider}' in PROMPTHEUS_PROVIDER")
             elif lowered in SUPPORTED_PROVIDER_IDS:
                 self._provider = lowered
+                self._provider_source = "env"
                 friendly = config_data.get("provider_aliases", {}).get(lowered, lowered.title())
                 self._record_status(f"Using {friendly}")
                 return
@@ -163,6 +172,7 @@ class Config:
             keys = env_keys if isinstance(env_keys, list) else [env_keys]
             if any(key and os.getenv(key) for key in keys):
                 self._provider = name
+                self._provider_source = "auto"
                 friendly = config_data.get("provider_aliases", {}).get(name, name.title())
                 self._record_status(f"Using {friendly}")
                 return
@@ -170,6 +180,7 @@ class Config:
         # No credentials found; default to first provider in config (usually Gemini)
         fallback = priority[0]
         self._provider = fallback
+        self._provider_source = "auto"
         friendly = config_data.get("provider_aliases", {}).get(fallback, fallback.title())
         self._record_status(f"No API key found - using {friendly} (add your API key to switch)")
 
@@ -198,10 +209,11 @@ class Config:
             if env_model:
                 return env_model
 
-        # 3. Global environment variable (PROMPTHEUS_MODEL)
-        global_env_model = os.getenv("PROMPTHEUS_MODEL")
-        if global_env_model:
-            return global_env_model
+        # 3. Global environment variable (PROMPTHEUS_MODEL) unless provider was manually overridden
+        if self._provider_source != "manual":
+            global_env_model = os.getenv("PROMPTHEUS_MODEL")
+            if global_env_model:
+                return global_env_model
 
         # 4. Default model from providers.json
         return provider_info.get("default_model", "")

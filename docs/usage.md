@@ -277,7 +277,7 @@ Flags may be combined. Example: `promptheus -s -c @brief.md`
 ## Provider and Model Selection
 
 ### Auto-Detection
-The system auto-detects available providers based on configured API keys in the `.env` file.
+The system auto-detects available providers based on configured API keys in the `.env` file. The supported providers are: gemini, anthropic, openai, groq, qwen, glm.
 
 ### Manual Override
 
@@ -306,6 +306,45 @@ promptheus --model llama-3.1-70b-versatile "Idea"
 promptheus list-models
 promptheus list-models --providers openai,gemini
 ```
+
+### Provider Validation and Configuration
+
+**Interactive Provider Setup:**
+```bash
+# Interactive setup for any provider
+promptheus auth
+
+# Setup for specific provider
+promptheus auth openai
+promptheus auth gemini
+```
+
+**Validation:**
+```bash
+# Validate provider configuration
+promptheus validate --providers gemini,openai
+
+# Test API connectivity
+promptheus validate --test-connection
+```
+
+### Provider Management in Web UI
+
+The web interface provides comprehensive provider management features:
+
+- **Provider Selection:** Dropdown to switch between configured providers
+- **Model Selection:** Per-provider model selection with available model listing
+- **API Key Management:** Secure API key storage and validation
+- **Availability Status:** Visual indicators showing which providers are configured and available
+- **Provider-Specific Configuration:** Model-specific settings and options
+
+**Supported Provider Configuration:**
+- Google Gemini: Requires `GEMINI_API_KEY`
+- OpenAI: Requires `OPENAI_API_KEY`
+- Anthropic Claude: Requires `ANTHROPIC_API_KEY`
+- Groq: Requires `GROQ_API_KEY`
+- Alibaba Cloud Qwen: Requires `QWEN_API_KEY`
+- Zhipu AI GLM: Requires `GLM_API_KEY`
 
 ## Output Control Flags
 
@@ -336,10 +375,23 @@ promptheus history --clear         # Purge history
 - `/copy` - Copy last refined result to clipboard
 - `/status` - Display current session configuration
 
+### Web UI History Features
+
+The web interface provides enhanced history management capabilities:
+
+- **Paginated History View:** Displays history entries with pagination controls
+- **Search and Filter:** Find specific entries by content or timestamp
+- **Provider and Model Information:** Each history entry includes the provider and model used
+- **Click to Load:** Click any history entry to load both the original prompt and refined output
+- **Individual Entry Deletion:** Delete specific entries without clearing all history
+- **Bulk Clear:** Clear all history entries with confirmation
+- **Metadata Display:** Shows timestamp, task type, provider, and model for each entry
+
 ### Storage Characteristics
 - Automatic persistence of refined prompts
-- Metadata includes timestamps, task classifications, original and refined versions
+- Metadata includes timestamps, task classifications, provider, model, original and refined versions
 - Local storage with no external transmission
+- JSONL format for efficient append-only operations
 
 ## Iterative Refinement Interface
 
@@ -472,3 +524,52 @@ promptheus template openai,gemini,anthropic > .env
 | Command | Function |
 |---------|----------|
 | `/copy` | Copy last refined result to clipboard |
+
+## Web UI Features
+
+Promptheus includes a modern Web UI accessible via the `web` subcommand for browser-based prompt refinement workflows.
+
+### Starting the Web UI
+
+**Basic Usage:**
+```bash
+promptheus web
+```
+
+**With Custom Options:**
+```bash
+# Specify custom port
+promptheus web --port 3000
+
+# Use different host (default: 127.0.0.1)
+promptheus web --host 0.0.0.0
+
+# Start server without opening browser
+promptheus web --no-browser
+```
+
+**Web UI Features:**
+- Modern, responsive interface with dark theme
+- Real-time prompt refinement with streaming responses
+- Interactive question-and-answer workflows
+- Prompt history with pagination and search
+- Provider and model selection controls
+- API key management and validation
+- Prompt tweaking and iterative refinement
+- Copy-to-clipboard functionality
+- Settings management for configuration
+
+### Web UI Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `promptheus web` | Start the web server and open browser automatically |
+| `promptheus web --port N` | Start server on specific port (default: auto-find) |
+| `promptheus web --host hostname` | Bind to specific host (default: 127.0.0.1) |
+| `promptheus web --no-browser` | Start server without opening browser |
+
+**Web UI Security:**
+- Server binds to localhost (127.0.0.1) by default for security
+- CORS restricted to local origins only
+- All API endpoints require same-origin requests
+- API keys are masked in the UI and never exposed in client-side code

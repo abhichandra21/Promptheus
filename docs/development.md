@@ -85,6 +85,26 @@ black .
 # Imports should be grouped: standard library, third-party, local
 ```
 
+### Dependencies
+
+**Core Dependencies:**
+- `fastapi`: Web framework for the UI server
+- `uvicorn`: ASGI server for running the web application
+- `rich`: Terminal rendering and formatting
+- `questionary`: Interactive CLI prompts
+- `pyperclip`: Cross-platform clipboard operations
+- `prompt-toolkit`: Advanced terminal input handling
+- `python-dotenv`: Environment configuration management
+- `filelock`: File locking utilities
+
+**Provider SDKs:**
+- Google Gemini SDK (`google-genai` or `google-generativeai`)
+- Anthropic SDK (`anthropic`)
+- OpenAI SDK (`openai`)
+- Groq SDK (`groq`)
+- Alibaba Cloud DashScope SDK (`dashscope`)
+- Zhipu AI SDK (`zhipu`)
+
 ### Python Version Compatibility
 
 **Python 3.14 Support:**

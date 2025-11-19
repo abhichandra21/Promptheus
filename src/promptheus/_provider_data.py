@@ -41,9 +41,11 @@ def _select_test_model(provider_name: str, config: Config) -> Optional[str]:
 def _test_provider_connection(provider_name: str, config: Config) -> Tuple[bool, str]:
     """Attempt a simple API call to test credentials for a provider."""
     original_provider = None
+    original_source = None
     try:
         # Temporarily set the provider to ensure we use its settings for the test
         original_provider = config.provider
+        original_source = config.provider_source
         config.set_provider(provider_name)
 
         test_model = _select_test_model(provider_name, config)
@@ -59,7 +61,7 @@ def _test_provider_connection(provider_name: str, config: Config) -> Tuple[bool,
     finally:
         # Restore original provider setting
         if original_provider:
-            config.set_provider(original_provider)
+            config.set_provider(original_provider, source=original_source or "auto")
         else:
             config.reset() # Clear the temporary provider setting
 

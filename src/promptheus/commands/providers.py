@@ -21,6 +21,7 @@ def get_provider_models(provider_name: str, config: Config) -> Tuple[List[str], 
     try:
         # Temporarily set the provider to the one we want to query
         original_provider = config.provider
+        original_source = config.provider_source
         config.set_provider(provider_name)
 
         if not config.validate():
@@ -47,7 +48,7 @@ def get_provider_models(provider_name: str, config: Config) -> Tuple[List[str], 
     finally:
         # Restore original provider setting
         if original_provider:
-            config.set_provider(original_provider)
+            config.set_provider(original_provider, source=original_source or "auto")
         else:
             config.reset() # Clear the temporary provider setting
 

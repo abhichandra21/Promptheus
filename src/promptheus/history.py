@@ -291,6 +291,46 @@ class PromptHistory:
             logger.warning(f"Failed to get history entry by index {index}: {exc}")
             return None
 
+    def delete_by_timestamp(self, timestamp: str) -> bool:
+        """
+        Delete a history entry by timestamp.
+
+        Args:
+            timestamp: ISO format timestamp of the entry to delete
+
+        Returns:
+            True if entry was deleted, False if not found
+        """
+        if not self.history_file.exists():
+            return False
+
+        try:
+            # Load all entries
+            entries = self._load_history()
+
+            # Filter out the entry to delete
+            filtered_entries = [e for e in entries if e.timestamp != timestamp]
+
+            # Check if anything was removed
+            if len(filtered_entries) == len(entries):
+                return False  # Entry not found
+
+            # Rewrite the file without the deleted entry
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                for entry in filtered_entries:
+                    json.dump(entry.to_dict(), f)
+                    f.write('\n')
+
+            logger.info(f"Deleted history entry: {timestamp}")
+            return True
+
+        except OSError as exc:
+            logger.error(
+                "Failed to delete history entry: %s",
+                sanitize_error_message(str(exc)),
+            )
+            return False
+
     def clear(self) -> None:
         """Clear all history."""
         try:

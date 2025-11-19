@@ -871,11 +871,18 @@ class PromptheusApp {
 
         // If we got models, populate them
         if (models && models.length > 0) {
-            models.forEach(model => {
+            models.forEach((model, index) => {
                 const option = document.createElement('option');
                 option.value = model;
                 option.textContent = model;
-                option.selected = model === currentModel;
+
+                // Select current model if set, otherwise select first model
+                if (currentModel) {
+                    option.selected = model === currentModel;
+                } else if (index === 0) {
+                    option.selected = true;
+                }
+
                 modelSelect.appendChild(option);
             });
         } else {
@@ -986,8 +993,18 @@ class PromptheusApp {
             </div>
             <div class="history-card-footer">
                 <div class="history-card-meta">${this.escapeHtml(entry.provider)} • ${this.escapeHtml(entry.model)}</div>
+                <button class="history-card-delete" title="Delete this entry" data-timestamp="${entry.timestamp}">
+                    🗑
+                </button>
             </div>
         `;
+
+        // Add delete button handler
+        const deleteBtn = card.querySelector('.history-card-delete');
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation(); // Prevent card click event
+            await this.deleteHistoryEntry(entry.timestamp);
+        });
 
         card.addEventListener('click', () => {
             // Restore both input and output
@@ -1039,6 +1056,24 @@ class PromptheusApp {
         const currentPageDisplay = this.currentHistoryPage + 1;
         const totalPagesDisplay = this.totalHistoryPages || 1;
         currentPageSpan.textContent = `${currentPageDisplay} of ${totalPagesDisplay}`;
+    }
+
+    async deleteHistoryEntry(timestamp) {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/history/${encodeURIComponent(timestamp)}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                this.showToast('success', 'History entry deleted');
+                this.loadHistory(); // Reload to refresh the list
+            } else {
+                this.showToast('error', 'Failed to delete history entry');
+            }
+        } catch (error) {
+            console.error('Error deleting history entry:', error);
+            this.showToast('error', 'Network error: ' + error.message);
+        }
     }
 
     async clearHistory() {

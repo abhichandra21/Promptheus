@@ -161,11 +161,23 @@ def test_get_model_default(config, monkeypatch):
 
 def test_get_model_from_env(monkeypatch, config):
     """Test getting model from environment variable."""
+    monkeypatch.setenv("PROMPTHEUS_PROVIDER", "gemini")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
     monkeypatch.setenv("PROMPTHEUS_MODEL", "env-model")
-    
+
     model = config.get_model()
-    
+
     assert model == "env-model"
+
+
+def test_manual_provider_ignores_global_model(monkeypatch, config):
+    """Manual provider changes should use provider defaults unless overridden explicitly."""
+    monkeypatch.setenv("PROMPTHEUS_MODEL", "env-model")
+    config.set_provider("anthropic")
+
+    provider_default = config._ensure_provider_config()["providers"]["anthropic"]["default_model"]
+
+    assert config.get_model() == provider_default
 
 
 def test_get_provider_config_gemini(monkeypatch, config):
