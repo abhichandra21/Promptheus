@@ -9,7 +9,8 @@ class PromptheusApp {
         this.currentEventSource = null;
         this.streamingText = '';
         this.streamingInterval = null;
-        this.currentRefinedPrompt = ''; // Store current prompt
+        this.currentOptimizedPrompt = ''; // Store current prompt
+        this.cachedModels = {}; // Store fetched models by provider ID
         this.init();
     }
 
@@ -39,6 +40,21 @@ class PromptheusApp {
                 e.preventDefault();
                 this.submitPrompt();
             }
+        });
+
+        // Auto-clear output when starting new prompt
+        const promptInput = document.getElementById('prompt-input');
+
+        // Clear on focus if input is empty
+        promptInput.addEventListener('focus', () => {
+            this.handleInputFocus();
+        });
+
+        // Track input changes to detect new prompts
+        let lastPromptValue = '';
+        promptInput.addEventListener('input', () => {
+            this.handleInputChange(promptInput.value, lastPromptValue);
+            lastPromptValue = promptInput.value;
         });
 
         // Provider selection
@@ -137,6 +153,110 @@ class PromptheusApp {
     }
 
     /* ===================================================================
+       INPUT STATE MANAGEMENT
+       =================================================================== */
+
+    handleInputFocus() {
+        const promptInput = document.getElementById('prompt-input');
+        const outputDiv = document.getElementById('output');
+        const tweakBtn = document.getElementById('tweak-btn');
+
+        // Clear if there's existing output (user wants to start fresh)
+        const hasOutput = outputDiv.querySelector('.optimized-prompt-content');
+
+        if (hasOutput) {
+            // Clear the input field to signal fresh start
+            promptInput.value = '';
+            this.clearOutputWithTransition();
+        }
+    }
+
+    handleInputChange(currentValue, lastValue) {
+        const outputDiv = document.getElementById('output');
+        const hasOutput = outputDiv.querySelector('.optimized-prompt-content');
+
+        if (!hasOutput) return;
+
+        // Calculate similarity between current and last prompt
+        const isSimilar = this.calculateSimilarity(currentValue, lastValue) > 0.7;
+
+        // If user is typing something significantly different (more than 10 chars changed)
+        if (!isSimilar && currentValue.length > 10 && Math.abs(currentValue.length - lastValue.length) > 5) {
+            this.clearOutputWithTransition();
+        }
+    }
+
+    calculateSimilarity(str1, str2) {
+        if (!str1 || !str2) return 0;
+
+        const longer = str1.length > str2.length ? str1 : str2;
+        const shorter = str1.length > str2.length ? str2 : str1;
+
+        if (longer.length === 0) return 1.0;
+
+        const editDistance = this.levenshteinDistance(longer, shorter);
+        return (longer.length - editDistance) / longer.length;
+    }
+
+    levenshteinDistance(str1, str2) {
+        const matrix = [];
+
+        for (let i = 0; i <= str2.length; i++) {
+            matrix[i] = [i];
+        }
+
+        for (let j = 0; j <= str1.length; j++) {
+            matrix[0][j] = j;
+        }
+
+        for (let i = 1; i <= str2.length; i++) {
+            for (let j = 1; j <= str1.length; j++) {
+                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                    );
+                }
+            }
+        }
+
+        return matrix[str2.length][str1.length];
+    }
+
+    clearOutputWithTransition() {
+        const outputDiv = document.getElementById('output');
+        const tweakBtn = document.getElementById('tweak-btn');
+        const copyBtn = document.getElementById('copy-btn');
+
+        // Add fade-out class
+        outputDiv.style.opacity = '0';
+        outputDiv.style.transition = 'opacity 0.2s ease-out';
+
+        setTimeout(() => {
+            // Clear output and show ready state
+            outputDiv.innerHTML = `
+                <p class="message message-info">
+                    <span>💡</span>
+                    <span>Your optimized prompt will appear here</span>
+                </p>
+            `;
+
+            // Hide tweak and copy buttons
+            tweakBtn.classList.add('hidden');
+            copyBtn.classList.add('hidden');
+
+            // Fade back in
+            setTimeout(() => {
+                outputDiv.style.opacity = '1';
+                outputDiv.style.transition = 'opacity 0.3s ease-in';
+            }, 50);
+        }, 200);
+    }
+
+    /* ===================================================================
        PROMPT SUBMISSION & PROCESSING
        =================================================================== */
 
@@ -145,7 +265,7 @@ class PromptheusApp {
         const outputDiv = document.getElementById('output');
         const submitBtn = document.getElementById('submit-btn');
         const cancelBtn = document.getElementById('cancel-btn');
-        const skipQuestions = document.getElementById('skip-questions').checked;
+        const questionMode = document.getElementById('question-mode').value;
 
         const prompt = promptInput.value.trim();
         if (!prompt) {
@@ -154,6 +274,11 @@ class PromptheusApp {
         }
 
         const provider = document.getElementById('provider-select').value;
+        const model = document.getElementById('model-select')?.value || null;
+
+        // Determine skip_questions and force_questions from mode
+        const skipQuestions = questionMode === 'skip';
+        const forceQuestions = questionMode === 'force';
 
         // Cancel any existing request
         if (this.currentAbortController) {
@@ -167,16 +292,21 @@ class PromptheusApp {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner"></span><span>Processing...</span>';
         cancelBtn.classList.remove('hidden');
-        // Clear output but don't show analyzing message yet
-        outputDiv.innerHTML = '';
 
         try {
             // Check if clarifying questions are needed
             if (!skipQuestions) {
+                // Show analyzing indicator while generating questions
+                this.showProgressIndicator('analyzing');
+
                 const questionsResponse = await fetch(`${this.apiBaseUrl}/api/questions/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt, provider: provider || null }),
+                    body: JSON.stringify({
+                        prompt,
+                        provider: provider || null,
+                        force_questions: forceQuestions
+                    }),
                     signal: this.currentAbortController.signal
                 });
 
@@ -187,14 +317,19 @@ class PromptheusApp {
                 if (this.currentAbortController.signal.aborted) return;
 
                 if (questionsData.success && questionsData.questions && questionsData.questions.length > 0) {
-                    const answers = await this.showQuestionsAndCollectAnswers(questionsData.questions);
+                    const answersResult = await this.showQuestionsAndCollectAnswers(questionsData.questions);
 
-                    if (answers === null) {
+                    if (answersResult === null) {
                         submitBtn.disabled = false;
-                        submitBtn.innerHTML = '<span>Refine Prompt</span>';
+                        submitBtn.innerHTML = '<span>Optimize Prompt</span>';
                         cancelBtn.classList.add('hidden');
                         return;
                     }
+
+                    const { responses, mapping } = answersResult;
+
+                    // Show refining indicator
+                    this.showProgressIndicator('refining');
 
                     // Submit with answers
                     const response = await fetch(`${this.apiBaseUrl}/api/prompt/submit`, {
@@ -203,8 +338,11 @@ class PromptheusApp {
                         body: JSON.stringify({
                             prompt,
                             provider: provider || null,
+                            model: model || null,
                             skip_questions: false,
-                            answers
+                            refine: forceQuestions,
+                            answers: responses,
+                            question_mapping: mapping
                         }),
                         signal: this.currentAbortController.signal
                     });
@@ -214,10 +352,10 @@ class PromptheusApp {
                     const data = await response.json();
                     this.handlePromptResponse(data);
                 } else {
-                    await this.submitPromptDirect(prompt, provider, skipQuestions);
+                    await this.submitPromptDirect(prompt, provider, skipQuestions, forceQuestions);
                 }
             } else {
-                await this.submitPromptDirect(prompt, provider, skipQuestions);
+                await this.submitPromptDirect(prompt, provider, skipQuestions, forceQuestions);
             }
         } catch (error) {
             if (error.name === 'AbortError') return;
@@ -226,32 +364,40 @@ class PromptheusApp {
         } finally {
             this.currentAbortController = null;
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span>Refine Prompt</span>';
+            submitBtn.innerHTML = '<span>Optimize Prompt</span>';
             cancelBtn.classList.add('hidden');
         }
     }
 
-    async submitPromptDirect(prompt, provider, skipQuestions) {
+    async submitPromptDirect(prompt, provider, skipQuestions, forceQuestions = false) {
         const outputDiv = document.getElementById('output');
         const tweakBtn = document.getElementById('tweak-btn');
+        const copyBtn = document.getElementById('copy-btn');
         const model = document.getElementById('model-select')?.value || null;
 
         // Use streaming endpoint
         const params = new URLSearchParams({
             prompt,
-            skip_questions: skipQuestions
+            skip_questions: skipQuestions,
+            refine: forceQuestions
         });
 
         if (provider) params.append('provider', provider);
         if (model) params.append('model', model);
 
+        // Show optimizing indicator briefly before streaming
+        this.showProgressIndicator(forceQuestions ? 'refining' : 'optimizing');
+
+        // Small delay to let the progress indicator display
+        await new Promise(resolve => setTimeout(resolve, 200));
+
         this.streamingText = '';
-        outputDiv.innerHTML = '<div class="refined-prompt-content streaming"><span class="streaming-cursor">|</span></div>';
+        outputDiv.innerHTML = '<div class="optimized-prompt-content streaming"><span class="streaming-cursor">|</span></div>';
 
         const eventSource = new EventSource(`${this.apiBaseUrl}/api/prompt/stream?${params.toString()}`);
         this.currentEventSource = eventSource;
 
-        const contentDiv = outputDiv.querySelector('.refined-prompt-content');
+        const contentDiv = outputDiv.querySelector('.optimized-prompt-content');
         const cursorSpan = contentDiv.querySelector('.streaming-cursor');
 
         eventSource.onmessage = (event) => {
@@ -266,13 +412,15 @@ class PromptheusApp {
                 this.currentEventSource = null;
                 cursorSpan.remove();
                 contentDiv.classList.remove('streaming');
-                this.currentRefinedPrompt = this.streamingText; // Store for markdown toggle
+                this.currentOptimizedPrompt = this.streamingText; // Store for markdown toggle
                 tweakBtn.classList.remove('hidden'); // Show tweak button
+                copyBtn.classList.remove('hidden'); // Show copy button
                 this.loadHistory();
             } else if (data.type === 'error') {
                 eventSource.close();
                 this.currentEventSource = null;
                 tweakBtn.classList.add('hidden');
+                copyBtn.classList.add('hidden');
                 this.showMessage('error', data.content);
             }
         };
@@ -294,118 +442,264 @@ class PromptheusApp {
     handlePromptResponse(data) {
         const outputDiv = document.getElementById('output');
         const tweakBtn = document.getElementById('tweak-btn');
+        const copyBtn = document.getElementById('copy-btn');
 
         if (data.success) {
-            this.currentRefinedPrompt = data.refined_prompt;
+            this.currentOptimizedPrompt = data.refined_prompt;
             this.renderOutput();
             tweakBtn.classList.remove('hidden'); // Show tweak button
+            copyBtn.classList.remove('hidden'); // Show copy button
             this.loadHistory();
         } else {
             this.showMessage('error', data.error || 'Failed to process prompt');
             tweakBtn.classList.add('hidden');
+            copyBtn.classList.add('hidden');
         }
     }
 
     renderOutput() {
         const outputDiv = document.getElementById('output');
-        // Always render as markdown
-        if (typeof marked !== 'undefined') {
-            const html = marked.parse(this.currentRefinedPrompt);
-            outputDiv.innerHTML = `<div class="refined-prompt-content markdown-content">${html}</div>`;
-        } else {
-            // Fallback to plain text if marked is not loaded
-            outputDiv.innerHTML = `<div class="refined-prompt-content">${this.escapeHtml(this.currentRefinedPrompt)}</div>`;
+
+        // Remove redundant "Optimized Prompt" heading if present
+        let cleanedPrompt = this.currentOptimizedPrompt.trim();
+
+        // Remove common redundant headings
+        const redundantHeadings = [
+            /^#\s*Optimized Prompt\s*\n+/i,
+            /^##\s*Optimized Prompt\s*\n+/i,
+            /^\*\*Optimized Prompt\*\*\s*\n+/i,
+            /^Optimized Prompt:\s*\n+/i
+        ];
+
+        for (const pattern of redundantHeadings) {
+            cleanedPrompt = cleanedPrompt.replace(pattern, '');
         }
+
+        // Enhanced plain text rendering with selective formatting
+        const formattedText = this.formatEnhancedText(cleanedPrompt);
+        outputDiv.innerHTML = `<div class="optimized-prompt-content">${formattedText}</div>`;
+    }
+
+    formatEnhancedText(text) {
+        // Escape HTML first
+        let formatted = this.escapeHtml(text);
+
+        // Convert **bold** to <strong>
+        formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+        // Convert *italic* to <em>
+        formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+        // Convert `inline code` to <code>
+        formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Preserve line breaks
+        formatted = formatted.replace(/\n/g, '<br>');
+
+        return formatted;
     }
 
     async showQuestionsAndCollectAnswers(questions) {
         const outputDiv = document.getElementById('output');
         const submitBtn = document.getElementById('submit-btn');
 
-        // Show processing message in the button (already done) and show questions
-        let formHtml = '<div class="questions-container">';
-        formHtml += '<div class="questions-header">';
-        formHtml += '<h3 class="questions-title">Clarifying Questions</h3>';
-        formHtml += '<p class="questions-description">Please answer these questions to help refine your prompt:</p>';
-        formHtml += '</div>';
-        formHtml += '<form id="questions-form">';
+        let currentQuestionIndex = 0;
+        const answers = {};
+        const questionMapping = {};
 
-        questions.forEach((question, index) => {
+        const renderQuestion = (index) => {
+            const question = questions[index];
             const questionKey = `q${index}`;
             const questionText = question.question || `Question ${index + 1}`;
             const questionType = question.type || 'text';
             const required = question.required !== false;
+            const isLastQuestion = index === questions.length - 1;
 
-            formHtml += `<div class="question-item">`;
-            formHtml += `<label for="${questionKey}" class="question-label">${this.escapeHtml(questionText)}${required ? ' *' : ''}</label>`;
+            questionMapping[questionKey] = questionText;
+
+            let formHtml = '<div class="question-wizard">';
+
+            // Progress dots
+            formHtml += '<div class="wizard-progress">';
+            for (let i = 0; i < questions.length; i++) {
+                formHtml += `<span class="progress-dot ${i === index ? 'active' : ''} ${i < index ? 'completed' : ''}"></span>`;
+            }
+            formHtml += '</div>';
+
+            // Question content
+            formHtml += '<div class="wizard-content">';
+            formHtml += `<div class="wizard-question-number">Question ${index + 1} of ${questions.length}</div>`;
+            formHtml += `<h3 class="wizard-question-text">${this.escapeHtml(questionText)}${required ? ' <span style="color: var(--color-primary);">*</span>' : ''}</h3>`;
+
+            formHtml += '<form id="wizard-form">';
+            formHtml += '<div class="wizard-input-container">';
 
             if (questionType === 'radio' && question.options && question.options.length > 0) {
                 question.options.forEach((option, optIndex) => {
-                    formHtml += `<div style="margin-bottom: var(--space-2);">`;
-                    formHtml += `<input type="radio" name="${questionKey}" id="${questionKey}_${optIndex}" value="${this.escapeHtml(option)}" style="margin-right: var(--space-2);">`;
-                    formHtml += `<label for="${questionKey}_${optIndex}" style="cursor: pointer;">${this.escapeHtml(option)}</label>`;
-                    formHtml += `</div>`;
+                    formHtml += `<label class="wizard-option">`;
+                    formHtml += `<input type="radio" name="${questionKey}" value="${this.escapeHtml(option)}" ${optIndex === 0 ? 'checked' : ''}>`;
+                    formHtml += `<span class="wizard-option-text">${this.escapeHtml(option)}</span>`;
+                    formHtml += `</label>`;
                 });
             } else if (questionType === 'checkbox' && question.options && question.options.length > 0) {
                 question.options.forEach((option, optIndex) => {
-                    formHtml += `<div style="margin-bottom: var(--space-2);">`;
-                    formHtml += `<input type="checkbox" name="${questionKey}" id="${questionKey}_${optIndex}" value="${this.escapeHtml(option)}" style="margin-right: var(--space-2);">`;
-                    formHtml += `<label for="${questionKey}_${optIndex}" style="cursor: pointer;">${this.escapeHtml(option)}</label>`;
-                    formHtml += `</div>`;
+                    formHtml += `<label class="wizard-option">`;
+                    formHtml += `<input type="checkbox" name="${questionKey}" value="${this.escapeHtml(option)}">`;
+                    formHtml += `<span class="wizard-option-text">${this.escapeHtml(option)}</span>`;
+                    formHtml += `</label>`;
                 });
             } else {
-                formHtml += `<input type="text" id="${questionKey}" name="${questionKey}" ${required ? 'required' : ''} class="question-input">`;
+                const savedAnswer = answers[questionKey] || '';
+                const placeholder = required ? "Type your answer here..." : "Optional - Leave blank to skip";
+                formHtml += `<textarea id="${questionKey}" name="${questionKey}" ${required ? 'required' : ''} class="wizard-input" placeholder="${placeholder}" rows="4">${this.escapeHtml(savedAnswer)}</textarea>`;
             }
 
-            formHtml += '</div>';
-        });
+            formHtml += '</div>'; // wizard-input-container
 
-        formHtml += '<div class="questions-actions">';
-        formHtml += '<button type="submit" class="btn btn-primary">Submit Answers</button>';
-        formHtml += '<button type="button" id="cancel-questions-btn" class="btn btn-secondary">Cancel</button>';
-        formHtml += '</div></form></div>';
+            // Navigation buttons
+            formHtml += '<div class="wizard-actions">';
 
-        outputDiv.innerHTML = formHtml;
+            if (index > 0) {
+                formHtml += '<button type="button" id="wizard-prev-btn" class="btn btn-secondary">';
+                formHtml += '<span>← Previous</span>';
+                formHtml += '</button>';
+            } else {
+                formHtml += '<div></div>'; // Spacer
+            }
 
-        const form = document.getElementById('questions-form');
-        const cancelBtn = document.getElementById('cancel-questions-btn');
+            if (!required) {
+                formHtml += '<button type="button" id="wizard-skip-btn" class="btn btn-tertiary">';
+                formHtml += '<span>Skip</span>';
+                formHtml += '</button>';
+            }
+
+            if (isLastQuestion) {
+                formHtml += '<button type="submit" class="btn btn-primary">';
+                formHtml += '<span>Submit Answers</span>';
+                formHtml += '</button>';
+            } else {
+                formHtml += '<button type="submit" class="btn btn-primary">';
+                formHtml += '<span>Next →</span>';
+                formHtml += '</button>';
+            }
+
+            formHtml += '</div>'; // wizard-actions
+            formHtml += '</form>';
+            formHtml += '</div>'; // wizard-content
+
+            // Cancel button
+            formHtml += '<button type="button" id="wizard-cancel-btn" class="wizard-cancel-btn" title="Cancel">✕</button>';
+
+            formHtml += '</div>'; // question-wizard
+
+            outputDiv.innerHTML = formHtml;
+
+            // Focus the input
+            const firstInput = outputDiv.querySelector('input, textarea');
+            if (firstInput && firstInput.type !== 'radio' && firstInput.type !== 'checkbox') {
+                setTimeout(() => firstInput.focus(), 100);
+            }
+        };
 
         return new Promise((resolve) => {
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
+            const handleNext = (form) => {
+                const question = questions[currentQuestionIndex];
+                const questionKey = `q${currentQuestionIndex}`;
+                const questionType = question.type || 'text';
 
-                // Scroll to top to show processing indicator
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                // Collect answer
+                if (questionType === 'checkbox') {
+                    const checkboxes = form.querySelectorAll(`input[name="${questionKey}"]:checked`);
+                    answers[questionKey] = Array.from(checkboxes).map(cb => cb.value);
+                } else if (questionType === 'radio') {
+                    const radio = form.querySelector(`input[name="${questionKey}"]:checked`);
+                    answers[questionKey] = radio ? radio.value : '';
+                } else {
+                    const input = form.querySelector(`[name="${questionKey}"]`);
+                    answers[questionKey] = input ? input.value : '';
+                }
 
-                // Show processing message before collecting answers
-                submitBtn.innerHTML = '<span class="spinner"></span><span>Generating refined prompt...</span>';
-                outputDiv.innerHTML = '<p class="message message-info"><span>✨</span><span>Creating your refined prompt...</span></p>';
+                // Move to next question or finish
+                if (currentQuestionIndex < questions.length - 1) {
+                    currentQuestionIndex++;
+                    renderQuestion(currentQuestionIndex);
+                    attachEventListeners();
+                } else {
+                    // All questions answered
+                    submitBtn.innerHTML = '<span class="spinner"></span><span>Generating optimized prompt...</span>';
+                    outputDiv.innerHTML = '<p class="message message-info"><span>✨</span><span>Creating your optimized prompt...</span></p>';
+                    resolve({ responses: answers, mapping: questionMapping });
+                }
+            };
 
-                const formData = new FormData(form);
-                const answers = {};
+            const handlePrevious = () => {
+                if (currentQuestionIndex > 0) {
+                    currentQuestionIndex--;
+                    renderQuestion(currentQuestionIndex);
+                    attachEventListeners();
+                }
+            };
 
-                questions.forEach((question, index) => {
-                    const questionKey = `q${index}`;
-                    const questionType = question.type || 'text';
+            const handleSkip = () => {
+                const questionKey = `q${currentQuestionIndex}`;
+                answers[questionKey] = '';
 
-                    if (questionType === 'checkbox') {
-                        const checkboxes = form.querySelectorAll(`input[name="${questionKey}"]:checked`);
-                        answers[questionKey] = Array.from(checkboxes).map(cb => cb.value);
-                    } else if (questionType === 'radio') {
-                        const radio = form.querySelector(`input[name="${questionKey}"]:checked`);
-                        answers[questionKey] = radio ? radio.value : '';
-                    } else {
-                        answers[questionKey] = formData.get(questionKey) || '';
-                    }
-                });
+                if (currentQuestionIndex < questions.length - 1) {
+                    currentQuestionIndex++;
+                    renderQuestion(currentQuestionIndex);
+                    attachEventListeners();
+                } else {
+                    submitBtn.innerHTML = '<span class="spinner"></span><span>Generating optimized prompt...</span>';
+                    outputDiv.innerHTML = '<p class="message message-info"><span>✨</span><span>Creating your optimized prompt...</span></p>';
+                    resolve({ responses: answers, mapping: questionMapping });
+                }
+            };
 
-                resolve(answers);
-            });
-
-            cancelBtn.addEventListener('click', () => {
+            const handleCancel = () => {
                 this.cancelCurrentRequest();
                 resolve(null);
-            });
+            };
+
+            const attachEventListeners = () => {
+                const form = document.getElementById('wizard-form');
+                const prevBtn = document.getElementById('wizard-prev-btn');
+                const skipBtn = document.getElementById('wizard-skip-btn');
+                const cancelBtn = document.getElementById('wizard-cancel-btn');
+
+                if (form) {
+                    form.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        handleNext(form);
+                    });
+                }
+
+                if (prevBtn) {
+                    prevBtn.addEventListener('click', handlePrevious);
+                }
+
+                if (skipBtn) {
+                    skipBtn.addEventListener('click', handleSkip);
+                }
+
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', handleCancel);
+                }
+
+                // Enter key to submit
+                const textInput = form?.querySelector('textarea');
+                if (textInput) {
+                    textInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && e.ctrlKey) {
+                            e.preventDefault();
+                            form.dispatchEvent(new Event('submit'));
+                        }
+                    });
+                }
+            };
+
+            // Render first question
+            renderQuestion(currentQuestionIndex);
+            attachEventListeners();
         });
     }
 
@@ -426,7 +720,7 @@ class PromptheusApp {
 
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span>Refine Prompt</span>';
+            submitBtn.innerHTML = '<span>Optimize Prompt</span>';
         }
         if (cancelBtn) {
             cancelBtn.classList.add('hidden');
@@ -461,27 +755,6 @@ class PromptheusApp {
             if (data.current_provider) {
                 await this.loadModelsForProvider(data.current_provider);
             }
-
-            // Update providers list in settings
-            const providersList = document.getElementById('providers-list');
-            providersList.innerHTML = '';
-
-            data.available_providers.forEach(provider => {
-                const card = document.createElement('div');
-                card.className = 'provider-card';
-
-                card.innerHTML = `
-                    <div class="provider-card-header">
-                        <div class="provider-name">${this.escapeHtml(provider.name)}</div>
-                        <span class="provider-status ${provider.available ? 'available' : 'unavailable'}">
-                            ${provider.available ? 'Available' : 'Unavailable'}
-                        </span>
-                    </div>
-                    <div class="provider-model">${this.escapeHtml(provider.default_model)}</div>
-                `;
-
-                providersList.appendChild(card);
-            });
         } catch (error) {
             console.error('Error loading providers:', error);
             this.showMessage('error', 'Failed to load providers');
@@ -490,22 +763,36 @@ class PromptheusApp {
 
     async selectProvider(providerId) {
         try {
+            const payloadId = providerId || "";
+
+            if (!providerId) {
+                const modelSelect = document.getElementById('model-select');
+                if (modelSelect) {
+                    modelSelect.innerHTML = '<option value="">Auto</option>';
+                    modelSelect.disabled = true;
+                }
+            }
+
             const response = await fetch(`${this.apiBaseUrl}/api/providers/select`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider_id: providerId })
+                body: JSON.stringify({ provider_id: payloadId })
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                this.showMessage('success', `Provider changed to ${data.current_provider}`);
+                if (payloadId === "") {
+                    this.showToast('success', 'Provider reset to auto-detect');
+                } else {
+                    this.showToast('success', `Provider changed to ${data.current_provider}`);
+                }
             } else {
-                this.showMessage('error', data.detail || 'Failed to change provider');
+                this.showToast('error', data.detail || 'Failed to change provider');
             }
         } catch (error) {
             console.error('Error selecting provider:', error);
-            this.showMessage('error', 'Network error: ' + error.message);
+            this.showToast('error', 'Network error: ' + error.message);
         }
     }
 
@@ -523,6 +810,13 @@ class PromptheusApp {
         if (!modelSelect) return;
 
         try {
+            // Check if we have cached models for this provider
+            if (this.cachedModels[providerId] && !fetchAll) {
+                const cachedData = this.cachedModels[providerId];
+                this.populateModelSelect(modelSelect, cachedData.models, cachedData.current_model, false);
+                return;
+            }
+
             // Show loading state if fetching all models
             if (fetchAll) {
                 modelSelect.disabled = true;
@@ -536,45 +830,60 @@ class PromptheusApp {
             const response = await fetch(url);
             const data = await response.json();
 
+            // Cache the models for this provider
+            if (fetchAll && data.models && data.models.length > 0) {
+                this.cachedModels[providerId] = {
+                    models: data.models,
+                    current_model: data.current_model,
+                    fetchedAll: true
+                };
+            }
+
             modelSelect.innerHTML = '';
             modelSelect.disabled = false;
 
-            // Add "Load All Models" option if not already fetched all
-            if (!fetchAll && data.models.length > 0) {
-                const loadAllOption = document.createElement('option');
-                loadAllOption.value = '__load_all__';
-                loadAllOption.textContent = '↻ Load All Models...';
-                loadAllOption.style.fontStyle = 'italic';
-                loadAllOption.style.color = 'var(--text-secondary)';
-                modelSelect.appendChild(loadAllOption);
-            }
+            this.populateModelSelect(modelSelect, data.models, data.current_model, fetchAll);
 
-            // If we got models, populate them
-            if (data.models && data.models.length > 0) {
-                data.models.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model;
-                    option.textContent = model;
-                    option.selected = model === data.current_model;
-                    modelSelect.appendChild(option);
-                });
-
-                // Show toast notification if we loaded all models
-                if (fetchAll) {
-                    this.showToast('success', `Loaded ${data.models.length} models for ${providerId}`);
-                }
-            } else {
-                // No models found
-                const emptyOption = document.createElement('option');
-                emptyOption.value = '';
-                emptyOption.textContent = 'No models available';
-                modelSelect.appendChild(emptyOption);
+            // Show toast notification if we loaded all models
+            if (fetchAll && data.models && data.models.length > 0) {
+                this.showToast('success', `Loaded ${data.models.length} models for ${providerId}`);
             }
         } catch (error) {
             console.error('Error loading models:', error);
             modelSelect.innerHTML = '<option value="">Error loading models</option>';
             modelSelect.disabled = false;
             this.showToast('error', 'Failed to load models');
+        }
+    }
+
+    populateModelSelect(modelSelect, models, currentModel, fetchedAll) {
+        modelSelect.innerHTML = '';
+
+        // Add "Load All Models" option if not already fetched all
+        if (!fetchedAll && models && models.length > 0) {
+            const loadAllOption = document.createElement('option');
+            loadAllOption.value = '__load_all__';
+            loadAllOption.textContent = '↻ Load All Models...';
+            loadAllOption.style.fontStyle = 'italic';
+            loadAllOption.style.color = 'var(--text-secondary)';
+            modelSelect.appendChild(loadAllOption);
+        }
+
+        // If we got models, populate them
+        if (models && models.length > 0) {
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                option.selected = model === currentModel;
+                modelSelect.appendChild(option);
+            });
+        } else {
+            // No models found
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = 'No models available';
+            modelSelect.appendChild(emptyOption);
         }
     }
 
@@ -602,13 +911,13 @@ class PromptheusApp {
             const data = await response.json();
 
             if (response.ok) {
-                this.showMessage('success', `Model changed to ${data.current_model}`);
+                this.showToast('success', `Model changed to ${data.current_model}`);
             } else {
-                this.showMessage('error', data.detail || 'Failed to change model');
+                this.showToast('error', data.detail || 'Failed to change model');
             }
         } catch (error) {
             console.error('Error selecting model:', error);
-            this.showMessage('error', 'Network error: ' + error.message);
+            this.showToast('error', 'Network error: ' + error.message);
         }
     }
 
@@ -630,7 +939,7 @@ class PromptheusApp {
                     <div class="empty-state">
                         <div class="empty-state-icon">📜</div>
                         <div class="empty-state-title">No History Yet</div>
-                        <div class="empty-state-description">Your refined prompts will appear here</div>
+                        <div class="empty-state-description">Your optimized prompts will appear here</div>
                     </div>
                 `;
                 this.totalHistoryPages = 0;
@@ -681,7 +990,24 @@ class PromptheusApp {
         `;
 
         card.addEventListener('click', () => {
-            document.getElementById('prompt-input').value = entry.original_prompt;
+            // Restore both input and output
+            const promptInput = document.getElementById('prompt-input');
+            const outputDiv = document.getElementById('output');
+            const tweakBtn = document.getElementById('tweak-btn');
+            const copyBtn = document.getElementById('copy-btn');
+
+            // Set the input value
+            promptInput.value = entry.original_prompt;
+
+            // Restore the optimized output if available
+            if (entry.refined_prompt) {
+                this.currentOptimizedPrompt = entry.refined_prompt;
+                this.renderOutput();
+                tweakBtn.classList.remove('hidden');
+                copyBtn.classList.remove('hidden');
+            }
+
+            // Scroll to top to see the restored content
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
@@ -772,14 +1098,12 @@ class PromptheusApp {
                 // Skip provider category (handled in top bar)
                 if (category === 'provider') return;
 
+                // Only show API Keys section
+                if (category !== 'api_keys') return;
+
                 // Create category section
                 const categorySection = document.createElement('div');
                 categorySection.className = 'settings-category';
-
-                const categoryTitle = document.createElement('h4');
-                categoryTitle.className = 'settings-category-title';
-                categoryTitle.textContent = category === 'api_keys' ? 'API Keys' : 'General Settings';
-                categorySection.appendChild(categoryTitle);
 
                 // Render each setting in the category
                 settings.forEach(setting => {
@@ -826,9 +1150,18 @@ class PromptheusApp {
                         inputElement = document.createElement('input');
                         inputElement.type = 'password';
                         inputElement.className = 'settings-input';
-                        inputElement.value = setting.value || '';
-                        inputElement.placeholder = '••••••••';
-                        inputElement.dataset.originalValue = setting.value || '';
+
+                        // If key exists (masked), show as placeholder and keep field empty
+                        // User must enter new key to update it
+                        if (setting.masked) {
+                            inputElement.value = '';
+                            inputElement.placeholder = `${setting.value} (current key)`;
+                            inputElement.dataset.hasExistingKey = 'true';
+                        } else {
+                            inputElement.value = '';
+                            inputElement.placeholder = 'Enter your API key';
+                            inputElement.dataset.hasExistingKey = 'false';
+                        }
 
                         // Add eye icon for password visibility toggle
                         const eyeButton = document.createElement('button');
@@ -864,8 +1197,45 @@ class PromptheusApp {
 
                     inputContainer.insertBefore(inputElement, inputContainer.firstChild);
 
-                    item.appendChild(labelContainer);
-                    item.appendChild(inputContainer);
+                    // Add Save & Validate button for API keys
+                    if (setting.type === 'password') {
+                        // Determine provider from key name
+                        const providerMatch = setting.key.match(/^(\w+)_API_KEY$/);
+                        const providerName = providerMatch ? providerMatch[1].toLowerCase() : null;
+
+                        // Create button container
+                        const buttonContainer = document.createElement('div');
+                        buttonContainer.style.display = 'flex';
+                        buttonContainer.style.gap = 'var(--space-2)';
+                        buttonContainer.style.alignItems = 'center';
+                        buttonContainer.style.marginTop = 'var(--space-2)';
+
+                        // Add Save button for individual API key
+                        const saveBtn = document.createElement('button');
+                        saveBtn.type = 'button';
+                        saveBtn.className = 'btn btn-secondary btn-sm';
+                        saveBtn.innerHTML = '<span>💾</span><span>Save</span>';
+                        saveBtn.style.minWidth = '80px';
+
+                        // Create status container for validation feedback
+                        const statusContainer = document.createElement('div');
+                        statusContainer.id = `status-${setting.key}`;
+                        statusContainer.className = 'validation-status-container';
+
+                        saveBtn.addEventListener('click', async () => {
+                            await this.saveAndValidateApiKey(setting.key, inputElement, providerName, statusContainer);
+                        });
+
+                        buttonContainer.appendChild(saveBtn);
+                        item.appendChild(labelContainer);
+                        item.appendChild(inputContainer);
+                        item.appendChild(buttonContainer);
+                        item.appendChild(statusContainer);
+                    } else {
+                        item.appendChild(labelContainer);
+                        item.appendChild(inputContainer);
+                    }
+
                     categorySection.appendChild(item);
                 });
 
@@ -954,15 +1324,157 @@ class PromptheusApp {
             const data = await response.json();
 
             if (response.ok) {
-                this.showMessage('success', `Setting "${key}" updated`);
+                this.showToast('success', `Setting "${key}" updated`);
                 this.loadProviders();
             } else {
-                this.showMessage('error', data.detail || 'Failed to update setting');
+                this.showToast('error', data.detail || 'Failed to update setting');
             }
         } catch (error) {
             console.error('Error updating setting:', error);
-            this.showMessage('error', 'Network error: ' + error.message);
+            this.showToast('error', 'Network error: ' + error.message);
         }
+    }
+
+    async saveAndValidateApiKey(key, inputElement, providerName, statusContainer) {
+        const apiKey = inputElement.value.trim();
+        const hasExistingKey = inputElement.dataset.hasExistingKey === 'true';
+
+        // If field is empty and there's an existing key, we need to get it from backend to validate
+        if (!apiKey && hasExistingKey) {
+            // User wants to test existing key without re-entering it
+            // We can't validate without the actual key, so just show a message
+            this.showToast('info', 'Enter a new API key to save and validate, or use the existing key');
+            return;
+        }
+
+        if (!apiKey) {
+            this.showToast('error', 'Please enter an API key');
+            return;
+        }
+
+        // Save the API key first
+        try {
+            await this.updateSetting(key, apiKey);
+            // After saving, mark that we now have an existing key and remember the value for quick retries
+            inputElement.dataset.hasExistingKey = 'true';
+            inputElement.dataset.lastSavedKey = apiKey;
+            // Clear the field and update placeholder
+            const maskedKey = '●'.repeat(Math.max(0, apiKey.length - 4)) + apiKey.slice(-4);
+            inputElement.value = '';
+            inputElement.placeholder = `${maskedKey} (current key)`;
+        } catch (error) {
+            this.showToast('error', 'Failed to save API key');
+            return;
+        }
+
+        // Now validate the connection if provider is known
+        if (!providerName) {
+            this.showToast('success', 'API key saved');
+            return;
+        }
+
+        await this.validateApiKey(providerName, apiKey, key, inputElement, statusContainer);
+    }
+
+    async validateApiKey(provider, apiKey, settingKey, inputElement, statusContainer) {
+        // Show validating status
+        inputElement.classList.remove('valid', 'invalid');
+        inputElement.classList.add('validating');
+
+        statusContainer.innerHTML = `
+            <div class="validation-status validating">
+                <span class="validation-status-icon">⚗</span>
+                <span class="validation-status-text">Verifying connection...</span>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/settings/validate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider, api_key: apiKey })
+            });
+
+            const data = await response.json();
+
+            inputElement.classList.remove('validating');
+
+            if (data.valid) {
+                // Success state
+                inputElement.classList.add('valid');
+
+                const modelsInfo = data.models_available && data.models_available.length > 0
+                    ? `<div style="margin-top: var(--space-1); font-size: var(--text-xs); opacity: 0.8;">Models: ${data.models_available.slice(0, 3).join(', ')}${data.models_available.length > 3 ? '...' : ''}</div>`
+                    : '';
+
+                statusContainer.innerHTML = `
+                    <div class="validation-status success">
+                        <span class="validation-status-icon">✓</span>
+                        <span class="validation-status-text">Connected to ${provider}</span>
+                        <span class="validation-status-time">Just now</span>
+                    </div>
+                    ${modelsInfo}
+                `;
+
+                this.showToast('success', `✓ ${provider} API key validated`);
+            } else {
+                // Error state
+                inputElement.classList.add('invalid');
+
+                statusContainer.innerHTML = `
+                    <div class="validation-status error">
+                        <span class="validation-status-icon">✗</span>
+                        <span class="validation-status-text">Connection Failed</span>
+                    </div>
+                    <div class="validation-error-details">
+                        <strong>Error:</strong> ${this.escapeHtml(data.error || 'Unknown error')}<br>
+                        <strong>Suggestion:</strong> ${this.escapeHtml(data.suggestion || 'Check your API key and try again')}
+                    </div>
+                    <button class="validation-retry-btn" onclick="window.promptheusApp.retryValidation('${provider}', '${settingKey}')">
+                        ↻ Retry
+                    </button>
+                `;
+
+                this.showToast('error', `✗ ${provider} validation failed`);
+            }
+        } catch (error) {
+            inputElement.classList.remove('validating');
+            inputElement.classList.add('invalid');
+
+            statusContainer.innerHTML = `
+                <div class="validation-status error">
+                    <span class="validation-status-icon">✗</span>
+                    <span class="validation-status-text">Validation Error</span>
+                </div>
+                <div class="validation-error-details">
+                    Network error: ${this.escapeHtml(error.message)}
+                </div>
+            `;
+
+            this.showToast('error', 'Network error during validation');
+        }
+    }
+
+    retryValidation(provider, settingKey) {
+        const inputElement = document.getElementById(`setting-${settingKey}`);
+        const statusContainer = document.getElementById(`status-${settingKey}`);
+
+        if (!inputElement || !statusContainer) {
+            this.showToast('error', 'Unable to retry validation—input not found');
+            return;
+        }
+
+        let apiKey = inputElement.value.trim();
+        if (!apiKey) {
+            apiKey = inputElement.dataset.lastSavedKey || '';
+        }
+
+        if (!apiKey) {
+            this.showToast('info', 'Enter an API key to validate');
+            return;
+        }
+
+        this.validateApiKey(provider, apiKey, settingKey, inputElement, statusContainer);
     }
 
     /* ===================================================================
@@ -971,20 +1483,20 @@ class PromptheusApp {
 
     async showTweakPromptDialog() {
         const outputDiv = document.getElementById('output');
-        const refinedPromptDiv = outputDiv.querySelector('.refined-prompt-content');
+        const optimizedPromptDiv = outputDiv.querySelector('.optimized-prompt-content');
 
-        if (!refinedPromptDiv) {
+        if (!optimizedPromptDiv) {
             this.showMessage('error', 'No prompt to tweak');
             return;
         }
 
-        const currentPrompt = refinedPromptDiv.textContent || refinedPromptDiv.innerText;
+        const currentPrompt = optimizedPromptDiv.textContent || optimizedPromptDiv.innerText;
 
         // Show tweak input form
         let formHtml = '<div class="tweak-container">';
         formHtml += '<div class="tweak-header">';
         formHtml += '<h3 class="tweak-title">Tweak Your Prompt</h3>';
-        formHtml += '<p class="tweak-description">Describe how you want to modify the refined prompt:</p>';
+        formHtml += '<p class="tweak-description">Describe how you want to modify the optimized prompt:</p>';
         formHtml += '</div>';
         formHtml += '<form id="tweak-form">';
         formHtml += '<div class="tweak-item">';
@@ -1010,13 +1522,16 @@ class PromptheusApp {
         const form = document.getElementById('tweak-form');
         const cancelBtn = document.getElementById('cancel-tweak-btn');
         const tweakBtn = document.getElementById('tweak-btn');
+        const copyBtn = document.getElementById('copy-btn');
 
         tweakBtn.classList.add('hidden'); // Hide tweak button while tweaking
+        copyBtn.classList.add('hidden'); // Hide copy button while tweaking
 
         cancelBtn.addEventListener('click', () => {
             // Restore the original prompt
-            outputDiv.innerHTML = `<div class="refined-prompt-content">${this.escapeHtml(currentPrompt)}</div>`;
+            outputDiv.innerHTML = `<div class="optimized-prompt-content">${this.escapeHtml(currentPrompt)}</div>`;
             tweakBtn.classList.remove('hidden');
+            copyBtn.classList.remove('hidden');
         });
 
         form.addEventListener('submit', async (e) => {
@@ -1047,9 +1562,10 @@ class PromptheusApp {
                 const data = await response.json();
 
                 if (data.success) {
-                    this.currentRefinedPrompt = data.tweaked_prompt;
+                    this.currentOptimizedPrompt = data.tweaked_prompt;
                     this.renderOutput();
                     tweakBtn.classList.remove('hidden');
+                    copyBtn.classList.remove('hidden');
                 } else {
                     this.showMessage('error', data.error || 'Failed to tweak prompt');
                 }
@@ -1069,14 +1585,14 @@ class PromptheusApp {
 
     async copyOutputToClipboard() {
         const outputDiv = document.getElementById('output');
-        const refinedPromptDiv = outputDiv.querySelector('.refined-prompt-content');
+        const optimizedPromptDiv = outputDiv.querySelector('.optimized-prompt-content');
 
-        if (!refinedPromptDiv) {
+        if (!optimizedPromptDiv) {
             this.showToast('info', 'Nothing to copy');
             return;
         }
 
-        const textToCopy = refinedPromptDiv.textContent || refinedPromptDiv.innerText;
+        const textToCopy = optimizedPromptDiv.textContent || optimizedPromptDiv.innerText;
 
         try {
             await navigator.clipboard.writeText(textToCopy);
@@ -1152,6 +1668,37 @@ class PromptheusApp {
         `;
     }
 
+    showProgressIndicator(phase) {
+        const outputDiv = document.getElementById('output');
+        const phases = {
+            analyzing: {
+                symbol: '🔮',
+                text: 'Analyzing prompt...'
+            },
+            generating_questions: {
+                symbol: '❓',
+                text: 'Generating questions...'
+            },
+            optimizing: {
+                symbol: '⚗',
+                text: 'Optimizing...'
+            },
+            refining: {
+                symbol: '✨',
+                text: 'Refining with your answers...'
+            }
+        };
+
+        const phaseData = phases[phase] || phases.optimizing;
+
+        outputDiv.innerHTML = `
+            <div class="progress-indicator">
+                <div class="progress-symbol">${phaseData.symbol}</div>
+                <div class="progress-text">${phaseData.text}</div>
+            </div>
+        `;
+    }
+
     escapeHtml(text) {
         if (typeof text !== 'string') return '';
         const div = document.createElement('div');
@@ -1162,5 +1709,5 @@ class PromptheusApp {
 
 // Initialize the app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    new PromptheusApp();
+    window.promptheusApp = new PromptheusApp();
 });

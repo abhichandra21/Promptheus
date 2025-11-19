@@ -38,7 +38,9 @@ async def process_prompt_web(
     from promptheus.utils import sanitize_error_message
     
     # Import here to avoid circular imports
-    if not skip_questions and not refine:
+    should_ask_questions = (not skip_questions) or refine
+
+    if should_ask_questions:
         # Generate questions first to determine task type
         try:
             result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
@@ -88,11 +90,13 @@ async def process_prompt_web(
 class PromptRequest(BaseModel):
     prompt: str
     provider: Optional[str] = None
+    model: Optional[str] = None
     skip_questions: bool = False
     refine: bool = False
     copy_to_clipboard: bool = False
     output_format: str = "plain"
     answers: Optional[Dict[str, Any]] = None  # Answers to clarifying questions
+    question_mapping: Optional[Dict[str, str]] = None
 
 
 class TweakRequest(BaseModel):
@@ -121,6 +125,8 @@ async def submit_prompt(request: PromptRequest):
         app_config = Config()
         if request.provider:
             app_config.set_provider(request.provider)
+        if request.model:
+            app_config.set_model(request.model)
         
         # Create provider instance
         provider_name = app_config.provider or "gemini"
@@ -148,10 +154,9 @@ async def submit_prompt(request: PromptRequest):
         
         # Create a simple mapping from answers keys to question text (in real usage, this would come from the questions generation)
         # For now, if we have answers, we'll just use the keys as is
-        mapping = {}
-        if request.answers:
-            for key in request.answers.keys():
-                mapping[key] = key  # Simple mapping, in real usage this would map to the actual question text
+        mapping = request.question_mapping or {}
+        if not mapping and request.answers:
+            mapping = {key: key for key in request.answers.keys()}
 
         # Process the prompt using the web-compatible function
         final_prompt, task_type = await process_prompt_web(
@@ -235,6 +240,7 @@ async def tweak_prompt(request: TweakRequest):
 async def stream_prompt(
     prompt: str,
     skip_questions: bool = False,
+    refine: bool = False,
     provider: Optional[str] = None,
     model: Optional[str] = None
 ):
@@ -258,8 +264,8 @@ async def stream_prompt(
                 initial_prompt=prompt,
                 answers=None,
                 mapping=None,
-                skip_questions=True,
-                refine=False,
+                skip_questions=skip_questions,
+                refine=refine,
                 app_config=app_config
             )
 

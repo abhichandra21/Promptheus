@@ -1,5 +1,6 @@
 """Providers API router for Promptheus Web UI."""
 import json
+import os
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -279,12 +280,14 @@ async def select_provider(selection: ProviderSelection):
             if env_path:
                 try:
                     unset_key(env_path, "PROMPTHEUS_PROVIDER")
-                except:
+                except Exception:
                     # If unset_key doesn't exist, set to empty string
                     set_key(env_path, "PROMPTHEUS_PROVIDER", "")
 
-            # Auto-detect the provider
-            app_config.provider = None
+            os.environ.pop("PROMPTHEUS_PROVIDER", None)
+
+            # Auto-detect the provider again
+            app_config.reset()
             detected_provider = app_config.provider or "gemini"
             return {"current_provider": detected_provider}
 
@@ -302,6 +305,7 @@ async def select_provider(selection: ProviderSelection):
         env_path = find_and_load_dotenv()
         if env_path:
             set_key(env_path, "PROMPTHEUS_PROVIDER", selection.provider_id)
+        os.environ["PROMPTHEUS_PROVIDER"] = selection.provider_id
 
         return {"current_provider": selection.provider_id}
     except Exception as e:
@@ -365,9 +369,6 @@ async def select_model(selection: ModelSelection):
         provider_config = providers_config['providers'][selection.provider_id]
         available_models = provider_config.get('example_models', [])
 
-        if selection.model not in available_models:
-            raise HTTPException(status_code=400, detail=f"Model {selection.model} not available for provider {selection.provider_id}")
-
         # Update the configuration
         app_config.set_model(selection.model)
 
@@ -380,6 +381,13 @@ async def select_model(selection: ModelSelection):
             model_env_key = provider_config.get('model_env')
             if model_env_key:
                 set_key(env_path, model_env_key, selection.model)
+            else:
+                set_key(env_path, "PROMPTHEUS_MODEL", selection.model)
+
+        model_env_key = provider_config.get('model_env')
+        if model_env_key:
+            os.environ[model_env_key] = selection.model
+        os.environ["PROMPTHEUS_MODEL"] = selection.model
 
         return {
             "provider_id": selection.provider_id,

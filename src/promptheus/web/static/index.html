@@ -3,12 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Promptheus - Modern AI-powered prompt refinement tool">
-    <title>Promptheus - AI Prompt Refinement</title>
+    <meta name="description" content="Promptheus - Transform raw prompts into optimized gold through digital alchemy">
+    <title>Promptheus - Alchemical Prompt Optimization</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
 </head>
 <body>
@@ -16,7 +13,7 @@
     <header class="top-bar">
         <div class="top-bar-content">
             <a href="#" class="logo">
-                <span class="logo-icon">✨</span>
+                <span class="logo-icon">⚗</span>
                 <span class="logo-text">Promptheus</span>
             </a>
             <div class="top-bar-controls">
@@ -43,25 +40,30 @@
     <!-- Main Content Area -->
     <main class="main-content">
 
-        <!-- Prompt Input Canvas -->
-        <section class="prompt-canvas" aria-label="Prompt input section">
+        <!-- Workspace Container - Side by Side -->
+        <div class="workspace-container">
+            <!-- Prompt Input Canvas -->
+            <section class="prompt-canvas" aria-label="Prompt input section">
             <div class="prompt-input-wrapper">
                 <label for="prompt-input" class="sr-only">Enter your prompt</label>
                 <textarea
                     id="prompt-input"
-                    placeholder="Enter your prompt here and let AI help you refine it..."
+                    placeholder="Enter your prompt here..."
                     aria-describedby="prompt-hint"
                 ></textarea>
-                <span id="prompt-hint" class="sr-only">Type your prompt and press the refine button to improve it</span>
+                <span id="prompt-hint" class="sr-only">Type your prompt and press the optimize button to improve it</span>
             </div>
 
             <div class="prompt-controls">
                 <div class="prompt-controls-left">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="skip-questions" aria-describedby="skip-hint">
-                        <span>Skip Questions</span>
+                    <label class="select-label">
+                        <span>Mode:</span>
+                        <select id="question-mode" aria-label="Question mode">
+                            <option value="auto">Auto</option>
+                            <option value="force">Always Ask</option>
+                            <option value="skip">Skip Questions</option>
+                        </select>
                     </label>
-                    <span id="skip-hint" class="sr-only">When checked, refines immediately without asking clarifying questions</span>
                 </div>
 
                 <div class="prompt-controls-right">
@@ -69,26 +71,26 @@
                         <span>✕</span>
                         <span>Cancel</span>
                     </button>
-                    <button id="submit-btn" class="btn btn-primary" aria-label="Refine prompt">
-                        <span>Refine Prompt</span>
+                    <button id="submit-btn" class="btn btn-primary" aria-label="Optimize prompt">
+                        <span>Optimize Prompt</span>
                     </button>
                 </div>
             </div>
         </section>
 
         <!-- Output Section -->
-        <section class="output-section" aria-label="Refined prompt output">
+        <section class="output-section" aria-label="Optimized prompt output">
             <div class="output-header">
                 <h2 class="output-title">
-                    <span>✨</span>
-                    <span>Refined Prompt</span>
+                    <span>🜃</span>
+                    <span>Optimized Prompt</span>
                 </h2>
                 <div class="output-actions">
-                    <button id="tweak-btn" class="btn btn-secondary hidden" title="Tweak this prompt" aria-label="Tweak refined prompt">
+                    <button id="tweak-btn" class="btn btn-secondary hidden" title="Tweak this prompt" aria-label="Tweak optimized prompt">
                         <span>🔧</span>
                         <span>Tweak</span>
                     </button>
-                    <button id="copy-btn" class="btn btn-secondary" title="Copy to clipboard" aria-label="Copy refined prompt">
+                    <button id="copy-btn" class="btn btn-secondary hidden" title="Copy to clipboard" aria-label="Copy optimized prompt">
                         <span>📋</span>
                         <span>Copy</span>
                     </button>
@@ -97,18 +99,16 @@
             <div id="output" aria-live="polite" aria-atomic="true">
                 <p class="message message-info">
                     <span>💡</span>
-                    <span>Your refined prompt will appear here</span>
+                    <span>Your optimized prompt will appear here</span>
                 </p>
             </div>
         </section>
+        </div>
 
         <!-- History Section -->
         <section class="history-section" aria-label="Prompt history">
             <div class="history-header">
-                <h2 class="history-title">
-                    <span>📜</span>
-                    <span>History</span>
-                </h2>
+                <h2 class="history-title">History</h2>
                 <button id="clear-history-btn" class="btn btn-secondary btn-sm" title="Clear all history" aria-label="Clear history">
                     <span>🗑</span>
                     <span>Clear History</span>
@@ -174,22 +174,11 @@
             </header>
 
             <div class="settings-content">
-                <!-- Providers Section -->
+                <!-- API Keys Section -->
                 <section class="settings-section">
                     <h3 class="settings-section-title">
-                        <span>🔌</span>
-                        <span>Providers</span>
-                    </h3>
-                    <div id="providers-list">
-                        <!-- Provider cards will be dynamically inserted here -->
-                    </div>
-                </section>
-
-                <!-- Configuration Section -->
-                <section class="settings-section">
-                    <h3 class="settings-section-title">
-                        <span>⚙</span>
-                        <span>Configuration</span>
+                        <span>🔑</span>
+                        <span>API Keys</span>
                     </h3>
                     <div id="settings-form">
                         <!-- Settings form will be dynamically inserted here -->
@@ -204,7 +193,7 @@
                     </h3>
                     <div class="settings-item">
                         <p style="font-size: var(--text-sm); color: var(--text-secondary);">
-                            Promptheus - AI-powered prompt refinement tool
+                            Promptheus - AI-powered prompt optimization tool
                         </p>
                     </div>
                 </section>

@@ -29,6 +29,21 @@ class SettingsResponse(BaseModel):
     settings: List[SettingMetadata]
 
 
+class ValidationRequest(BaseModel):
+    provider: str
+    api_key: str
+
+
+class ValidationResponse(BaseModel):
+    valid: bool
+    provider: str
+    error: Optional[str] = None
+    error_type: Optional[str] = None
+    suggestion: Optional[str] = None
+    models_available: Optional[List[str]] = None
+    account_info: Optional[Dict] = None
+
+
 @router.get("/settings", response_model=SettingsResponse)
 async def get_settings():
     """Get current settings from environment with metadata."""
@@ -137,3 +152,126 @@ async def update_settings(update: SettingsUpdate):
         return {"success": True, "key": update.key, "value": update.value}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/settings/validate", response_model=ValidationResponse)
+async def validate_api_key(request: ValidationRequest):
+    """Validate an API key by testing connection to the provider."""
+    try:
+        from promptheus.providers import get_provider
+        from promptheus.utils import sanitize_error_message
+
+        provider_id = request.provider.lower()
+        api_key = request.api_key
+
+        # Temporarily set the API key in environment for validation
+        env_key_map = {
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "qwen": "QWEN_API_KEY",
+            "glm": "GLM_API_KEY"
+        }
+
+        if provider_id not in env_key_map:
+            return ValidationResponse(
+                valid=False,
+                provider=provider_id,
+                error=f"Unknown provider: {provider_id}",
+                error_type="invalid_provider",
+                suggestion="Choose a valid provider: gemini, openai, anthropic, groq, qwen, or glm"
+            )
+
+        env_key = env_key_map[provider_id]
+        original_key = os.getenv(env_key)
+
+        try:
+            # Temporarily set the API key
+            os.environ[env_key] = api_key
+
+            # Build config scoped to this provider so validation uses the supplied key
+            app_config = Config()
+            app_config.set_provider(provider_id)
+
+            # Determine a model that belongs to this provider (ignore global PROMPTHEUS_MODEL overrides)
+            provider_configs = app_config._ensure_provider_config()
+            provider_info = provider_configs.get("providers", {}).get(provider_id, {})
+            default_model = provider_info.get("default_model")
+            example_models = provider_info.get("example_models", [])
+            model_for_validation = default_model or (example_models[0] if example_models else None)
+
+            # Try to initialize the provider with current configuration and provider-scoped model
+            provider = get_provider(provider_id, app_config, model_for_validation)
+
+            # Test with a simple prompt
+            test_prompt = "Validation ping"
+            validation_instruction = "Respond with 'OK'"
+            try:
+                # Try to generate a response (this will validate the API key)
+                response = provider.light_refine(
+                    prompt=test_prompt,
+                    system_instruction=validation_instruction
+                )
+
+                # If we got here, the API key is valid
+                models_available = []
+                try:
+                    # Try to get available models if provider supports it
+                    if hasattr(provider, 'get_available_models'):
+                        models_available = provider.get_available_models()
+                except Exception:
+                    # Not all providers support this, so just continue
+                    pass
+
+                return ValidationResponse(
+                    valid=True,
+                    provider=provider_id,
+                    models_available=models_available if models_available else None
+                )
+
+            except Exception as e:
+                error_msg = str(e)
+                sanitized_error = sanitize_error_message(error_msg)
+
+                # Determine error type and provide suggestions
+                error_type = "unknown_error"
+                suggestion = "Check your API key and try again"
+
+                if "401" in error_msg or "unauthorized" in error_msg.lower() or "invalid" in error_msg.lower():
+                    error_type = "authentication_error"
+                    suggestion = f"Invalid API key. Check your key at the {provider_id} dashboard"
+                elif "403" in error_msg or "forbidden" in error_msg.lower():
+                    error_type = "permission_error"
+                    suggestion = "API key lacks required permissions"
+                elif "429" in error_msg or "rate" in error_msg.lower():
+                    error_type = "rate_limit_error"
+                    suggestion = "Rate limit exceeded. Try again in a few moments"
+                elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+                    error_type = "network_error"
+                    suggestion = f"Unable to reach {provider_id} servers. Check your internet connection"
+
+                return ValidationResponse(
+                    valid=False,
+                    provider=provider_id,
+                    error=sanitized_error,
+                    error_type=error_type,
+                    suggestion=suggestion
+                )
+
+        finally:
+            # Restore original API key
+            if original_key is not None:
+                os.environ[env_key] = original_key
+            elif env_key in os.environ:
+                del os.environ[env_key]
+
+    except Exception as e:
+        error_msg = sanitize_error_message(str(e))
+        return ValidationResponse(
+            valid=False,
+            provider=request.provider,
+            error=error_msg,
+            error_type="validation_error",
+            suggestion="An unexpected error occurred during validation"
+        )
