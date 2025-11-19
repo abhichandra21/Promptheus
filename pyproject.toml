@@ -33,6 +33,8 @@ python-dotenv = ">=1.2.0"
 questionary = ">=2.1.0"
 rich = ">=14.0.0"
 filelock = ">=3.20.0,<4.0.0"
+fastapi = "^0.115.0"
+uvicorn = {version = "^0.24.0", extras = ["standard"]}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "~=8.4.0"

@@ -1,0 +1,1166 @@
+// Promptheus Web UI - Modern Application Controller
+class PromptheusApp {
+    constructor() {
+        this.apiBaseUrl = window.location.origin;
+        this.currentHistoryPage = 0; // 0-based page index
+        this.currentPageSize = 20;
+        this.totalHistoryPages = 0;
+        this.currentAbortController = null;
+        this.currentEventSource = null;
+        this.streamingText = '';
+        this.streamingInterval = null;
+        this.currentRefinedPrompt = ''; // Store current prompt
+        this.init();
+    }
+
+    init() {
+        // Configure marked.js to reduce extra spacing
+        if (typeof marked !== 'undefined') {
+            marked.setOptions({
+                breaks: false,  // Don't convert \n to <br>
+                gfm: true,      // GitHub Flavored Markdown
+                headerIds: false,
+                mangle: false
+            });
+        }
+        this.bindEvents();
+        this.loadProviders();
+        this.loadHistory();
+        this.loadSettings();
+    }
+
+    bindEvents() {
+        // Main prompt submission
+        document.getElementById('submit-btn').addEventListener('click', () => this.submitPrompt());
+
+        // Keyboard shortcuts
+        document.getElementById('prompt-input').addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                this.submitPrompt();
+            }
+        });
+
+        // Provider selection
+        document.getElementById('provider-select').addEventListener('change', (e) => {
+            this.selectProvider(e.target.value);
+            this.loadModelsForProvider(e.target.value);
+        });
+
+        // Model selection
+        document.getElementById('model-select').addEventListener('change', (e) => {
+            this.selectModel(e.target.value);
+        });
+
+        // Copy button
+        document.getElementById('copy-btn').addEventListener('click', () => {
+            this.copyOutputToClipboard();
+        });
+
+        // Tweak button
+        document.getElementById('tweak-btn').addEventListener('click', () => {
+            this.showTweakPromptDialog();
+        });
+
+        // Settings panel controls
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            this.openSettings();
+        });
+
+        document.getElementById('settings-close-btn').addEventListener('click', () => {
+            this.closeSettings();
+        });
+
+        document.getElementById('settings-overlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                this.closeSettings();
+            }
+        });
+
+        // Escape key to close settings
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeSettings();
+            }
+        });
+
+        // History pagination
+        document.getElementById('prev-page-btn').addEventListener('click', () => {
+            this.previousHistoryPage();
+        });
+
+        document.getElementById('next-page-btn').addEventListener('click', () => {
+            this.nextHistoryPage();
+        });
+
+        document.getElementById('page-size-select').addEventListener('change', (e) => {
+            this.currentPageSize = parseInt(e.target.value);
+            this.currentHistoryPage = 0;
+            this.loadHistory();
+        });
+
+        // Cancel button
+        document.getElementById('cancel-btn').addEventListener('click', () => {
+            this.cancelCurrentRequest();
+        });
+
+        // Clear history button
+        document.getElementById('clear-history-btn').addEventListener('click', () => {
+            this.clearHistory();
+        });
+    }
+
+    /* ===================================================================
+       SETTINGS PANEL MANAGEMENT
+       =================================================================== */
+
+    openSettings() {
+        const overlay = document.getElementById('settings-overlay');
+        const panel = document.getElementById('settings-panel');
+
+        overlay.classList.add('active');
+        panel.classList.add('active');
+
+        // Focus first focusable element
+        setTimeout(() => {
+            const firstInput = panel.querySelector('input, button, select');
+            if (firstInput) firstInput.focus();
+        }, 300);
+    }
+
+    closeSettings() {
+        const overlay = document.getElementById('settings-overlay');
+        const panel = document.getElementById('settings-panel');
+
+        overlay.classList.remove('active');
+        panel.classList.remove('active');
+    }
+
+    /* ===================================================================
+       PROMPT SUBMISSION & PROCESSING
+       =================================================================== */
+
+    async submitPrompt() {
+        const promptInput = document.getElementById('prompt-input');
+        const outputDiv = document.getElementById('output');
+        const submitBtn = document.getElementById('submit-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const skipQuestions = document.getElementById('skip-questions').checked;
+
+        const prompt = promptInput.value.trim();
+        if (!prompt) {
+            this.showMessage('error', 'Please enter a prompt');
+            return;
+        }
+
+        const provider = document.getElementById('provider-select').value;
+
+        // Cancel any existing request
+        if (this.currentAbortController) {
+            this.currentAbortController.abort();
+        }
+
+        // Create new AbortController
+        this.currentAbortController = new AbortController();
+
+        // Show loading state - keep button visible at top
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner"></span><span>Processing...</span>';
+        cancelBtn.classList.remove('hidden');
+        // Clear output but don't show analyzing message yet
+        outputDiv.innerHTML = '';
+
+        try {
+            // Check if clarifying questions are needed
+            if (!skipQuestions) {
+                const questionsResponse = await fetch(`${this.apiBaseUrl}/api/questions/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, provider: provider || null }),
+                    signal: this.currentAbortController.signal
+                });
+
+                if (this.currentAbortController.signal.aborted) return;
+
+                const questionsData = await questionsResponse.json();
+
+                if (this.currentAbortController.signal.aborted) return;
+
+                if (questionsData.success && questionsData.questions && questionsData.questions.length > 0) {
+                    const answers = await this.showQuestionsAndCollectAnswers(questionsData.questions);
+
+                    if (answers === null) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<span>Refine Prompt</span>';
+                        cancelBtn.classList.add('hidden');
+                        return;
+                    }
+
+                    // Submit with answers
+                    const response = await fetch(`${this.apiBaseUrl}/api/prompt/submit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt,
+                            provider: provider || null,
+                            skip_questions: false,
+                            answers
+                        }),
+                        signal: this.currentAbortController.signal
+                    });
+
+                    if (this.currentAbortController.signal.aborted) return;
+
+                    const data = await response.json();
+                    this.handlePromptResponse(data);
+                } else {
+                    await this.submitPromptDirect(prompt, provider, skipQuestions);
+                }
+            } else {
+                await this.submitPromptDirect(prompt, provider, skipQuestions);
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            console.error('Error submitting prompt:', error);
+            this.showMessage('error', 'Network error: ' + error.message);
+        } finally {
+            this.currentAbortController = null;
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>Refine Prompt</span>';
+            cancelBtn.classList.add('hidden');
+        }
+    }
+
+    async submitPromptDirect(prompt, provider, skipQuestions) {
+        const outputDiv = document.getElementById('output');
+        const tweakBtn = document.getElementById('tweak-btn');
+        const model = document.getElementById('model-select')?.value || null;
+
+        // Use streaming endpoint
+        const params = new URLSearchParams({
+            prompt,
+            skip_questions: skipQuestions
+        });
+
+        if (provider) params.append('provider', provider);
+        if (model) params.append('model', model);
+
+        this.streamingText = '';
+        outputDiv.innerHTML = '<div class="refined-prompt-content streaming"><span class="streaming-cursor">|</span></div>';
+
+        const eventSource = new EventSource(`${this.apiBaseUrl}/api/prompt/stream?${params.toString()}`);
+        this.currentEventSource = eventSource;
+
+        const contentDiv = outputDiv.querySelector('.refined-prompt-content');
+        const cursorSpan = contentDiv.querySelector('.streaming-cursor');
+
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'token') {
+                this.streamingText += data.content;
+                contentDiv.textContent = this.streamingText;
+                contentDiv.appendChild(cursorSpan);
+            } else if (data.type === 'done') {
+                eventSource.close();
+                this.currentEventSource = null;
+                cursorSpan.remove();
+                contentDiv.classList.remove('streaming');
+                this.currentRefinedPrompt = this.streamingText; // Store for markdown toggle
+                tweakBtn.classList.remove('hidden'); // Show tweak button
+                this.loadHistory();
+            } else if (data.type === 'error') {
+                eventSource.close();
+                this.currentEventSource = null;
+                tweakBtn.classList.add('hidden');
+                this.showMessage('error', data.content);
+            }
+        };
+
+        eventSource.onerror = (error) => {
+            console.error('EventSource error:', error);
+            eventSource.close();
+            this.currentEventSource = null;
+
+            if (!this.streamingText) {
+                this.showMessage('error', 'Streaming connection failed');
+            } else {
+                cursorSpan.remove();
+                contentDiv.classList.remove('streaming');
+            }
+        };
+    }
+
+    handlePromptResponse(data) {
+        const outputDiv = document.getElementById('output');
+        const tweakBtn = document.getElementById('tweak-btn');
+
+        if (data.success) {
+            this.currentRefinedPrompt = data.refined_prompt;
+            this.renderOutput();
+            tweakBtn.classList.remove('hidden'); // Show tweak button
+            this.loadHistory();
+        } else {
+            this.showMessage('error', data.error || 'Failed to process prompt');
+            tweakBtn.classList.add('hidden');
+        }
+    }
+
+    renderOutput() {
+        const outputDiv = document.getElementById('output');
+        // Always render as markdown
+        if (typeof marked !== 'undefined') {
+            const html = marked.parse(this.currentRefinedPrompt);
+            outputDiv.innerHTML = `<div class="refined-prompt-content markdown-content">${html}</div>`;
+        } else {
+            // Fallback to plain text if marked is not loaded
+            outputDiv.innerHTML = `<div class="refined-prompt-content">${this.escapeHtml(this.currentRefinedPrompt)}</div>`;
+        }
+    }
+
+    async showQuestionsAndCollectAnswers(questions) {
+        const outputDiv = document.getElementById('output');
+        const submitBtn = document.getElementById('submit-btn');
+
+        // Show processing message in the button (already done) and show questions
+        let formHtml = '<div class="questions-container">';
+        formHtml += '<div class="questions-header">';
+        formHtml += '<h3 class="questions-title">Clarifying Questions</h3>';
+        formHtml += '<p class="questions-description">Please answer these questions to help refine your prompt:</p>';
+        formHtml += '</div>';
+        formHtml += '<form id="questions-form">';
+
+        questions.forEach((question, index) => {
+            const questionKey = `q${index}`;
+            const questionText = question.question || `Question ${index + 1}`;
+            const questionType = question.type || 'text';
+            const required = question.required !== false;
+
+            formHtml += `<div class="question-item">`;
+            formHtml += `<label for="${questionKey}" class="question-label">${this.escapeHtml(questionText)}${required ? ' *' : ''}</label>`;
+
+            if (questionType === 'radio' && question.options && question.options.length > 0) {
+                question.options.forEach((option, optIndex) => {
+                    formHtml += `<div style="margin-bottom: var(--space-2);">`;
+                    formHtml += `<input type="radio" name="${questionKey}" id="${questionKey}_${optIndex}" value="${this.escapeHtml(option)}" style="margin-right: var(--space-2);">`;
+                    formHtml += `<label for="${questionKey}_${optIndex}" style="cursor: pointer;">${this.escapeHtml(option)}</label>`;
+                    formHtml += `</div>`;
+                });
+            } else if (questionType === 'checkbox' && question.options && question.options.length > 0) {
+                question.options.forEach((option, optIndex) => {
+                    formHtml += `<div style="margin-bottom: var(--space-2);">`;
+                    formHtml += `<input type="checkbox" name="${questionKey}" id="${questionKey}_${optIndex}" value="${this.escapeHtml(option)}" style="margin-right: var(--space-2);">`;
+                    formHtml += `<label for="${questionKey}_${optIndex}" style="cursor: pointer;">${this.escapeHtml(option)}</label>`;
+                    formHtml += `</div>`;
+                });
+            } else {
+                formHtml += `<input type="text" id="${questionKey}" name="${questionKey}" ${required ? 'required' : ''} class="question-input">`;
+            }
+
+            formHtml += '</div>';
+        });
+
+        formHtml += '<div class="questions-actions">';
+        formHtml += '<button type="submit" class="btn btn-primary">Submit Answers</button>';
+        formHtml += '<button type="button" id="cancel-questions-btn" class="btn btn-secondary">Cancel</button>';
+        formHtml += '</div></form></div>';
+
+        outputDiv.innerHTML = formHtml;
+
+        const form = document.getElementById('questions-form');
+        const cancelBtn = document.getElementById('cancel-questions-btn');
+
+        return new Promise((resolve) => {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+
+                // Scroll to top to show processing indicator
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                // Show processing message before collecting answers
+                submitBtn.innerHTML = '<span class="spinner"></span><span>Generating refined prompt...</span>';
+                outputDiv.innerHTML = '<p class="message message-info"><span>✨</span><span>Creating your refined prompt...</span></p>';
+
+                const formData = new FormData(form);
+                const answers = {};
+
+                questions.forEach((question, index) => {
+                    const questionKey = `q${index}`;
+                    const questionType = question.type || 'text';
+
+                    if (questionType === 'checkbox') {
+                        const checkboxes = form.querySelectorAll(`input[name="${questionKey}"]:checked`);
+                        answers[questionKey] = Array.from(checkboxes).map(cb => cb.value);
+                    } else if (questionType === 'radio') {
+                        const radio = form.querySelector(`input[name="${questionKey}"]:checked`);
+                        answers[questionKey] = radio ? radio.value : '';
+                    } else {
+                        answers[questionKey] = formData.get(questionKey) || '';
+                    }
+                });
+
+                resolve(answers);
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                this.cancelCurrentRequest();
+                resolve(null);
+            });
+        });
+    }
+
+    cancelCurrentRequest() {
+        if (this.currentAbortController) {
+            this.currentAbortController.abort();
+            this.currentAbortController = null;
+        }
+
+        if (this.currentEventSource) {
+            this.currentEventSource.close();
+            this.currentEventSource = null;
+        }
+
+        const submitBtn = document.getElementById('submit-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const outputDiv = document.getElementById('output');
+
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>Refine Prompt</span>';
+        }
+        if (cancelBtn) {
+            cancelBtn.classList.add('hidden');
+        }
+        if (outputDiv) {
+            this.showMessage('info', 'Request cancelled');
+        }
+    }
+
+    /* ===================================================================
+       PROVIDERS MANAGEMENT
+       =================================================================== */
+
+    async loadProviders() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/providers`);
+            const data = await response.json();
+
+            // Update provider select dropdown
+            const providerSelect = document.getElementById('provider-select');
+            providerSelect.innerHTML = '<option value="">Auto</option>';
+
+            data.available_providers.forEach(provider => {
+                const option = document.createElement('option');
+                option.value = provider.id;
+                option.textContent = provider.name;
+                option.selected = provider.id === data.current_provider;
+                providerSelect.appendChild(option);
+            });
+
+            // Load models for current provider
+            if (data.current_provider) {
+                await this.loadModelsForProvider(data.current_provider);
+            }
+
+            // Update providers list in settings
+            const providersList = document.getElementById('providers-list');
+            providersList.innerHTML = '';
+
+            data.available_providers.forEach(provider => {
+                const card = document.createElement('div');
+                card.className = 'provider-card';
+
+                card.innerHTML = `
+                    <div class="provider-card-header">
+                        <div class="provider-name">${this.escapeHtml(provider.name)}</div>
+                        <span class="provider-status ${provider.available ? 'available' : 'unavailable'}">
+                            ${provider.available ? 'Available' : 'Unavailable'}
+                        </span>
+                    </div>
+                    <div class="provider-model">${this.escapeHtml(provider.default_model)}</div>
+                `;
+
+                providersList.appendChild(card);
+            });
+        } catch (error) {
+            console.error('Error loading providers:', error);
+            this.showMessage('error', 'Failed to load providers');
+        }
+    }
+
+    async selectProvider(providerId) {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/providers/select`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider_id: providerId })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                this.showMessage('success', `Provider changed to ${data.current_provider}`);
+            } else {
+                this.showMessage('error', data.detail || 'Failed to change provider');
+            }
+        } catch (error) {
+            console.error('Error selecting provider:', error);
+            this.showMessage('error', 'Network error: ' + error.message);
+        }
+    }
+
+    async loadModelsForProvider(providerId, fetchAll = false) {
+        if (!providerId) {
+            const modelSelect = document.getElementById('model-select');
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">Auto</option>';
+                modelSelect.disabled = true;
+            }
+            return;
+        }
+
+        const modelSelect = document.getElementById('model-select');
+        if (!modelSelect) return;
+
+        try {
+            // Show loading state if fetching all models
+            if (fetchAll) {
+                modelSelect.disabled = true;
+                modelSelect.innerHTML = '<option>Loading all models...</option>';
+            }
+
+            const url = fetchAll
+                ? `${this.apiBaseUrl}/api/providers/${providerId}/models?fetch_all=true`
+                : `${this.apiBaseUrl}/api/providers/${providerId}/models`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            modelSelect.innerHTML = '';
+            modelSelect.disabled = false;
+
+            // Add "Load All Models" option if not already fetched all
+            if (!fetchAll && data.models.length > 0) {
+                const loadAllOption = document.createElement('option');
+                loadAllOption.value = '__load_all__';
+                loadAllOption.textContent = '↻ Load All Models...';
+                loadAllOption.style.fontStyle = 'italic';
+                loadAllOption.style.color = 'var(--text-secondary)';
+                modelSelect.appendChild(loadAllOption);
+            }
+
+            // If we got models, populate them
+            if (data.models && data.models.length > 0) {
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    option.selected = model === data.current_model;
+                    modelSelect.appendChild(option);
+                });
+
+                // Show toast notification if we loaded all models
+                if (fetchAll) {
+                    this.showToast('success', `Loaded ${data.models.length} models for ${providerId}`);
+                }
+            } else {
+                // No models found
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = 'No models available';
+                modelSelect.appendChild(emptyOption);
+            }
+        } catch (error) {
+            console.error('Error loading models:', error);
+            modelSelect.innerHTML = '<option value="">Error loading models</option>';
+            modelSelect.disabled = false;
+            this.showToast('error', 'Failed to load models');
+        }
+    }
+
+    async selectModel(model) {
+        const providerId = document.getElementById('provider-select').value;
+
+        if (!providerId || !model) return;
+
+        // Check if user selected "Load All Models"
+        if (model === '__load_all__') {
+            await this.loadModelsForProvider(providerId, true);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/providers/select-model`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider_id: providerId,
+                    model: model
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                this.showMessage('success', `Model changed to ${data.current_model}`);
+            } else {
+                this.showMessage('error', data.detail || 'Failed to change model');
+            }
+        } catch (error) {
+            console.error('Error selecting model:', error);
+            this.showMessage('error', 'Network error: ' + error.message);
+        }
+    }
+
+    /* ===================================================================
+       HISTORY MANAGEMENT
+       =================================================================== */
+
+    async loadHistory() {
+        try {
+            const offset = this.currentHistoryPage * this.currentPageSize;
+            const response = await fetch(`${this.apiBaseUrl}/api/history?limit=${this.currentPageSize}&offset=${offset}`);
+            const data = await response.json();
+
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = '';
+
+            if (data.entries.length === 0) {
+                historyList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📜</div>
+                        <div class="empty-state-title">No History Yet</div>
+                        <div class="empty-state-description">Your refined prompts will appear here</div>
+                    </div>
+                `;
+                this.totalHistoryPages = 0;
+                this.updateHistoryPagination();
+                return;
+            }
+
+            this.totalHistoryPages = Math.ceil(data.total / this.currentPageSize);
+
+            data.entries.forEach(entry => {
+                const card = this.createHistoryCard(entry);
+                historyList.appendChild(card);
+            });
+
+            this.updateHistoryPagination();
+        } catch (error) {
+            console.error('Error loading history:', error);
+            this.showMessage('error', 'Failed to load history');
+        }
+    }
+
+    createHistoryCard(entry) {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.setAttribute('role', 'listitem');
+
+        const timestamp = new Date(entry.timestamp).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const taskType = entry.task_type || 'general';
+        const badgeClass = `badge-${taskType.toLowerCase()}`;
+
+        card.innerHTML = `
+            <div class="history-card-header">
+                <div class="history-card-timestamp">${timestamp}</div>
+                <span class="history-card-badge ${badgeClass}">${this.escapeHtml(taskType)}</span>
+            </div>
+            <div class="history-card-content">
+                <div class="history-card-preview">${this.escapeHtml(entry.original_prompt)}</div>
+            </div>
+            <div class="history-card-footer">
+                <div class="history-card-meta">${this.escapeHtml(entry.provider)} • ${this.escapeHtml(entry.model)}</div>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            document.getElementById('prompt-input').value = entry.original_prompt;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        return card;
+    }
+
+    previousHistoryPage() {
+        if (this.currentHistoryPage > 0) {
+            this.currentHistoryPage--;
+            this.loadHistory();
+        }
+    }
+
+    nextHistoryPage() {
+        if (this.currentHistoryPage < this.totalHistoryPages - 1) {
+            this.currentHistoryPage++;
+            this.loadHistory();
+        }
+    }
+
+    updateHistoryPagination() {
+        const prevBtn = document.getElementById('prev-page-btn');
+        const nextBtn = document.getElementById('next-page-btn');
+        const currentPageSpan = document.getElementById('current-page');
+
+        prevBtn.disabled = this.currentHistoryPage <= 0;
+        nextBtn.disabled = this.currentHistoryPage >= this.totalHistoryPages - 1 || this.totalHistoryPages <= 1;
+
+        const currentPageDisplay = this.currentHistoryPage + 1;
+        const totalPagesDisplay = this.totalHistoryPages || 1;
+        currentPageSpan.textContent = `${currentPageDisplay} of ${totalPagesDisplay}`;
+    }
+
+    async clearHistory() {
+        // Confirm with user
+        if (!confirm('Are you sure you want to clear all history? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/history`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                this.showToast('success', 'History cleared successfully');
+                this.currentHistoryPage = 0;
+                this.loadHistory();
+            } else {
+                this.showToast('error', 'Failed to clear history');
+            }
+        } catch (error) {
+            console.error('Error clearing history:', error);
+            this.showToast('error', 'Network error: ' + error.message);
+        }
+    }
+
+    /* ===================================================================
+       SETTINGS MANAGEMENT
+       =================================================================== */
+
+    async loadSettings() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/settings`);
+            const data = await response.json();
+
+            const settingsForm = document.getElementById('settings-form');
+            settingsForm.innerHTML = '';
+
+            // Check if settings is an array
+            if (!Array.isArray(data.settings)) {
+                console.error('Settings is not an array:', data.settings);
+                settingsForm.innerHTML = '<p style="color: var(--text-error);">Error: Invalid settings format</p>';
+                return;
+            }
+
+            // Group settings by category
+            const groupedSettings = {};
+            data.settings.forEach(setting => {
+                if (!groupedSettings[setting.category]) {
+                    groupedSettings[setting.category] = [];
+                }
+                groupedSettings[setting.category].push(setting);
+            });
+
+            // Render each category
+            Object.entries(groupedSettings).forEach(([category, settings]) => {
+                // Skip provider category (handled in top bar)
+                if (category === 'provider') return;
+
+                // Create category section
+                const categorySection = document.createElement('div');
+                categorySection.className = 'settings-category';
+
+                const categoryTitle = document.createElement('h4');
+                categoryTitle.className = 'settings-category-title';
+                categoryTitle.textContent = category === 'api_keys' ? 'API Keys' : 'General Settings';
+                categorySection.appendChild(categoryTitle);
+
+                // Render each setting in the category
+                settings.forEach(setting => {
+                    const item = document.createElement('div');
+                    item.className = 'settings-item';
+
+                    const labelContainer = document.createElement('div');
+                    labelContainer.className = 'settings-label-container';
+
+                    const label = document.createElement('label');
+                    label.className = 'settings-label';
+                    label.textContent = setting.label;
+                    label.htmlFor = `setting-${setting.key}`;
+
+                    const description = document.createElement('p');
+                    description.className = 'settings-description';
+                    description.textContent = setting.description;
+
+                    labelContainer.appendChild(label);
+                    labelContainer.appendChild(description);
+
+                    const inputContainer = document.createElement('div');
+                    inputContainer.className = 'settings-input-container';
+
+                    // Create input based on type
+                    let inputElement;
+
+                    if (setting.type === 'select') {
+                        inputElement = document.createElement('select');
+                        inputElement.className = 'settings-input';
+                        setting.options.forEach(option => {
+                            const opt = document.createElement('option');
+                            opt.value = option;
+                            opt.textContent = option === '' ? 'Auto' : option.charAt(0).toUpperCase() + option.slice(1);
+                            if (option === setting.value) opt.selected = true;
+                            inputElement.appendChild(opt);
+                        });
+                    } else if (setting.type === 'checkbox') {
+                        inputElement = document.createElement('input');
+                        inputElement.type = 'checkbox';
+                        inputElement.className = 'settings-checkbox';
+                        inputElement.checked = setting.value === 'true';
+                    } else if (setting.type === 'password') {
+                        inputElement = document.createElement('input');
+                        inputElement.type = 'password';
+                        inputElement.className = 'settings-input';
+                        inputElement.value = setting.value || '';
+                        inputElement.placeholder = '••••••••';
+                        inputElement.dataset.originalValue = setting.value || '';
+
+                        // Add eye icon for password visibility toggle
+                        const eyeButton = document.createElement('button');
+                        eyeButton.type = 'button';
+                        eyeButton.className = 'settings-eye-btn';
+                        eyeButton.innerHTML = '👁';
+                        eyeButton.title = 'Show/Hide API Key';
+                        eyeButton.addEventListener('click', () => {
+                            if (inputElement.type === 'password') {
+                                inputElement.type = 'text';
+                                eyeButton.innerHTML = '👁‍🗨';
+                            } else {
+                                inputElement.type = 'password';
+                                eyeButton.innerHTML = '👁';
+                            }
+                        });
+                        inputContainer.appendChild(eyeButton);
+                    } else {
+                        inputElement = document.createElement('input');
+                        inputElement.type = 'text';
+                        inputElement.className = 'settings-input';
+                        inputElement.value = setting.value || '';
+                    }
+
+                    inputElement.id = `setting-${setting.key}`;
+                    inputElement.name = setting.key;
+
+                    // Mark as modified on change
+                    inputElement.addEventListener('change', () => {
+                        inputElement.dataset.modified = 'true';
+                        this.showSaveButton();
+                    });
+
+                    inputContainer.insertBefore(inputElement, inputContainer.firstChild);
+
+                    item.appendChild(labelContainer);
+                    item.appendChild(inputContainer);
+                    categorySection.appendChild(item);
+                });
+
+                settingsForm.appendChild(categorySection);
+            });
+
+            // Add save button if not present
+            if (!document.getElementById('save-settings-btn')) {
+                const saveButtonContainer = document.createElement('div');
+                saveButtonContainer.className = 'settings-save-container';
+                saveButtonContainer.style.display = 'none';
+
+                const saveButton = document.createElement('button');
+                saveButton.id = 'save-settings-btn';
+                saveButton.className = 'btn btn-primary btn-save-settings';
+                saveButton.innerHTML = '<span>💾</span><span>Save All Settings</span>';
+                saveButton.addEventListener('click', () => this.saveAllSettings());
+
+                saveButtonContainer.appendChild(saveButton);
+                settingsForm.appendChild(saveButtonContainer);
+            }
+
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            this.showToast('error', 'Failed to load settings');
+        }
+    }
+
+    showSaveButton() {
+        const container = document.querySelector('.settings-save-container');
+        if (container) {
+            container.style.display = 'block';
+        }
+    }
+
+    async saveAllSettings() {
+        const inputs = document.querySelectorAll('[data-modified="true"]');
+        let savedCount = 0;
+        let errorCount = 0;
+
+        for (const input of inputs) {
+            const key = input.name;
+            let value;
+
+            if (input.type === 'checkbox') {
+                value = input.checked ? 'true' : 'false';
+            } else {
+                value = input.value;
+            }
+
+            try {
+                await this.updateSetting(key, value);
+                input.removeAttribute('data-modified');
+                savedCount++;
+            } catch (error) {
+                console.error(`Error saving ${key}:`, error);
+                errorCount++;
+            }
+        }
+
+        if (savedCount > 0) {
+            this.showToast('success', `Saved ${savedCount} setting(s)`);
+        }
+        if (errorCount > 0) {
+            this.showToast('error', `Failed to save ${errorCount} setting(s)`);
+        }
+
+        // Hide save button
+        const container = document.querySelector('.settings-save-container');
+        if (container) {
+            container.style.display = 'none';
+        }
+
+        // Reload providers in case they changed
+        this.loadProviders();
+    }
+
+    async updateSetting(key, value) {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, value })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                this.showMessage('success', `Setting "${key}" updated`);
+                this.loadProviders();
+            } else {
+                this.showMessage('error', data.detail || 'Failed to update setting');
+            }
+        } catch (error) {
+            console.error('Error updating setting:', error);
+            this.showMessage('error', 'Network error: ' + error.message);
+        }
+    }
+
+    /* ===================================================================
+       PROMPT TWEAKING
+       =================================================================== */
+
+    async showTweakPromptDialog() {
+        const outputDiv = document.getElementById('output');
+        const refinedPromptDiv = outputDiv.querySelector('.refined-prompt-content');
+
+        if (!refinedPromptDiv) {
+            this.showMessage('error', 'No prompt to tweak');
+            return;
+        }
+
+        const currentPrompt = refinedPromptDiv.textContent || refinedPromptDiv.innerText;
+
+        // Show tweak input form
+        let formHtml = '<div class="tweak-container">';
+        formHtml += '<div class="tweak-header">';
+        formHtml += '<h3 class="tweak-title">Tweak Your Prompt</h3>';
+        formHtml += '<p class="tweak-description">Describe how you want to modify the refined prompt:</p>';
+        formHtml += '</div>';
+        formHtml += '<form id="tweak-form">';
+        formHtml += '<div class="tweak-item">';
+        formHtml += '<textarea id="tweak-instruction" placeholder="e.g., Make it more formal, Add more details about X, Make it shorter" required class="tweak-input"></textarea>';
+        formHtml += '</div>';
+        formHtml += '<div class="tweak-examples">';
+        formHtml += '<p style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">Examples:</p>';
+        formHtml += '<ul style="font-size: var(--text-sm); color: var(--text-secondary); margin-left: var(--space-4);">';
+        formHtml += '<li>Make it more formal and professional</li>';
+        formHtml += '<li>Add specific examples for each point</li>';
+        formHtml += '<li>Make it more concise and direct</li>';
+        formHtml += '<li>Convert to bullet points</li>';
+        formHtml += '</ul>';
+        formHtml += '</div>';
+        formHtml += '<div class="tweak-actions">';
+        formHtml += '<button type="submit" class="btn btn-primary">Apply Tweak</button>';
+        formHtml += '<button type="button" id="cancel-tweak-btn" class="btn btn-secondary">Cancel</button>';
+        formHtml += '</div>';
+        formHtml += '</form></div>';
+
+        outputDiv.innerHTML = formHtml;
+
+        const form = document.getElementById('tweak-form');
+        const cancelBtn = document.getElementById('cancel-tweak-btn');
+        const tweakBtn = document.getElementById('tweak-btn');
+
+        tweakBtn.classList.add('hidden'); // Hide tweak button while tweaking
+
+        cancelBtn.addEventListener('click', () => {
+            // Restore the original prompt
+            outputDiv.innerHTML = `<div class="refined-prompt-content">${this.escapeHtml(currentPrompt)}</div>`;
+            tweakBtn.classList.remove('hidden');
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const tweakInstruction = document.getElementById('tweak-instruction').value.trim();
+
+            if (!tweakInstruction) {
+                this.showMessage('error', 'Please enter a tweak instruction');
+                return;
+            }
+
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner"></span><span>Applying tweak...</span>';
+
+            try {
+                const provider = document.getElementById('provider-select').value;
+                const response = await fetch(`${this.apiBaseUrl}/api/prompt/tweak`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        current_prompt: currentPrompt,
+                        tweak_instruction: tweakInstruction,
+                        provider: provider || null
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.currentRefinedPrompt = data.tweaked_prompt;
+                    this.renderOutput();
+                    tweakBtn.classList.remove('hidden');
+                } else {
+                    this.showMessage('error', data.error || 'Failed to tweak prompt');
+                }
+            } catch (error) {
+                console.error('Error tweaking prompt:', error);
+                this.showMessage('error', 'Network error: ' + error.message);
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<span>Apply Tweak</span>';
+            }
+        });
+    }
+
+    /* ===================================================================
+       UI HELPERS
+       =================================================================== */
+
+    async copyOutputToClipboard() {
+        const outputDiv = document.getElementById('output');
+        const refinedPromptDiv = outputDiv.querySelector('.refined-prompt-content');
+
+        if (!refinedPromptDiv) {
+            this.showToast('info', 'Nothing to copy');
+            return;
+        }
+
+        const textToCopy = refinedPromptDiv.textContent || refinedPromptDiv.innerText;
+
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            this.showToast('success', 'Copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy:', err);
+
+            // Fallback
+            const textArea = document.createElement('textarea');
+            textArea.value = textToCopy;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+
+                if (successful) {
+                    this.showToast('success', 'Copied to clipboard!');
+                } else {
+                    this.showToast('error', 'Failed to copy');
+                }
+            } catch (err) {
+                document.body.removeChild(textArea);
+                this.showToast('error', 'Failed to copy');
+            }
+        }
+    }
+
+    showToast(type, message) {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+
+        const iconMap = {
+            success: '✓',
+            error: '⚠',
+            info: '💡'
+        };
+
+        toast.innerHTML = `
+            <span class="toast-icon">${iconMap[type]}</span>
+            <span class="toast-message">${this.escapeHtml(message)}</span>
+        `;
+
+        document.body.appendChild(toast);
+
+        // Trigger animation
+        setTimeout(() => toast.classList.add('show'), 10);
+
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    showMessage(type, message) {
+        const outputDiv = document.getElementById('output');
+        const iconMap = {
+            success: '✓',
+            error: '⚠',
+            info: '💡'
+        };
+
+        outputDiv.innerHTML = `
+            <p class="message message-${type}">
+                <span>${iconMap[type]}</span>
+                <span>${this.escapeHtml(message)}</span>
+            </p>
+        `;
+    }
+
+    escapeHtml(text) {
+        if (typeof text !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// Initialize the app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    new PromptheusApp();
+});

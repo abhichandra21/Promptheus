@@ -463,7 +463,9 @@ def process_single_prompt(
         history.save_entry(
             original_prompt=initial_prompt,
             refined_prompt=final_prompt,
-            task_type=plan.task_type
+            task_type=plan.task_type,
+            provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+            model=app_config.get_model()
         )
         logger.debug("Saved prompt to history")
     except Exception as exc:
@@ -570,6 +572,15 @@ def main() -> None:
 
     if getattr(args, "command", None) == "auth":
         auth_commands.auth_command(args.provider, skip_validation=getattr(args, "skip_validation", False))
+        sys.exit(0)
+
+    if getattr(args, "command", None) == "web":
+        from promptheus.commands import web as web_commands
+        web_commands.web_command(
+            port=getattr(args, "port", None),
+            host=getattr(args, "host", "127.0.0.1"),
+            no_browser=getattr(args, "no_browser", False)
+        )
         sys.exit(0)
 
     # Show provider status in a friendly way

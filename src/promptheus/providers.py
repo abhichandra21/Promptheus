@@ -24,6 +24,9 @@ from promptheus.exceptions import ProviderAPIError
 
 logger = logging.getLogger(__name__)
 
+# Providers with full runtime support (keep in sync with promptheus.config.SUPPORTED_PROVIDER_IDS)
+SUPPORTED_PROVIDER_IDS = {"gemini", "anthropic", "openai", "groq", "qwen", "glm"}
+
 
 def _print_user_error(message: str) -> None:
     """Print error message directly to stderr for user visibility."""
@@ -644,9 +647,60 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
         )
     raise ValueError(f"Unknown provider: {provider_name}")
 
+
+def get_available_providers(config) -> Dict[str, Any]:
+    """Get available providers and their status."""
+    from promptheus.config import SUPPORTED_PROVIDER_IDS
+    config_data = config._ensure_provider_config()
+    providers_data = config_data.get("providers", {})
+    
+    available_providers = {}
+    for provider_id in SUPPORTED_PROVIDER_IDS:
+        provider_info = providers_data.get(provider_id, {})
+        if not provider_info:
+            continue
+            
+        # Check if this provider has API key configured
+        api_key_env = provider_info.get("api_key_env")
+        is_configured = False
+        if isinstance(api_key_env, list):
+            is_configured = any(os.getenv(key_env) for key_env in api_key_env)
+        else:
+            is_configured = bool(os.getenv(api_key_env))
+        
+        available_providers[provider_id] = {
+            "name": provider_info.get("name", provider_id.title()),
+            "available": is_configured,
+            "default_model": provider_info.get("default_model", "")
+        }
+    
+    return available_providers
+
+
+def validate_provider(provider_id: str, config) -> bool:
+    """Validate if a provider is available and properly configured."""
+    from promptheus.config import SUPPORTED_PROVIDER_IDS
+    if provider_id not in SUPPORTED_PROVIDER_IDS:
+        return False
+
+    config_data = config._ensure_provider_config()
+    provider_info = config_data.get("providers", {}).get(provider_id)
+    if not provider_info:
+        return False
+
+    api_key_env = provider_info.get("api_key_env")
+    if isinstance(api_key_env, list):
+        return any(os.getenv(key_env) for key_env in api_key_env)
+    if api_key_env:
+        return bool(os.getenv(api_key_env))
+    return False
+
+
 __all__ = [
     "LLMProvider",
     "get_provider",
+    "get_available_providers",
+    "validate_provider",
     "GeminiProvider",
     "AnthropicProvider",
     "OpenAIProvider",

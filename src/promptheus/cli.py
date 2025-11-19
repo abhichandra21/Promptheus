@@ -238,8 +238,17 @@ Interactive Mode Commands (available when running without arguments):
             "-v", "--verbose", action="store_true", help=argparse.SUPPRESS
         )
 
+        # web subcommand
+        web_parser = subparsers.add_parser(
+            "web",
+            help="Start the web UI server",
+            description="Start the Promptheus web UI server with interactive prompt refinement.",
+        )
+        from promptheus.commands import web as web_commands
+        web_commands.add_arguments(web_parser)
+
         # Add verbose and version flags to all subcommands for convenience
-        for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser, auth_parser]:
+        for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser, auth_parser, web_parser]:
             sub.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug output")
             sub.add_argument("--version", action="store_true", help="Show version information and exit")
 
@@ -250,7 +259,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     """Parse CLI arguments, building the correct parser for the context."""
     argv_list = sys.argv[1:] if argv is None else list(argv)
 
-    known_subcommands = {"history", "list-models", "validate", "template", "completion", "__complete", "auth"}
+    known_subcommands = {"history", "list-models", "validate", "template", "completion", "__complete", "auth", "web"}
     
     # If no args, or the first arg is a known subcommand or help, use the full parser.
     if not argv_list or argv_list[0] in known_subcommands or any(arg in {"-h", "--help"} for arg in argv_list):
