@@ -33,11 +33,9 @@ jobs:
     - name: Build package
       run: poetry build
 
-    - name: Publish to Test PyPI (on PRs or non-main pushes)
-      if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_name != 'main' && !startsWith(github.ref, 'refs/tags/v'))
-      env:
-        POETRY_PYPI_TOKEN_TESTPYPI: ${{ secrets.TEST_PYPI_API_TOKEN }}
-      run: poetry publish -r testpypi
+    - name: Verify Test PyPI publishing (dry-run on PRs)
+      if: github.event_name == 'pull_request'
+      run: poetry publish -r testpypi --dry-run
 
     - name: Publish to PyPI (on main branch push or tag)
       if: github.event_name == 'push' && (github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/v'))
