@@ -357,6 +357,16 @@ All input methods support flag combinations.
 | `promptheus completion bash` | Generate Bash completion script |
 | `promptheus completion zsh` | Generate Zsh completion script |
 
+## Release Notes
+
+### 0.2.0
+- Launch FastAPI-powered web UI with REST endpoints for prompts, history, provider switching, and settings plus the initial React-free frontend bundle.
+- Harden provider/model precedence so manual provider switches use that provider's default model unless explicitly overridden.
+- Document the release workflow and general housekeeping needed before pushing to PyPI.
+
+### 0.1.2
+- Initial public release with multi-provider CLI, REPL, and question workflow.
+
 ## Advanced Configuration
 
 ### Environment Variables

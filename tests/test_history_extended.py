@@ -24,7 +24,9 @@ def test_history_entry_serialization():
         "timestamp": "2023-01-01T12:00:00",
         "original_prompt": "Original prompt", 
         "refined_prompt": "Refined prompt",
-        "task_type": "generation"
+        "task_type": "generation",
+        "provider": None,
+        "model": None
     }
     assert data == expected
     

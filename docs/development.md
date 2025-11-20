@@ -192,3 +192,12 @@ For providers requiring custom integration (e.g., Gemini, Anthropic):
 - Submit draft PRs for early feedback on significant changes
 - Request review before marking PR as ready
 - Respond to review comments promptly
+
+## Release Process
+
+1. Run the full test suite (`pytest -q`) and a manual CLI smoke test (`promptheus --skip-questions "Smoke test"`).
+2. Update `pyproject.toml` and `src/promptheus/constants.py` with the new semantic version.
+3. Refresh the Release Notes section in `README.md` with a short bullet list of key changes.
+4. Commit the changes, tag the release (for example `git tag v0.2.0 && git push origin v0.2.0`).
+5. Build artifacts locally using `poetry build` and inspect the wheel/sdist outputs.
+6. Publish to PyPI (or TestPyPI first) with `poetry publish --build` after exporting the appropriate credentials.

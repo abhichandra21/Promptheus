@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "promptheus"
-version = "0.1.2"
+version = "0.2.0"
 description = "AI-powered prompt engineering CLI tool"
 authors = ["Promptheus Contributors"]
 license = "MIT"
