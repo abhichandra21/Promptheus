@@ -42,7 +42,7 @@ pip install -e .
 ### Configuration
 The application requires at least one API key for an LLM provider to power its internal refinement features.
 1.  Copy the example `.env` file: `cp .env.example .env`
-2.  Edit the `.env` file to add your API key (e.g., `GEMINI_API_KEY=...`, `ANTHROPIC_API_KEY=...`, etc.).
+2.  Edit the `.env` file to add your API key (e.g., `GOOGLE_API_KEY=...`, `ANTHROPIC_API_KEY=...`, etc.).
 
 ### Running the Application
 The tool is installed as a command-line script named `promptheus`. Its function is to output a refined prompt.

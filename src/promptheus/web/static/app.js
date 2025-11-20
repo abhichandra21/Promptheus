@@ -1660,6 +1660,26 @@ class PromptheusApp {
        UI HELPERS
        =================================================================== */
 
+    extractTextWithNewlines(node) {
+        if (!node) return '';
+        // Work off rendered HTML to normalize line breaks consistently
+        const html = node.innerHTML;
+        const withBreaks = html
+            .replace(/<br\s*\/?>(\r?\n)?/gi, '\n')
+            .replace(/<\/(p|div|section|article|h[1-6])>/gi, '\n\n')
+            .replace(/<\/(li)>/gi, '\n')
+            .replace(/<li>/gi, '- ')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;/gi, "'");
+
+        return withBreaks.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
     async copyOutputToClipboard() {
         const outputDiv = document.getElementById('output');
         const optimizedPromptDiv = outputDiv.querySelector('.optimized-prompt-content');
@@ -1669,7 +1689,9 @@ class PromptheusApp {
             return;
         }
 
-        const textToCopy = optimizedPromptDiv.textContent || optimizedPromptDiv.innerText;
+        const textFromState = (this.currentOptimizedPrompt || '').trim();
+        const textFromDom = this.extractTextWithNewlines(optimizedPromptDiv);
+        const textToCopy = textFromState || textFromDom;
 
         try {
             await navigator.clipboard.writeText(textToCopy);

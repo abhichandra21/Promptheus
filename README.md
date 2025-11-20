@@ -51,8 +51,8 @@ pytest -q
 Create a `.env` file in your project directory. At minimum, one provider API key is required:
 
 ```bash
-# Google Gemini
-GEMINI_API_KEY=your_gemini_key_here
+# Google Gemini (Google AI Studio)
+GOOGLE_API_KEY=your_google_api_key_here
 
 # Anthropic Claude
 ANTHROPIC_API_KEY=your_anthropic_key_here
@@ -63,12 +63,18 @@ OPENAI_API_KEY=your_openai_key_here
 # Groq
 GROQ_API_KEY=your_groq_key_here
 
-# Alibaba Cloud Qwen
+# Alibaba Cloud Qwen (DashScope)
 DASHSCOPE_API_KEY=your_qwen_key_here
 
 # Zhipu AI GLM
-ZAI_API_KEY=your_glm_key_here
+ZHIPUAI_API_KEY=your_glm_key_here
 ```
+
+**Important Changes in Latest Version:**
+- Provider IDs have been standardized: `gemini` is now `google`
+- Model lists are now dynamically fetched from models.dev API
+- API key environment variables are now vendor-standardized only
+- Legacy provider aliases and custom env vars are no longer supported
 
 The system auto-detects available providers. Override detection using `--provider` flag or environment variables.
 
@@ -124,7 +130,7 @@ cat idea.txt | promptheus
 **Developer-Focused Examples:**
 ```bash
 # Specify provider explicitly
-promptheus --provider gemini "Analyze this codebase structure"
+promptheus --provider google "Analyze this codebase structure"
 
 # Specify model explicitly
 promptheus --model gpt-4o "Generate API documentation"
@@ -155,12 +161,14 @@ Override automatic detection using `-s` (skip-questions) or `-r` (refine) flags.
 **Developer-Facing:** Provider abstraction layer ensures consistent behavior across heterogeneous LLM APIs.
 
 **Supported Providers and Models:**
-- **Google Gemini**: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
-- **Anthropic Claude**: claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus
-- **OpenAI**: gpt-4o, gpt-4-turbo, gpt-3.5-turbo
-- **Groq**: llama-3.3-70b-versatile, llama-3.1-70b-versatile, mixtral-8x7b
-- **Alibaba Cloud Qwen**: qwen-max, qwen-plus, qwen-turbo
-- **Zhipu AI GLM**: glm-4-plus, glm-4-0520, glm-4-air
+- **Google**: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash (and many more)
+- **Anthropic**: claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus (and many more)
+- **OpenAI**: gpt-4o, gpt-4-turbo, gpt-3.5-turbo (and many more)
+- **Groq**: llama-3.3-70b-versatile, llama-3.1-70b-versatile, mixtral-8x7b (and many more)
+- **Alibaba Cloud Qwen**: qwen-max, qwen-plus, qwen-turbo (and many more)
+- **Zhipu AI GLM**: glm-4-plus, glm-4-0520, glm-4-air (and many more)
+
+**Model Lists:** Model availability is now dynamically fetched from models.dev API. Use `promptheus list-models` to see current offerings for each provider.
 
 Provider selection via `--provider` flag or `PROMPTHEUS_PROVIDER` environment variable. Model selection via `--model` flag or `PROMPTHEUS_MODEL` environment variable.
 
@@ -303,7 +311,7 @@ All input methods support flag combinations.
 
 | Flag | Description |
 |------|-------------|
-| `--provider <name>` | Specify LLM provider: gemini, anthropic, openai, groq, qwen, glm |
+| `--provider <name>` | Specify LLM provider: google, anthropic, openai, groq, qwen, glm |
 | `--model <model>` | Specify model identifier (overrides provider default) |
 
 ### Input Source Specification
@@ -374,8 +382,8 @@ All input methods support flag combinations.
 **Provider and Model Control:**
 ```bash
 # Provider selection (overrides auto-detection)
-export PROMPTHEUS_PROVIDER=gemini
-# Supported: gemini, anthropic, openai, groq, qwen, glm
+export PROMPTHEUS_PROVIDER=google
+# Supported: google, anthropic, openai, groq, qwen, glm
 
 # Model selection (global fallback for auto-detected provider)
 export PROMPTHEUS_MODEL=gemini-2.0-flash-exp
@@ -417,7 +425,7 @@ export PROMPTHEUS_LOG_FILE=app.log
 1. CLI argument (`--provider`)
 2. `PROMPTHEUS_PROVIDER` environment variable
 3. Auto-detection based on available API keys in `.env`
-4. Default fallback (`gemini` when no keys are configured)
+4. Default fallback (`google` when no keys are configured)
 
 **Model Resolution**
 1. CLI argument (`--model`)
@@ -562,7 +570,7 @@ The authentication system provides an interactive workflow for configuring provi
 promptheus auth
 
 # Direct provider specification
-promptheus auth gemini
+promptheus auth google
 promptheus auth anthropic
 promptheus auth openai
 
@@ -598,7 +606,7 @@ promptheus validate
 promptheus validate --test-connection
 
 # Provider-specific validation
-promptheus validate --providers gemini,anthropic
+promptheus validate --providers google,anthropic
 ```
 
 ### Provider and Model Discovery
@@ -611,6 +619,9 @@ promptheus list-models
 
 # Provider-filtered listing
 promptheus list-models --providers openai
+
+# Include non-text-generation models (embeddings, TTS, etc.)
+promptheus list-models --include-nontext
 
 # Limited output
 promptheus list-models --limit 10
@@ -644,13 +655,13 @@ python -m promptheus.main "Test prompt"
 ```bash
 # Verify API key configuration
 cat .env
-env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI)'
+env | grep -E '(GOOGLE|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZHIPUAI)'
 
 # Test specific provider
-promptheus --provider gemini "Test"
+promptheus --provider google "Test"
 
 # Validate provider configuration
-promptheus validate --providers gemini
+promptheus validate --providers google
 ```
 
 ### Clipboard Functionality

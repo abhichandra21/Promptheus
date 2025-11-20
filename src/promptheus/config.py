@@ -51,7 +51,7 @@ def find_and_load_dotenv(filename: str = ".env") -> Optional[Path]:
 _LOADED_ENV_PATH = find_and_load_dotenv()
 
 # Providers with full runtime support (keep in sync with promptheus.providers.get_provider)
-SUPPORTED_PROVIDER_IDS = {"gemini", "anthropic", "openai", "groq", "qwen", "glm"}
+SUPPORTED_PROVIDER_IDS = {"google", "anthropic", "openai", "groq", "qwen", "glm"}
 
 
 class Config:
@@ -129,8 +129,8 @@ class Config:
         self._provider = lowered
         self._provider_source = source or "manual"
         self.model = None  # Clear cached model to use new provider's default
-        friendly = config_data.get("provider_aliases", {}).get(lowered, lowered.title())
-        self._record_status(f"Switched to {friendly}")
+        provider_info = config_data.get("providers", {}).get(lowered, {})
+        self._record_status(f"Switched to {self.get_display_name(lowered, provider_info)}")
 
     # ------------------------------------------------------------------ #
     # Provider detection and configuration
@@ -150,8 +150,8 @@ class Config:
             elif lowered in SUPPORTED_PROVIDER_IDS:
                 self._provider = lowered
                 self._provider_source = "env"
-                friendly = config_data.get("provider_aliases", {}).get(lowered, lowered.title())
-                self._record_status(f"Using {friendly}")
+                provider_info = config_data.get("providers", {}).get(lowered, {})
+                self._record_status(f"Using {self.get_display_name(lowered, provider_info)}")
                 return
             else:
                 supported = ", ".join(sorted(SUPPORTED_PROVIDER_IDS))
@@ -162,7 +162,7 @@ class Config:
         providers = config_data.get("providers", {})
         priority = [name for name in providers.keys() if name in SUPPORTED_PROVIDER_IDS]
         if not priority:
-            priority = ["gemini"] if "gemini" in providers else list(providers.keys()) or ["gemini"]
+            priority = ["google"] if "google" in providers else list(providers.keys()) or ["google"]
 
         for name in priority:
             info = providers.get(name, {})
@@ -173,16 +173,17 @@ class Config:
             if any(key and os.getenv(key) for key in keys):
                 self._provider = name
                 self._provider_source = "auto"
-                friendly = config_data.get("provider_aliases", {}).get(name, name.title())
-                self._record_status(f"Using {friendly}")
+                self._record_status(f"Using {self.get_display_name(name, info)}")
                 return
 
-        # No credentials found; default to first provider in config (usually Gemini)
+        # No credentials found; default to first provider in config (usually Google)
         fallback = priority[0]
         self._provider = fallback
         self._provider_source = "auto"
-        friendly = config_data.get("provider_aliases", {}).get(fallback, fallback.title())
-        self._record_status(f"No API key found - using {friendly} (add your API key to switch)")
+        fallback_info = providers.get(fallback, {})
+        self._record_status(
+            f"No API key found - using {self.get_display_name(fallback, fallback_info)} (add your API key to switch)"
+        )
 
     def set_model(self, model: str) -> None:
         """Manually set the model (e.g., from CLI flag)."""
@@ -199,7 +200,7 @@ class Config:
             return self.model
 
         config_data = self._ensure_provider_config()
-        provider_id = self.provider or "gemini"
+        provider_id = self.provider or "google"
         provider_info = config_data.get("providers", {}).get(provider_id, {})
 
         # 2. Provider-specific environment variable (e.g., OPENAI_MODEL)
@@ -221,7 +222,7 @@ class Config:
     def get_provider_config(self) -> Dict[str, Any]:
         """Get provider-specific configuration."""
         config_data = self._ensure_provider_config()
-        provider = self.provider or "gemini"
+        provider = self.provider or "google"
         provider_info = config_data["providers"][provider]
 
         config = {}
@@ -254,6 +255,14 @@ class Config:
                 config[key] = value
 
         return config
+
+    def get_display_name(self, provider_id: str, provider_info: Optional[Dict[str, Any]] = None) -> str:
+        """Return user-friendly display name for a provider."""
+        info = provider_info
+        if info is None:
+            config_data = self._ensure_provider_config()
+            info = config_data.get("providers", {}).get(provider_id, {})
+        return info.get("display_name", provider_id.title())
 
     def get_configured_providers(self) -> List[str]:
         """Return a list of providers that have an API key configured."""
@@ -290,8 +299,8 @@ class Config:
         provider_config = self.get_provider_config()
         api_key = provider_config.get("api_key")
 
-        provider_names = config_data.get("provider_aliases", {})
-        friendly_name = provider_names.get(self.provider or "", self.provider or "")
+        provider_info = config_data.get("providers", {}).get(self.provider or "", {})
+        friendly_name = self.get_display_name(provider_id, provider_info)
 
         if not api_key:
             self._record_error(f"Oops! No API key found for {friendly_name}")
@@ -317,9 +326,9 @@ class Config:
         return True
 
     def _missing_key_instructions(self) -> str:
-        if self.provider == "gemini":
+        if self.provider == "google":
             return (
-                "To use Gemini, add GEMINI_API_KEY to your .env file.\n"
+                "To use Google, add GOOGLE_API_KEY to your .env file.\n"
                 "Get your free API key at: https://makersuite.google.com/app/apikey"
             )
         if self.provider == "anthropic":
@@ -346,7 +355,7 @@ class Config:
             )
         if self.provider == "glm":
             return (
-                "To use GLM (Zhipu), add ZAI_API_KEY to your .env file.\n"
+                "To use GLM (Zhipu), add ZHIPUAI_API_KEY to your .env file.\n"
                 "Optionally set ZAI_BASE_URL for self-hosted gateways."
             )
         return "Set the appropriate API key for the selected provider."

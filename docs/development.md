@@ -43,7 +43,7 @@ python -m promptheus.main --skip-questions "Smoke test"
 
 **Provider Validation:**
 ```bash
-promptheus validate --providers gemini
+promptheus validate --providers google
 promptheus validate --test-connection
 ```
 

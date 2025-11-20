@@ -29,12 +29,7 @@ def _select_test_model(provider_name: str, config: Config) -> Optional[str]:
     if default_model:
         return default_model
 
-    # 3) Fall back to the first example model if provided
-    examples = provider_meta.get("example_models") or []
-    if examples:
-        return examples[0]
-
-    # 4) Absolute fallback: global override (PROMPTHEUS_MODEL)
+    # 3) Absolute fallback: global override (PROMPTHEUS_MODEL)
     return os.getenv("PROMPTHEUS_MODEL")
 
 
@@ -55,8 +50,8 @@ def _test_provider_connection(provider_name: str, config: Config) -> Tuple[bool,
         provider._generate_text("ping", "", max_tokens=8)
         return True, ""
     except Exception as exc:
-        if provider_name == "gemini" and "did not include text content" in str(exc):
-            return False, "Connection failed. Note: Standard Gemini API keys may have limitations."
+        if provider_name == "google" and "did not include text content" in str(exc):
+            return False, "Connection failed. Note: Standard Google API keys may have limitations."
         return False, sanitize_error_message(str(exc))
     finally:
         # Restore original provider setting

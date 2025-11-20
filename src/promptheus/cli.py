@@ -4,7 +4,7 @@ import argparse
 import sys
 from typing import List, Optional, Sequence
 
-PROVIDER_CHOICES = ["gemini", "anthropic", "openai", "groq", "qwen", "glm"]
+PROVIDER_CHOICES = ["google", "anthropic", "openai", "groq", "qwen", "glm"]
 
 
 def build_parser(include_subcommands: bool = True) -> argparse.ArgumentParser:
@@ -17,7 +17,7 @@ Examples:
   promptheus                                             # Interactive mode (continuous loop)
   promptheus list-models --provider openai               # List available models from a specific provider
   promptheus validate --test-connection                  # Check environment and test API keys
-  promptheus template openai,gemini                      # Generate env template for multiple providers
+  promptheus template openai,google                      # Generate env template for multiple providers
   promptheus --skip-questions "Explain Docker"          # Skip questions, improve prompt directly
   promptheus -o json "Create API schema"                # Output in JSON format
   promptheus history                                     # View prompt history
@@ -183,7 +183,7 @@ Interactive Mode Commands (available when running without arguments):
         validate_parser.add_argument(
             "--providers",
             type=str,
-            help="Optional: Comma-separated list of providers to validate (e.g., openai,gemini)",
+            help="Optional: Comma-separated list of providers to validate (e.g., openai,google)",
         )
 
         # template subcommand
@@ -196,7 +196,7 @@ Interactive Mode Commands (available when running without arguments):
             "--providers",
             type=str,
             required=True,
-            help="Comma-separated list of providers (e.g., openai,gemini)",
+            help="Comma-separated list of providers (e.g., openai,google)",
         )
 
         # completion subcommand

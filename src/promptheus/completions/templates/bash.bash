@@ -55,7 +55,7 @@ _promptheus_complete() {
     local in_subcommand=""
     local i
     for (( i=0; i < cword; i++ )); do
-        if [[ "${words[i]}" =~ ^(history|list-models|validate|template|completion)$ ]]; then
+        if [[ "${words[i]}" =~ ^(history|list-models|validate|template|completion|web|auth)$ ]]; then
             in_subcommand="${words[i]}"
             break
         fi
@@ -83,6 +83,16 @@ _promptheus_complete() {
                 COMPREPLY=( $(compgen -W "${template_opts}" -- "${cur}") )
                 return 0
                 ;;
+            web)
+                local web_opts="--port --host --no-browser --verbose --help"
+                COMPREPLY=( $(compgen -W "${web_opts}" -- "${cur}") )
+                return 0
+                ;;
+            auth)
+                local auth_opts="--skip-validation --verbose --help"
+                COMPREPLY=( $(compgen -W "${auth_opts}" -- "${cur}") )
+                return 0
+                ;;
         esac
         return 0
     fi
@@ -94,7 +104,7 @@ _promptheus_complete() {
         return 0
     fi
 
-    local subcommands="history list-models validate template completion"
+    local subcommands="history list-models validate template completion web auth"
     COMPREPLY=( $(compgen -W "${subcommands}" -- "${cur}") )
     return 0
 }

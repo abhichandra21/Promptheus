@@ -24,7 +24,7 @@ promptheus -o plain "Write haiku"
 ```
 Validate credentials before hitting remote APIs:
 ```bash
-promptheus validate --providers gemini
+promptheus validate --providers google
 promptheus validate --test-connection  # to test actual API connectivity
 ```
 
@@ -42,12 +42,12 @@ Store provider secrets in `.env` (bootstrap from `.env.example`) and never log r
 
 ## Supported Providers
 Promptheus supports 6 major LLM providers:
-- **Gemini** (Google) - using `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- **Google** (formerly Gemini) - using `GOOGLE_API_KEY`
 - **Claude** (Anthropic) - using `ANTHROPIC_API_KEY`
 - **OpenAI** - using `OPENAI_API_KEY`
 - **Groq** - using `GROQ_API_KEY`
 - **Qwen** (Alibaba/DashScope) - using `DASHSCOPE_API_KEY`
-- **GLM** (Zhipu) - using `ZAI_API_KEY`
+- **GLM** (Zhipu) - using `ZHIPUAI_API_KEY`
 
 Each provider has its own configuration in `models.json` and respective adapter in `providers.py`.
 

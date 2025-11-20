@@ -11,7 +11,7 @@ This document provides diagnostic procedures and resolution strategies for commo
 **Resolution:**
 ```bash
 # Explicitly specify provider
-promptheus --provider gemini "Prompt"
+promptheus --provider google "Prompt"
 promptheus --provider anthropic "Prompt"
 promptheus --provider openai "Prompt"
 promptheus --provider groq "Prompt"
@@ -29,10 +29,10 @@ promptheus --provider glm "Prompt"
 cat .env
 
 # Check environment variables
-env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI|PROMPTHEUS)'
+env | grep -E '(GOOGLE|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZHIPUAI|PROMPTHEUS)'
 
 # Override provider selection
-export PROMPTHEUS_PROVIDER=gemini
+export PROMPTHEUS_PROVIDER=google
 ```
 
 ### API Key Validation
@@ -40,7 +40,7 @@ export PROMPTHEUS_PROVIDER=gemini
 **Verification Commands:**
 ```bash
 # Validate specific provider configuration
-promptheus validate --providers gemini
+promptheus validate --providers google
 promptheus validate --providers anthropic
 promptheus validate --providers openai
 promptheus validate --providers groq
@@ -140,7 +140,7 @@ promptheus -f ./relative/path/prompt.txt
 /status
 
 # Modify provider
-/set provider gemini
+/set provider google
 
 # Modify model
 /set model gpt-4o

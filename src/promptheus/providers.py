@@ -25,7 +25,7 @@ from promptheus.exceptions import ProviderAPIError
 logger = logging.getLogger(__name__)
 
 # Providers with full runtime support (keep in sync with promptheus.config.SUPPORTED_PROVIDER_IDS)
-SUPPORTED_PROVIDER_IDS = {"gemini", "anthropic", "openai", "groq", "qwen", "glm"}
+SUPPORTED_PROVIDER_IDS = {"google", "anthropic", "openai", "groq", "qwen", "glm"}
 
 
 def _print_user_error(message: str) -> None:
@@ -610,7 +610,7 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
     provider_config = config.get_provider_config()
     model_to_use = model_name or config.get_model()
 
-    if provider_name == "gemini":
+    if provider_name == "google":
         return GeminiProvider(
             api_key=provider_config["api_key"],
             model_name=model_to_use,

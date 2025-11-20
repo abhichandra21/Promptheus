@@ -41,6 +41,8 @@ _promptheus() {
                 'validate:Validate environment configuration'
                 'template:Generate a .env file template'
                 'completion:Generate shell completion script'
+                'web:Start the web UI server'
+                'auth:Authentication management'
             )
             _describe 'command' commands
 
@@ -119,6 +121,21 @@ _promptheus() {
                         '(- *)'{-h,--help}'[Show help message]' \
                         '(- *)'{-v,--verbose}'[Enable verbose output]' \
                         '*: :(bash zsh)'
+                    ;;
+                web)
+                    _arguments \
+                        '--port[Port to run the web server on]:port:' \
+                        '--host[Host to bind the web server to]:host:(127.0.0.1 0.0.0.0 localhost)' \
+                        '--no-browser[Don'\''t automatically open browser]' \
+                        '(- *)'{-h,--help}'[Show help message]' \
+                        '(- *)'{-v,--verbose}'[Enable verbose output]'
+                    ;;
+                auth)
+                    _arguments \
+                        '--skip-validation[Skip API key validation test]' \
+                        '(- *)'{-h,--help}'[Show help message]' \
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '*: :(google anthropic openai groq qwen glm)'
                     ;;
             esac
             ;;

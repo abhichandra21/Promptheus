@@ -36,7 +36,7 @@ def get_available_providers() -> list[str]:
         return sorted(providers)
     except Exception:
         # Fallback to a default list of providers
-        return ["anthropic", "openai", "google", "openrouter", "groq", "qwen", "gemini", "glm"]
+        return ["anthropic", "openai", "google", "openrouter", "groq", "qwen", "glm"]
 
 def update_env_file(env_var: str, value: str) -> None:
     """Update or add the environment variable to the .env file."""
@@ -120,8 +120,7 @@ def handle_provider_auth(provider: str, skip_validation: bool = False) -> bool:
     provider_info = providers_config.get("providers", {}).get(provider, {})
 
     # Get display name for user-friendly output
-    provider_aliases = providers_config.get("provider_aliases", {})
-    display_name = provider_aliases.get(provider, provider.title())
+    display_name = config.get_display_name(provider, provider_info)
 
     if not provider_info:
         console.print(f"[red]✗ Provider '{provider}' is not supported yet.[/red]")
@@ -196,7 +195,6 @@ def auth_command(provider: Optional[str] = None, skip_validation: bool = False) 
     # Create a mapping of display names to provider IDs
     config = Config()
     providers_config = config._ensure_provider_config()
-    provider_aliases = providers_config.get("provider_aliases", {})
 
     if not provider:
         # Show intro
@@ -207,7 +205,8 @@ def auth_command(provider: Optional[str] = None, skip_validation: bool = False) 
         # Prepare choices with friendly names
         choices = []
         for prov_id in all_providers:
-            display_name = provider_aliases.get(prov_id, prov_id.title())
+            provider_info = providers_config.get("providers", {}).get(prov_id, {})
+            display_name = config.get_display_name(prov_id, provider_info)
             choices.append({
                 'name': display_name,
                 'value': prov_id
@@ -217,10 +216,9 @@ def auth_command(provider: Optional[str] = None, skip_validation: bool = False) 
         priority = {
             'anthropic': 1,
             'openai': 2,
-            'gemini': 3,
+            'google': 3,
             'groq': 4,
-            'openrouter': 5,
-            'google': 6
+            'openrouter': 5
         }
         choices.sort(key=lambda x: (priority.get(x['value'], 99), x['name']))
 

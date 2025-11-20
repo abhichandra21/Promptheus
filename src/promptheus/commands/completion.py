@@ -24,9 +24,14 @@ def handle_completion_request(config, args):
     elif comp_type == "models":
         provider_name = args.provider
         if provider_name:
-            # Get example models, as listing all models can be slow/require auth
+            # Get default model from config, as example_models have been removed
             provider_data = config._ensure_provider_config().get("providers", {}).get(provider_name, {})
-            completions = provider_data.get("example_models", [])
+            default_model = provider_data.get("default_model", "")
+            if default_model:
+                completions = [default_model]
+            else:
+                # Fallback to empty list if no default model
+                completions = []
 
     # Print space-separated for bash completion (backward compatibility)
     print(" ".join(completions))

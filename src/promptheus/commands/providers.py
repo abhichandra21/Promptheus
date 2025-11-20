@@ -11,46 +11,23 @@ from rich import box
 from promptheus.config import Config
 from promptheus.providers import get_provider, LLMProvider
 from promptheus.utils import sanitize_error_message
-from promptheus._provider_data import _filter_text_models, _select_test_model, _test_provider_connection
+from promptheus._provider_data import _select_test_model, _test_provider_connection
+from promptheus.models_dev_service import get_sync_models_for_provider
 
 logger = logging.getLogger(__name__)
 
 
-def get_provider_models(provider_name: str, config: Config) -> Tuple[List[str], Optional[str]]:
-    """Get models for a specific provider using the actual provider implementation."""
+def get_provider_models(provider_name: str, config: Config, filter_text_only: bool = True) -> Tuple[List[str], Optional[str]]:
+    """Get models for a specific provider using models.dev service."""
     try:
-        # Temporarily set the provider to the one we want to query
-        original_provider = config.provider
-        original_source = config.provider_source
-        config.set_provider(provider_name)
-
-        if not config.validate():
-            # Extract the specific error message for the key
-            error = config.consume_error_messages()
-            if error and "API key" in error[0]:
-                return [], "Error: API key not found or invalid"
-            return [], f"Error: {error[0] if error else 'Unknown configuration error'}"
-
-        provider = get_provider(provider_name, config)
-        try:
-            models = provider.get_available_models()
-            logger.debug("Provider %s returned %d models (before filtering)", provider_name, len(models))
-            return models, None
-        except NotImplementedError:
-            return [], f"Note: {provider_name.capitalize()} does not support listing models via API."
-        except Exception as exc:
-            error_msg = sanitize_error_message(str(exc))
-            return [], f"Error: {error_msg}"
-
+        models = get_sync_models_for_provider(provider_name, filter_text_only)
+        logger.debug("Provider %s returned %d models from models.dev (filtered: %s)", provider_name, len(models), filter_text_only)
+        return models, None
+    except ValueError as exc:
+        return [], f"Error: {str(exc)}"
     except Exception as exc:
         error_msg = sanitize_error_message(str(exc))
-        return [], f"Error: {error_msg}"
-    finally:
-        # Restore original provider setting
-        if original_provider:
-            config.set_provider(original_provider, source=original_source or "auto")
-        else:
-            config.reset() # Clear the temporary provider setting
+        return [], f"Error fetching models from models.dev: {error_msg}"
 
 
 def list_models(config: Config, console: Console, providers: Optional[List[str]] = None, include_nontext: bool = False, limit: int = 20) -> None:
@@ -64,7 +41,8 @@ def list_models(config: Config, console: Console, providers: Optional[List[str]]
 
     with console.status("[bold blue]📦 Fetching available models...", spinner="aesthetic"):
         for provider_name in all_providers:
-            models, error = get_provider_models(provider_name, config)
+            # Use improved filtering from models.dev service
+            models, error = get_provider_models(provider_name, config, filter_text_only=not include_nontext)
             results[provider_name] = {"models": models, "error": error}
 
     console.print()
@@ -72,13 +50,10 @@ def list_models(config: Config, console: Console, providers: Optional[List[str]]
     for provider_name in all_providers:
         record = results.get(provider_name, {})
         models = record.get("models", [])
-        filtered = models if include_nontext else _filter_text_models(models)
-        if not include_nontext and len(models) > len(filtered):
-            logger.debug("Filtered %d non-text models for provider %s", len(models) - len(filtered), provider_name)
         error = record.get("error")
 
-        provider_aliases = provider_config.get("provider_aliases", {})
-        display_name = provider_aliases.get(provider_name, provider_name.capitalize())
+        provider_info = provider_config.get("providers", {}).get(provider_name, {})
+        display_name = config.get_display_name(provider_name, provider_info)
 
         provider_table = Table(
             title=f"{display_name} Models",
@@ -91,28 +66,24 @@ def list_models(config: Config, console: Console, providers: Optional[List[str]]
 
         if error:
             provider_table.add_row("-", f"[red]{error}[/red]")
-        elif not filtered:
-            message = (
-                "[yellow]No models returned from API[/yellow]"
-                if not models
-                else "[yellow]No text-capable models found (use --include-nontext to show all)[/yellow]"
-            )
+        elif not models:
+            message = "[yellow]No models returned from API[/yellow]"
             provider_table.add_row("-", message)
         else:
-            display_models = filtered if limit <= 0 else filtered[:limit]
+            display_models = models if limit <= 0 else models[:limit]
             for idx, model in enumerate(display_models, 1):
                 provider_table.add_row(str(idx), model)
-            total_count = len(filtered)
+            total_count = len(models)
             if limit > 0 and total_count > limit:
                 provider_table.add_row(
                     "…",
                     f"[dim]+{total_count - limit} more (use --limit 0 to show all)[/dim]",
                 )
 
-            if not include_nontext and len(filtered) < len(models):
+            if not include_nontext:
                 provider_table.add_row(
                     "-",
-                    f"[dim]Filtered {len(models) - len(filtered)} non-text models (use --include-nontext to show all)[/dim]",
+                    f"[dim]Showing text-generation models only (use --include-nontext to see all models)[/dim]",
                 )
 
         console.print(provider_table)
@@ -125,7 +96,6 @@ def validate_environment(config: Config, console: Console, test_connection: bool
     """Check environment for required API keys and optionally test connections."""
     console.print("[bold]Promptheus Environment Validator[/bold]")
     all_provider_data = config._ensure_provider_config().get("providers", {})
-    provider_aliases = config._ensure_provider_config().get("provider_aliases", {})
 
     # If specific providers are requested, filter the data
     if providers:
@@ -151,7 +121,7 @@ def validate_environment(config: Config, console: Console, test_connection: bool
     ready_providers = []
 
     for name, info in sorted(provider_data.items()):
-        display_name = provider_aliases.get(name, name.capitalize())
+        display_name = config.get_display_name(name, info)
         api_key_env = info.get("api_key_env")
         keys = api_key_env if isinstance(api_key_env, list) else [api_key_env]
 
