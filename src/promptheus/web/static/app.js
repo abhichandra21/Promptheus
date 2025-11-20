@@ -11,6 +11,7 @@ class PromptheusApp {
         this.streamingInterval = null;
         this.currentOptimizedPrompt = ''; // Store current prompt
         this.cachedModels = {}; // Store fetched models by provider ID
+        this.hasResults = false; // Track if we have results displayed
         this.init();
     }
 
@@ -42,19 +43,19 @@ class PromptheusApp {
             }
         });
 
-        // Auto-clear output when starting new prompt
-        const promptInput = document.getElementById('prompt-input');
-
-        // Clear on focus if input is empty
-        promptInput.addEventListener('focus', () => {
-            this.handleInputFocus();
+        // New prompt button (hidden initially, shown after results)
+        document.getElementById('start-over-btn').addEventListener('click', () => {
+            this.startNewPrompt();
         });
 
-        // Track input changes to detect new prompts
+        // Track input changes to detect new prompts (but only when we have results)
+        const promptInput = document.getElementById('prompt-input');
         let lastPromptValue = '';
         promptInput.addEventListener('input', () => {
-            this.handleInputChange(promptInput.value, lastPromptValue);
-            lastPromptValue = promptInput.value;
+            if (this.hasResults) {
+                this.handleInputChange(promptInput.value, lastPromptValue);
+                lastPromptValue = promptInput.value;
+            }
         });
 
         // Provider selection
@@ -156,19 +157,43 @@ class PromptheusApp {
        INPUT STATE MANAGEMENT
        =================================================================== */
 
-    handleInputFocus() {
+    startNewPrompt() {
         const promptInput = document.getElementById('prompt-input');
         const outputDiv = document.getElementById('output');
         const tweakBtn = document.getElementById('tweak-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        const startOverBtn = document.getElementById('start-over-btn');
 
-        // Clear if there's existing output (user wants to start fresh)
-        const hasOutput = outputDiv.querySelector('.optimized-prompt-content');
+        // Clear the input field and reset state
+        promptInput.value = '';
+        this.hasResults = false;
 
-        if (hasOutput) {
-            // Clear the input field to signal fresh start
-            promptInput.value = '';
-            this.clearOutputWithTransition();
-        }
+        // Clear output with transition
+        this.clearOutputWithTransition();
+
+        // Hide action buttons and start over button
+        tweakBtn.classList.add('hidden');
+        copyBtn.classList.add('hidden');
+        startOverBtn.classList.add('hidden');
+
+        // Update placeholder text to initial state
+        promptInput.placeholder = 'Enter your prompt here...';
+
+        // Focus input for convenience
+        promptInput.focus();
+    }
+
+    showResultsState() {
+        const promptInput = document.getElementById('prompt-input');
+        const startOverBtn = document.getElementById('start-over-btn');
+
+        this.hasResults = true;
+
+        // Update placeholder to indicate they can optimize another prompt
+        promptInput.placeholder = 'Optimize another prompt...';
+
+        // Show the "Start Over" button
+        startOverBtn.classList.remove('hidden');
     }
 
     handleInputChange(currentValue, lastValue) {
@@ -183,6 +208,10 @@ class PromptheusApp {
         // If user is typing something significantly different (more than 10 chars changed)
         if (!isSimilar && currentValue.length > 10 && Math.abs(currentValue.length - lastValue.length) > 5) {
             this.clearOutputWithTransition();
+            this.hasResults = false;
+            document.getElementById('start-over-btn').classList.add('hidden');
+            document.getElementById('tweak-btn').classList.add('hidden');
+            document.getElementById('copy-btn').classList.add('hidden');
         }
     }
 
@@ -274,7 +303,12 @@ class PromptheusApp {
         }
 
         const provider = document.getElementById('provider-select').value;
-        const model = document.getElementById('model-select')?.value || null;
+        let model = document.getElementById('model-select')?.value || null;
+
+        // Don't send the "load all models" placeholder as an actual model
+        if (model === '__load_all__') {
+            model = null; // Let backend use auto/default model
+        }
 
         // Determine skip_questions and force_questions from mode
         const skipQuestions = questionMode === 'skip';
@@ -373,7 +407,12 @@ class PromptheusApp {
         const outputDiv = document.getElementById('output');
         const tweakBtn = document.getElementById('tweak-btn');
         const copyBtn = document.getElementById('copy-btn');
-        const model = document.getElementById('model-select')?.value || null;
+        let model = document.getElementById('model-select')?.value || null;
+
+        // Don't send the "load all models" placeholder as an actual model
+        if (model === '__load_all__') {
+            model = null; // Let backend use auto/default model
+        }
 
         // Use streaming endpoint
         const params = new URLSearchParams({
@@ -415,6 +454,7 @@ class PromptheusApp {
                 this.currentOptimizedPrompt = this.streamingText; // Store for markdown toggle
                 tweakBtn.classList.remove('hidden'); // Show tweak button
                 copyBtn.classList.remove('hidden'); // Show copy button
+                this.showResultsState(); // Show contextual results state
                 this.loadHistory();
             } else if (data.type === 'error') {
                 eventSource.close();
@@ -449,6 +489,7 @@ class PromptheusApp {
             this.renderOutput();
             tweakBtn.classList.remove('hidden'); // Show tweak button
             copyBtn.classList.remove('hidden'); // Show copy button
+            this.showResultsState(); // Show contextual results state
             this.loadHistory();
         } else {
             this.showMessage('error', data.error || 'Failed to process prompt');
@@ -859,16 +900,6 @@ class PromptheusApp {
     populateModelSelect(modelSelect, models, currentModel, fetchedAll) {
         modelSelect.innerHTML = '';
 
-        // Add "Load All Models" option if not already fetched all
-        if (!fetchedAll && models && models.length > 0) {
-            const loadAllOption = document.createElement('option');
-            loadAllOption.value = '__load_all__';
-            loadAllOption.textContent = '↻ Load All Models...';
-            loadAllOption.style.fontStyle = 'italic';
-            loadAllOption.style.color = 'var(--text-secondary)';
-            modelSelect.appendChild(loadAllOption);
-        }
-
         // If we got models, populate them
         if (models && models.length > 0) {
             models.forEach((model, index) => {
@@ -891,6 +922,16 @@ class PromptheusApp {
             emptyOption.value = '';
             emptyOption.textContent = 'No models available';
             modelSelect.appendChild(emptyOption);
+        }
+
+        // Append the "Load All Models" option last so real models stay primary
+        if (!fetchedAll && models && models.length > 0) {
+            const loadAllOption = document.createElement('option');
+            loadAllOption.value = '__load_all__';
+            loadAllOption.textContent = '↻ Load All Models...';
+            loadAllOption.style.fontStyle = 'italic';
+            loadAllOption.style.color = 'var(--text-secondary)';
+            modelSelect.appendChild(loadAllOption);
         }
     }
 
@@ -1022,6 +1063,7 @@ class PromptheusApp {
                 this.renderOutput();
                 tweakBtn.classList.remove('hidden');
                 copyBtn.classList.remove('hidden');
+                this.showResultsState(); // Show contextual results state
             }
 
             // Scroll to top to see the restored content

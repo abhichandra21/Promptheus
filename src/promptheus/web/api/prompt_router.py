@@ -19,6 +19,9 @@ from promptheus.prompts import (
     TWEAK_SYSTEM_INSTRUCTION,
 )
 
+LOAD_ALL_MODELS_SENTINEL = "__load_all__"
+
+
 router = APIRouter()
 
 
@@ -125,7 +128,7 @@ async def submit_prompt(request: PromptRequest):
         app_config = Config()
         if request.provider:
             app_config.set_provider(request.provider)
-        if request.model:
+        if request.model and request.model != LOAD_ALL_MODELS_SENTINEL:
             app_config.set_model(request.model)
         
         # Create provider instance
@@ -251,7 +254,7 @@ async def stream_prompt(
             app_config = Config()
             if provider:
                 app_config.set_provider(provider)
-            if model:
+            if model and model != LOAD_ALL_MODELS_SENTINEL:
                 app_config.set_model(model)
 
             # Create provider instance
