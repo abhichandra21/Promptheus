@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promptheus Documentation - Complete Guide to CLI and Web</title>
+    <meta name="description" content="Comprehensive documentation for Promptheus CLI and Web UI. Learn how to transform raw prompts into AI gold.">
+
+    <style>
+        /* CSS Reset & Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0A0E1A;
+            --bg-secondary: #151F2E;
+            --bg-tertiary: #1E293B;
+            --accent-gold: #D4A574;
+            --accent-gold-light: #E5B88A;
+            --accent-gold-dark: #B8935F;
+            --text-primary: #E2E8F0;
+            --text-secondary: #94A3B8;
+            --text-muted: #64748B;
+            --gradient-primary: linear-gradient(135deg, #0A0E1A 0%, #151F2E 50%, #1E293B 100%);
+            --gradient-gold: linear-gradient(135deg, #D4A574 0%, #E5B88A 100%);
+            --shadow-gold: 0 0 30px rgba(212, 165, 116, 0.3);
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            overflow-x: hidden;
+        }
+
+        /* Layout */
+        .docs-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-right: 1px solid rgba(212, 165, 116, 0.2);
+            overflow-y: auto;
+            z-index: 100;
+            padding: 2rem 0;
+        }
+
+        .sidebar-header {
+            padding: 0 1.5rem 1.5rem;
+            border-bottom: 1px solid rgba(212, 165, 116, 0.2);
+            margin-bottom: 1.5rem;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            background: var(--gradient-gold);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-header p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .sidebar-nav {
+            padding: 0 1rem;
+        }
+
+        .nav-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .nav-section-title {
+            color: var(--accent-gold);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.5rem 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-links {
+            list-style: none;
+        }
+
+        .nav-links li {
+            margin-bottom: 0.25rem;
+        }
+
+        .nav-links a {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .nav-links a.active {
+            color: var(--accent-gold);
+            background: var(--bg-tertiary);
+            font-weight: 600;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            padding: 3rem;
+            max-width: 1200px;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 1rem;
+            margin-top: 2rem;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 4vw, 2.5rem);
+            color: var(--accent-gold);
+        }
+
+        h2 {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            color: var(--accent-gold);
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid rgba(212, 165, 116, 0.2);
+        }
+
+        h3 {
+            font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+            color: var(--accent-gold-light);
+        }
+
+        h4 {
+            font-size: 1.125rem;
+            color: var(--text-primary);
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        /* Code Blocks */
+        code {
+            background: var(--bg-tertiary);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            color: var(--accent-gold-light);
+        }
+
+        pre {
+            background: var(--bg-tertiary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-primary);
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(212, 165, 116, 0.1);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            color: var(--accent-gold);
+            font-weight: 600;
+        }
+
+        td {
+            color: var(--text-secondary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        /* Info Boxes */
+        .info-box {
+            background: var(--bg-secondary);
+            border-left: 4px solid var(--accent-gold);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+        }
+
+        .info-box h4 {
+            color: var(--accent-gold);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Back to Top Button */
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--gradient-gold);
+            color: var(--bg-primary);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-gold);
+            font-size: 1.5rem;
+            text-decoration: none;
+        }
+
+        .back-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .mobile-menu-toggle {
+                position: fixed;
+                top: 1rem;
+                left: 1rem;
+                z-index: 101;
+                background: var(--gradient-gold);
+                color: var(--bg-primary);
+                width: 40px;
+                height: 40px;
+                border-radius: 8px;
+                border: none;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.25rem;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .mobile-menu-toggle {
+                display: none;
+            }
+        }
+
+        /* Section styling */
+        section {
+            margin-bottom: 3rem;
+        }
+
+        /* Smooth Scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Command blocks */
+        .command {
+            background: var(--bg-tertiary);
+            border-left: 3px solid var(--accent-gold);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+
+        .command-title {
+            color: var(--accent-gold);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
+
+    <div class="docs-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>⚗️ Promptheus</h1>
+                <p>Complete Documentation</p>
+                <a href="index.html" style="color: var(--accent-gold); text-decoration: none; font-size: 0.875rem;">← Back to Home</a>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Getting Started</div>
+                    <ul class="nav-links">
+                        <li><a href="#overview">Overview</a></li>
+                        <li><a href="#installation">Installation</a></li>
+                        <li><a href="#configuration">Configuration</a></li>
+                        <li><a href="#quick-start">Quick Start</a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">CLI Usage</div>
+                    <ul class="nav-links">
+                        <li><a href="#cli-basics">Basic Commands</a></li>
+                        <li><a href="#cli-modes">Operational Modes</a></li>
+                        <li><a href="#cli-interactive">Interactive Mode</a></li>
+                        <li><a href="#cli-pipeline">Pipeline Integration</a></li>
+                        <li><a href="#cli-flags">Command Flags</a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Web Interface</div>
+                    <ul class="nav-links">
+                        <li><a href="#web-overview">Web UI Overview</a></li>
+                        <li><a href="#web-features">Features</a></li>
+                        <li><a href="#web-workflow">Workflow</a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Features</div>
+                    <ul class="nav-links">
+                        <li><a href="#providers">Provider Support</a></li>
+                        <li><a href="#history">History Management</a></li>
+                        <li><a href="#authentication">Authentication</a></li>
+                        <li><a href="#output-formats">Output Formats</a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Advanced</div>
+                    <ul class="nav-links">
+                        <li><a href="#environment-vars">Environment Variables</a></li>
+                        <li><a href="#validation">Validation Tools</a></li>
+                        <li><a href="#troubleshooting">Troubleshooting</a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Reference</div>
+                    <ul class="nav-links">
+                        <li><a href="#command-reference">Command Reference</a></li>
+                        <li><a href="#examples">Usage Examples</a></li>
+                        <li><a href="#contributing">Contributing</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Section -->
+            <section id="overview">
+                <h1>Promptheus Documentation</h1>
+                <p>Welcome to the comprehensive documentation for Promptheus - the AI-powered prompt optimization tool that transforms raw prompts into polished, effective queries for any LLM.</p>
+
+                <div class="info-box">
+                    <h4>🔮 What is Promptheus?</h4>
+                    <p>Promptheus uses advanced AI to analyze your basic prompts and transform them into detailed, structured instructions that get superior results from any large language model. Think of it as prompt alchemy - turning base prompts into gold.</p>
+                </div>
+
+                <h3>Core Capabilities</h3>
+                <ul>
+                    <li><strong>Adaptive Intelligence:</strong> Automatically detects task types and applies appropriate refinement strategies</li>
+                    <li><strong>Multi-Provider Support:</strong> Works with 6 major AI providers - Gemini, Claude, OpenAI, Groq, Qwen, and GLM</li>
+                    <li><strong>Interactive Refinement:</strong> Asks clarifying questions to understand your intent</li>
+                    <li><strong>Powerful CLI:</strong> Command-line interface with keyboard shortcuts and pipeline integration</li>
+                    <li><strong>Beautiful Web UI:</strong> Modern alchemical-themed interface for prompt enhancement</li>
+                    <li><strong>History Management:</strong> Track and reload your prompt evolution</li>
+                </ul>
+            </section>
+
+            <!-- Installation Section -->
+            <section id="installation">
+                <h2>Installation</h2>
+
+                <h3>User Installation</h3>
+                <p>Install Promptheus via pip for standard usage:</p>
+
+                <pre><code>pip install promptheus</code></pre>
+
+                <p>Verify the installation:</p>
+                <pre><code>promptheus --version</code></pre>
+
+                <h3>Developer Installation</h3>
+                <p>For development work, install from source:</p>
+
+                <pre><code># Clone the repository
+git clone https://github.com/abhichandra21/Promptheus.git
+cd Promptheus
+
+# Install in editable mode with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests to verify
+pytest -q</code></pre>
+
+                <h3>System Requirements</h3>
+                <ul>
+                    <li>Python 3.10 or higher</li>
+                    <li>At least one configured LLM provider API key</li>
+                    <li>Internet connection for API calls</li>
+                </ul>
+            </section>
+
+            <!-- Configuration Section -->
+            <section id="configuration">
+                <h2>Configuration</h2>
+
+                <h3>API Key Setup</h3>
+                <p>Promptheus requires at least one AI provider API key. Create a <code>.env</code> file in your project directory:</p>
+
+                <pre><code># Google Gemini
+GEMINI_API_KEY=your_gemini_key_here
+
+# Anthropic Claude
+ANTHROPIC_API_KEY=your_anthropic_key_here
+
+# OpenAI
+OPENAI_API_KEY=your_openai_key_here
+
+# Groq
+GROQ_API_KEY=your_groq_key_here
+
+# Alibaba Cloud Qwen
+DASHSCOPE_API_KEY=your_qwen_key_here
+
+# Zhipu AI GLM
+ZAI_API_KEY=your_glm_key_here</code></pre>
+
+                <h3>Interactive Authentication</h3>
+                <p>Use the interactive auth command for guided setup:</p>
+
+                <pre><code># Interactive provider selection
+promptheus auth
+
+# Specific provider
+promptheus auth gemini
+promptheus auth anthropic
+
+# Skip validation (for testing)
+promptheus auth openai --skip-validation</code></pre>
+
+                <h3>Environment File Discovery</h3>
+                <p>Promptheus searches upward from your current directory for <code>.env</code> files, stopping at project root markers:</p>
+                <ul>
+                    <li><code>.git</code> directory (repository root)</li>
+                    <li><code>pyproject.toml</code> (Python project root)</li>
+                    <li><code>setup.py</code> (Python project root)</li>
+                </ul>
+            </section>
+
+            <!-- Quick Start Section -->
+            <section id="quick-start">
+                <h2>Quick Start</h2>
+
+                <h3>Basic Usage</h3>
+                <p>Transform a prompt with a single command:</p>
+
+                <pre><code>promptheus "Write a blog post about AI ethics"</code></pre>
+
+                <h3>Skip Questions Mode</h3>
+                <p>For quick enhancements without interactive questions:</p>
+
+                <pre><code>promptheus -s "Explain quantum computing"</code></pre>
+
+                <h3>Interactive Mode</h3>
+                <p>Start a persistent session for multiple prompts:</p>
+
+                <pre><code>promptheus</code></pre>
+
+                <h3>Specify Provider</h3>
+                <p>Choose a specific AI provider:</p>
+
+                <pre><code>promptheus --provider gemini "Create a marketing plan"</code></pre>
+            </section>
+
+            <!-- CLI Basics Section -->
+            <section id="cli-basics">
+                <h2>CLI Basics</h2>
+
+                <h3>Command Structure</h3>
+                <p>The basic Promptheus command structure:</p>
+
+                <pre><code>promptheus [options] [prompt]</code></pre>
+
+                <h3>Input Methods</h3>
+                <p>Promptheus supports multiple input methods:</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Syntax</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Inline</td>
+                            <td><code>promptheus "text"</code></td>
+                            <td><code>promptheus "Write a haiku"</code></td>
+                        </tr>
+                        <tr>
+                            <td>File flag</td>
+                            <td><code>-f &lt;path&gt;</code></td>
+                            <td><code>promptheus -f prompt.txt</code></td>
+                        </tr>
+                        <tr>
+                            <td>@ shorthand</td>
+                            <td><code>@&lt;path&gt;</code></td>
+                            <td><code>promptheus @prompt.txt</code></td>
+                        </tr>
+                        <tr>
+                            <td>Standard input</td>
+                            <td>Pipe</td>
+                            <td><code>cat prompt.txt | promptheus</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- CLI Modes Section -->
+            <section id="cli-modes">
+                <h2>Operational Modes</h2>
+
+                <h3>Adaptive Mode (Default)</h3>
+                <p>Promptheus automatically detects whether your task is analytical or creative:</p>
+                <ul>
+                    <li><strong>Analysis tasks:</strong> Skips questions, applies direct enhancement</li>
+                    <li><strong>Generation tasks:</strong> Asks clarifying questions for better results</li>
+                </ul>
+
+                <pre><code># Adaptive mode detects task type
+promptheus "Analyze this codebase"  # Skips questions
+promptheus "Write a story"          # Asks questions</code></pre>
+
+                <h3>Skip Questions Mode</h3>
+                <p>Bypass questions and enhance directly:</p>
+
+                <pre><code>promptheus -s "Your prompt here"
+promptheus --skip-questions "Your prompt here"</code></pre>
+
+                <h3>Refine Mode</h3>
+                <p>Force interactive questions regardless of task type:</p>
+
+                <pre><code>promptheus -r "Your prompt here"
+promptheus --refine "Your prompt here"</code></pre>
+
+                <h3>Single Execution Mode</h3>
+                <p>Process one prompt and exit:</p>
+
+                <pre><code>promptheus "Generate a function"</code></pre>
+            </section>
+
+            <!-- CLI Interactive Section -->
+            <section id="cli-interactive">
+                <h2>Interactive Mode (REPL)</h2>
+
+                <p>Launch interactive mode for a persistent session:</p>
+
+                <pre><code>promptheus</code></pre>
+
+                <h3>Keyboard Shortcuts</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Key</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Enter</td>
+                            <td>Submit prompt</td>
+                        </tr>
+                        <tr>
+                            <td>Shift+Enter</td>
+                            <td>Insert newline (multiline mode)</td>
+                        </tr>
+                        <tr>
+                            <td>Option/Alt+Enter</td>
+                            <td>Insert newline (alternative)</td>
+                        </tr>
+                        <tr>
+                            <td>↑/↓ Arrows</td>
+                            <td>Navigate command history</td>
+                        </tr>
+                        <tr>
+                            <td>Tab</td>
+                            <td>Command completion</td>
+                        </tr>
+                        <tr>
+                            <td>Ctrl+C</td>
+                            <td>Cancel current operation</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Slash Commands</h3>
+
+                <div class="command">
+                    <div class="command-title">/help</div>
+                    <p>Display available commands and keyboard shortcuts</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/history</div>
+                    <p>Display recent prompts and refinements</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/load &lt;n&gt;</div>
+                    <p>Load prompt at index n from history</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/clear-history</div>
+                    <p>Purge all history entries</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/copy</div>
+                    <p>Copy last refined result to clipboard</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/status</div>
+                    <p>Display current session configuration</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/set provider &lt;name&gt;</div>
+                    <p>Change the active AI provider (gemini, anthropic, openai, groq, qwen, glm)</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/set model &lt;name&gt;</div>
+                    <p>Change the active model</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/toggle refine</div>
+                    <p>Toggle refinement mode on/off</p>
+                </div>
+
+                <div class="command">
+                    <div class="command-title">/toggle skip-questions</div>
+                    <p>Toggle question bypass mode</p>
+                </div>
+            </section>
+
+            <!-- CLI Pipeline Section -->
+            <section id="cli-pipeline">
+                <h2>Pipeline Integration</h2>
+
+                <p>Promptheus is designed for seamless integration with Unix pipelines and command substitution workflows.</p>
+
+                <h3>Basic Pipeline Operations</h3>
+
+                <pre><code># Automatic quiet mode when piped
+promptheus "Write a story" | cat
+
+# File redirection
+promptheus "Write docs" > output.txt
+
+# Integration with AI tools
+promptheus "Create a haiku" | claude exec</code></pre>
+
+                <h3>Command Substitution</h3>
+
+                <pre><code># Feed refined output to external tools
+claude "$(promptheus 'Write a technical prompt')"
+
+# Variable capture for scripting
+REFINED=$(promptheus "Optimize this query")
+echo "$REFINED" | mysql -u user -p</code></pre>
+
+                <h3>Unix Utility Integration</h3>
+
+                <pre><code># Save and display simultaneously
+promptheus "Long explanation" | tee output.txt
+
+# Filter output
+promptheus "List best practices" | grep -i "security"
+
+# Count words
+promptheus "Write essay" | wc -w
+
+# Transform output
+promptheus "Generate list" | sed 's/^/- /' > checklist.md</code></pre>
+
+                <h3>JSON Processing</h3>
+
+                <pre><code># Extract fields with jq
+promptheus -o json "Create API schema" | jq '.endpoints'
+
+# Format and save
+promptheus -o json "Config template" | jq '.' > formatted.json</code></pre>
+
+                <h3>Advanced Patterns</h3>
+
+                <pre><code># Batch processing
+cat prompts.txt | while read line; do
+  promptheus "$line" >> results.txt
+done
+
+# Conditional execution
+if promptheus "Check status" | grep -q "success"; then
+  echo "All systems operational"
+fi
+
+# Multi-stage pipeline
+promptheus "Draft outline" | \
+  promptheus "Expand this outline" | \
+  tee expanded.txt</code></pre>
+            </section>
+
+            <!-- CLI Flags Section -->
+            <section id="cli-flags">
+                <h2>Command Flags Reference</h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Flag</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>-s, --skip-questions</code></td>
+                            <td>Bypass interactive questions, apply direct enhancement</td>
+                        </tr>
+                        <tr>
+                            <td><code>-r, --refine</code></td>
+                            <td>Force interactive refinement workflow</td>
+                        </tr>
+                        <tr>
+                            <td><code>-o, --output-format</code></td>
+                            <td>Output format: plain (default) or json</td>
+                        </tr>
+                        <tr>
+                            <td><code>-c, --copy</code></td>
+                            <td>Copy refined prompt to clipboard</td>
+                        </tr>
+                        <tr>
+                            <td><code>-f, --file</code></td>
+                            <td>Read prompt from file</td>
+                        </tr>
+                        <tr>
+                            <td><code>--provider</code></td>
+                            <td>Specify AI provider</td>
+                        </tr>
+                        <tr>
+                            <td><code>--model</code></td>
+                            <td>Specify model identifier</td>
+                        </tr>
+                        <tr>
+                            <td><code>--help</code></td>
+                            <td>Display usage information</td>
+                        </tr>
+                        <tr>
+                            <td><code>--version</code></td>
+                            <td>Display version information</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Flag Composition</h3>
+                <p>Flags can be combined for powerful workflows:</p>
+
+                <pre><code># Skip questions + copy to clipboard + JSON output
+promptheus -s -c -o json "Pitch deck outline"
+
+# Custom provider + skip questions + file input
+promptheus --provider gemini -s -f brief.md</code></pre>
+            </section>
+
+            <!-- Web Overview Section -->
+            <section id="web-overview">
+                <h2>Web Interface Overview</h2>
+
+                <div class="info-box">
+                    <h4>🌐 Coming Soon</h4>
+                    <p>The Promptheus Web UI is currently under development. The web interface will provide a beautiful, alchemical-themed interface for prompt enhancement with all the power of the CLI in a modern web application.</p>
+                </div>
+
+                <h3>Planned Features</h3>
+                <ul>
+                    <li>Visual prompt refinement workflow</li>
+                    <li>Real-time collaborative editing</li>
+                    <li>Provider selection interface</li>
+                    <li>History browsing and management</li>
+                    <li>Export options (PDF, Markdown, Plain Text)</li>
+                    <li>Dark/light theme support</li>
+                    <li>Keyboard shortcuts matching CLI</li>
+                </ul>
+            </section>
+
+            <!-- Web Features Section -->
+            <section id="web-features">
+                <h2>Web UI Features</h2>
+
+                <h3>Alchemical Interface</h3>
+                <p>The web interface features a beautiful alchemical theme that mirrors the transformation process:</p>
+                <ul>
+                    <li>Animated transitions showing prompt transformation</li>
+                    <li>Visual feedback for AI processing</li>
+                    <li>Intuitive controls and navigation</li>
+                    <li>Responsive design for all devices</li>
+                </ul>
+
+                <h3>Interactive Workflow</h3>
+                <ul>
+                    <li>Step-by-step question interface</li>
+                    <li>Real-time preview of refined prompts</li>
+                    <li>One-click iteration and tweaking</li>
+                    <li>Side-by-side comparison view</li>
+                </ul>
+            </section>
+
+            <!-- Web Workflow Section -->
+            <section id="web-workflow">
+                <h2>Web UI Workflow</h2>
+
+                <h3>The Alchemical Process</h3>
+                <ol>
+                    <li><strong>Gather Raw Materials:</strong> Enter your basic prompt idea</li>
+                    <li><strong>Apply AI Heat:</strong> Answer clarifying questions</li>
+                    <li><strong>Transmutation:</strong> Watch as AI refines your prompt</li>
+                    <li><strong>Extract the Gold:</strong> Receive your polished prompt</li>
+                </ol>
+
+                <p>The web interface guides you through each step with visual feedback and helpful hints.</p>
+            </section>
+
+            <!-- Providers Section -->
+            <section id="providers">
+                <h2>Provider Support</h2>
+
+                <p>Promptheus supports six major AI providers through a unified interface. No vendor lock-in - use any provider you prefer.</p>
+
+                <h3>Google Gemini</h3>
+                <ul>
+                    <li><strong>Models:</strong> gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash</li>
+                    <li><strong>API Key:</strong> <code>GEMINI_API_KEY</code></li>
+                    <li><strong>Get Key:</strong> <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
+                </ul>
+
+                <h3>Anthropic Claude</h3>
+                <ul>
+                    <li><strong>Models:</strong> claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus</li>
+                    <li><strong>API Key:</strong> <code>ANTHROPIC_API_KEY</code></li>
+                    <li><strong>Get Key:</strong> <a href="https://console.anthropic.com/" target="_blank">Anthropic Console</a></li>
+                </ul>
+
+                <h3>OpenAI</h3>
+                <ul>
+                    <li><strong>Models:</strong> gpt-4o, gpt-4-turbo, gpt-3.5-turbo</li>
+                    <li><strong>API Key:</strong> <code>OPENAI_API_KEY</code></li>
+                    <li><strong>Get Key:</strong> <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a></li>
+                </ul>
+
+                <h3>Groq</h3>
+                <ul>
+                    <li><strong>Models:</strong> llama-3.3-70b-versatile, llama-3.1-70b-versatile, mixtral-8x7b</li>
+                    <li><strong>API Key:</strong> <code>GROQ_API_KEY</code></li>
+                    <li><strong>Get Key:</strong> <a href="https://console.groq.com/" target="_blank">Groq Console</a></li>
+                </ul>
+
+                <h3>Alibaba Cloud Qwen</h3>
+                <ul>
+                    <li><strong>Models:</strong> qwen-max, qwen-plus, qwen-turbo</li>
+                    <li><strong>API Key:</strong> <code>DASHSCOPE_API_KEY</code></li>
+                    <li><strong>Get Key:</strong> <a href="https://dashscope.console.aliyun.com/" target="_blank">DashScope Console</a></li>
+                </ul>
+
+                <h3>Zhipu AI GLM</h3>
+                <ul>
+                    <li><strong>Models:</strong> glm-4-plus, glm-4-0520, glm-4-air</li>
+                    <li><strong>API Key:</strong> <code>ZAI_API_KEY</code></li>
+                    <li><strong>Get Key:</strong> <a href="https://open.bigmodel.cn/" target="_blank">Zhipu AI Console</a></li>
+                </ul>
+
+                <h3>Provider Selection</h3>
+
+                <pre><code># Auto-detect from available API keys
+promptheus "Your prompt"
+
+# Explicit provider selection
+promptheus --provider gemini "Your prompt"
+promptheus --provider anthropic "Your prompt"
+
+# Specific model selection
+promptheus --model gpt-4o "Your prompt"
+promptheus --model claude-3-5-sonnet-20241022 "Your prompt"</code></pre>
+
+                <h3>List Available Models</h3>
+
+                <pre><code># List all models
+promptheus list-models
+
+# Filter by provider
+promptheus list-models --providers openai,gemini</code></pre>
+            </section>
+
+            <!-- History Section -->
+            <section id="history">
+                <h2>History Management</h2>
+
+                <p>Promptheus automatically tracks your refined prompts for easy retrieval and reuse.</p>
+
+                <h3>Command-Line Interface</h3>
+
+                <pre><code># Display all history
+promptheus history
+
+# Display last 50 entries
+promptheus history --limit 50
+
+# Clear all history
+promptheus history --clear</code></pre>
+
+                <h3>Interactive Mode Commands</h3>
+
+                <pre><code># In interactive mode
+/history              # View history
+/load 3              # Load entry at index 3
+/clear-history       # Purge all history</code></pre>
+
+                <h3>Storage Details</h3>
+                <ul>
+                    <li><strong>Location:</strong> <code>~/.promptheus/</code> (Unix) or <code>%APPDATA%/promptheus</code> (Windows)</li>
+                    <li><strong>Format:</strong> JSONL with metadata</li>
+                    <li><strong>Privacy:</strong> Local storage only, no external transmission</li>
+                    <li><strong>Content:</strong> Timestamps, task types, original and refined versions</li>
+                </ul>
+
+                <h3>Context-Aware Behavior</h3>
+                <p>History is automatically enabled or disabled based on context:</p>
+                <ul>
+                    <li><strong>Interactive terminals:</strong> History enabled by default</li>
+                    <li><strong>Pipelines/scripts:</strong> History disabled by default</li>
+                    <li><strong>Manual override:</strong> <code>PROMPTHEUS_ENABLE_HISTORY=1</code> or <code>=0</code></li>
+                </ul>
+
+                <pre><code># Enable history explicitly
+PROMPTHEUS_ENABLE_HISTORY=1 promptheus "analyze data"
+
+# Disable history explicitly
+PROMPTHEUS_ENABLE_HISTORY=0 promptheus "secret project"</code></pre>
+            </section>
+
+            <!-- Authentication Section -->
+            <section id="authentication">
+                <h2>Authentication Management</h2>
+
+                <h3>Interactive Setup</h3>
+                <p>The easiest way to configure API keys:</p>
+
+                <pre><code># Interactive provider selection
+promptheus auth
+
+# Direct provider specification
+promptheus auth gemini
+promptheus auth anthropic
+promptheus auth openai</code></pre>
+
+                <h3>Authentication Workflow</h3>
+                <ol>
+                    <li>Select provider from menu (or specify directly)</li>
+                    <li>System displays API key URL</li>
+                    <li>Enter API key (masked input)</li>
+                    <li>System validates key against provider API</li>
+                    <li>Valid key saved to <code>.env</code> file</li>
+                </ol>
+
+                <h3>Skip Validation</h3>
+                <p>For testing or offline configuration:</p>
+
+                <pre><code>promptheus auth openai --skip-validation</code></pre>
+
+                <h3>Manual Configuration</h3>
+                <p>Alternatively, manually edit your <code>.env</code> file:</p>
+
+                <pre><code># .env file
+GEMINI_API_KEY=your_key_here
+ANTHROPIC_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here</code></pre>
+            </section>
+
+            <!-- Output Formats Section -->
+            <section id="output-formats">
+                <h2>Output Formats</h2>
+
+                <h3>Plain Text (Default)</h3>
+                <p>Standard plain text output suitable for reading and piping:</p>
+
+                <pre><code>promptheus "Write a haiku"
+promptheus -o plain "Write a story"</code></pre>
+
+                <h3>JSON Output</h3>
+                <p>Structured JSON format with metadata for programmatic processing:</p>
+
+                <pre><code>promptheus -o json "Create API schema"</code></pre>
+
+                <p>JSON output includes:</p>
+                <ul>
+                    <li>Original prompt</li>
+                    <li>Refined prompt</li>
+                    <li>Task classification</li>
+                    <li>Provider and model used</li>
+                    <li>Timestamp</li>
+                </ul>
+
+                <h3>Processing JSON Output</h3>
+
+                <pre><code># Extract refined prompt
+promptheus -o json "prompt" | jq -r '.refined_prompt'
+
+# Extract metadata
+promptheus -o json "prompt" | jq '.metadata'
+
+# Format and save
+promptheus -o json "prompt" | jq '.' > output.json</code></pre>
+            </section>
+
+            <!-- Environment Variables Section -->
+            <section id="environment-vars">
+                <h2>Environment Variables</h2>
+
+                <h3>Provider Configuration</h3>
+
+                <pre><code># Override auto-detection
+export PROMPTHEUS_PROVIDER=gemini
+# Options: gemini, anthropic, openai, groq, qwen, glm
+
+# Override default model
+export PROMPTHEUS_MODEL=gemini-2.0-flash-exp</code></pre>
+
+                <h3>History Management</h3>
+
+                <pre><code># Enable/disable history
+export PROMPTHEUS_ENABLE_HISTORY=1   # Enable
+export PROMPTHEUS_ENABLE_HISTORY=0   # Disable
+# Values: 1/0, true/false, yes/no, on/off</code></pre>
+
+                <h3>Logging Configuration</h3>
+
+                <pre><code># Enable debug mode
+export PROMPTHEUS_DEBUG=1
+
+# Set log level
+export PROMPTHEUS_LOG_LEVEL=INFO
+# Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# JSON log format
+export PROMPTHEUS_LOG_FORMAT=json
+
+# Log to file
+export PROMPTHEUS_LOG_FILE=app.log</code></pre>
+
+                <h3>Configuration Precedence</h3>
+                <p>Settings are resolved in this order (highest to lowest priority):</p>
+                <ol>
+                    <li>Explicit CLI arguments</li>
+                    <li>Environment variables</li>
+                    <li>Auto-detection from <code>.env</code> file</li>
+                    <li>Provider defaults</li>
+                </ol>
+            </section>
+
+            <!-- Validation Section -->
+            <section id="validation">
+                <h2>Validation Tools</h2>
+
+                <h3>Configuration Validation</h3>
+                <p>Verify your setup is correct:</p>
+
+                <pre><code># Basic validation
+promptheus validate
+
+# Test live API connections
+promptheus validate --test-connection
+
+# Validate specific providers
+promptheus validate --providers gemini,anthropic</code></pre>
+
+                <h3>Model Discovery</h3>
+
+                <pre><code># List all available models
+promptheus list-models
+
+# Filter by providers
+promptheus list-models --providers openai
+
+# Limit output
+promptheus list-models --limit 10</code></pre>
+
+                <h3>Environment Template</h3>
+                <p>Generate a template <code>.env</code> file:</p>
+
+                <pre><code># Single provider
+promptheus template openai > .env
+
+# Multiple providers
+promptheus template openai,gemini,anthropic > .env</code></pre>
+            </section>
+
+            <!-- Troubleshooting Section -->
+            <section id="troubleshooting">
+                <h2>Troubleshooting</h2>
+
+                <h3>Installation Issues</h3>
+
+                <div class="info-box">
+                    <h4>Problem: Command not found</h4>
+                    <pre><code>pip install -e .
+which promptheus
+python -m promptheus.main "Test"</code></pre>
+                </div>
+
+                <h3>Provider Configuration</h3>
+
+                <div class="info-box">
+                    <h4>Problem: No API key found</h4>
+                    <pre><code># Verify .env file exists and has keys
+cat .env
+
+# Check environment variables
+env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI)'
+
+# Validate configuration
+promptheus validate --test-connection</code></pre>
+                </div>
+
+                <h3>Clipboard Issues</h3>
+
+                <div class="info-box">
+                    <h4>Problem: Clipboard not working</h4>
+                    <p><strong>Linux:</strong> Install xclip or xsel</p>
+                    <pre><code>sudo apt-get install xclip</code></pre>
+                    <p><strong>macOS/Windows:</strong> Native clipboard support included</p>
+                    <p><strong>WSL:</strong> May require X server configuration</p>
+                </div>
+
+                <h3>Python Version</h3>
+
+                <div class="info-box">
+                    <h4>Problem: Provider not compatible with Python 3.14</h4>
+                    <p>Some provider SDKs may not yet support Python 3.14:</p>
+                    <ul>
+                        <li><strong>Gemini:</strong> Full support via google-genai SDK</li>
+                        <li><strong>Others:</strong> Use Python 3.10-3.13 until compatibility updates</li>
+                    </ul>
+                    <p>Use virtual environments to manage multiple Python versions</p>
+                </div>
+
+                <h3>Debug Mode</h3>
+                <p>Enable verbose output for troubleshooting:</p>
+
+                <pre><code># Enable debug mode
+PROMPTHEUS_DEBUG=1 promptheus "test prompt"
+
+# Set log level
+PROMPTHEUS_LOG_LEVEL=DEBUG promptheus "test"
+
+# Log to file
+PROMPTHEUS_LOG_FILE=debug.log promptheus "test"</code></pre>
+            </section>
+
+            <!-- Command Reference Section -->
+            <section id="command-reference">
+                <h2>Command Reference</h2>
+
+                <h3>Primary Commands</h3>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Command</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>promptheus [prompt]</code></td>
+                            <td>Transform a prompt (or start interactive mode)</td>
+                        </tr>
+                        <tr>
+                            <td><code>promptheus auth</code></td>
+                            <td>Interactive API key configuration</td>
+                        </tr>
+                        <tr>
+                            <td><code>promptheus validate</code></td>
+                            <td>Validate API configuration</td>
+                        </tr>
+                        <tr>
+                            <td><code>promptheus list-models</code></td>
+                            <td>List available providers and models</td>
+                        </tr>
+                        <tr>
+                            <td><code>promptheus history</code></td>
+                            <td>View prompt history</td>
+                        </tr>
+                        <tr>
+                            <td><code>promptheus template</code></td>
+                            <td>Generate .env template</td>
+                        </tr>
+                        <tr>
+                            <td><code>promptheus completion</code></td>
+                            <td>Generate shell completion script</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Common Flag Combinations</h3>
+
+                <pre><code># Skip questions + copy
+promptheus -s -c "Generate docs"
+
+# JSON output + specific provider
+promptheus -o json --provider gemini "Create schema"
+
+# File input + skip questions
+promptheus -s -f prompt.txt
+
+# Custom provider + model
+promptheus --provider openai --model gpt-4o "Analyze code"</code></pre>
+            </section>
+
+            <!-- Examples Section -->
+            <section id="examples">
+                <h2>Usage Examples</h2>
+
+                <h3>Content Generation</h3>
+
+                <pre><code># Blog post with interactive questions
+promptheus "Write a blog post about AI"
+
+# Quick content without questions
+promptheus -s "Draft a product announcement"
+
+# Copy result to clipboard
+promptheus -c "Create social media posts"</code></pre>
+
+                <h3>Code Analysis</h3>
+
+                <pre><code># Analyze code (auto-skips questions)
+promptheus "Analyze the main.py file"
+
+# Code review prompt
+promptheus "Review this pull request for security issues"
+
+# Generate test cases
+promptheus --provider claude "Create unit tests for authentication"</code></pre>
+
+                <h3>Pipeline Workflows</h3>
+
+                <pre><code># Generate and save
+promptheus "Write tutorial" > tutorial.md
+
+# Batch processing
+cat topics.txt | while read topic; do
+  promptheus "Explain $topic" >> explanations.md
+done
+
+# JSON processing
+promptheus -o json "API spec" | jq '.endpoints' > api.json
+
+# Multi-stage refinement
+promptheus "Draft outline" | \
+  promptheus "Expand this" | \
+  tee final.txt</code></pre>
+
+                <h3>Interactive Session Workflow</h3>
+
+                <pre><code># Start interactive mode
+promptheus
+
+# Switch provider
+> /set provider gemini
+
+# Check status
+> /status
+
+# Process prompts
+> Write a technical guide
+
+# View and reload history
+> /history
+> /load 3
+
+# Toggle modes
+> /toggle skip-questions
+> /toggle refine</code></pre>
+            </section>
+
+            <!-- Contributing Section -->
+            <section id="contributing">
+                <h2>Contributing</h2>
+
+                <h3>Getting Started</h3>
+
+                <pre><code># Clone repository
+git clone https://github.com/abhichandra21/Promptheus.git
+cd Promptheus
+
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest -q
+
+# Format code
+black .</code></pre>
+
+                <h3>Contribution Guidelines</h3>
+
+                <ul>
+                    <li><strong>Scope:</strong> One feature or fix per pull request</li>
+                    <li><strong>Commits:</strong> Use imperative mood ("Add feature" not "Added feature")</li>
+                    <li><strong>Tests:</strong> Add tests for new functionality</li>
+                    <li><strong>Documentation:</strong> Update relevant docs</li>
+                    <li><strong>Code style:</strong> Run <code>black .</code> before committing</li>
+                    <li><strong>Security:</strong> Never log API keys or credentials</li>
+                </ul>
+
+                <h3>Adding New Providers</h3>
+
+                <ol>
+                    <li>Implement <code>LLMProvider</code> interface in <code>providers.py</code></li>
+                    <li>Add configuration to <code>providers.json</code></li>
+                    <li>Update environment detection in <code>config.py</code></li>
+                    <li>Add to provider factory function</li>
+                    <li>Update documentation</li>
+                    <li>Add tests</li>
+                </ol>
+
+                <h3>Issue Reporting</h3>
+                <p>Report issues at: <a href="https://github.com/abhichandra21/Promptheus/issues" target="_blank">github.com/abhichandra21/Promptheus/issues</a></p>
+
+                <p>Include:</p>
+                <ul>
+                    <li>Python version</li>
+                    <li>Operating system</li>
+                    <li>Provider being used</li>
+                    <li>Steps to reproduce</li>
+                    <li>Error messages or unexpected behavior</li>
+                </ul>
+            </section>
+
+            <!-- Footer Navigation -->
+            <section style="margin-top: 4rem; padding-top: 2rem; border-top: 2px solid rgba(212, 165, 116, 0.2);">
+                <h3>More Resources</h3>
+                <ul>
+                    <li><a href="index.html" style="color: var(--accent-gold);">← Back to Home</a></li>
+                    <li><a href="https://github.com/abhichandra21/Promptheus" target="_blank" style="color: var(--accent-gold);">View on GitHub</a></li>
+                    <li><a href="https://github.com/abhichandra21/Promptheus/issues" target="_blank" style="color: var(--accent-gold);">Report an Issue</a></li>
+                </ul>
+            </section>
+        </main>
+    </div>
+
+    <!-- Back to Top Button -->
+    <a href="#overview" class="back-to-top" id="backToTop">↑</a>
+
+    <!-- JavaScript -->
+    <script>
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.mobile-menu-toggle');
+
+            if (window.innerWidth <= 768 &&
+                sidebar.classList.contains('open') &&
+                !sidebar.contains(event.target) &&
+                !toggle.contains(event.target)) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // Active navigation highlighting
+        const sections = document.querySelectorAll('section[id]');
+        const navLinks = document.querySelectorAll('.nav-links a');
+
+        function highlightNavigation() {
+            let currentSection = '';
+
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+
+                if (window.pageYOffset >= (sectionTop - 100)) {
+                    currentSection = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${currentSection}`) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Back to top button visibility
+        function toggleBackToTop() {
+            const backToTop = document.getElementById('backToTop');
+            if (window.pageYOffset > 300) {
+                backToTop.classList.add('visible');
+            } else {
+                backToTop.classList.remove('visible');
+            }
+        }
+
+        // Scroll event listeners
+        window.addEventListener('scroll', () => {
+            highlightNavigation();
+            toggleBackToTop();
+        });
+
+        // Initial call
+        highlightNavigation();
+
+        // Smooth scroll for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+
+                    // Close mobile menu after clicking
+                    if (window.innerWidth <= 768) {
+                        document.getElementById('sidebar').classList.remove('open');
+                    }
+                }
+            });
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Escape key closes mobile menu
+            if (e.key === 'Escape' && window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('open');
+            }
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Promptheus Documentation loaded');
+        });
+    </script>
+</body>
+</html>

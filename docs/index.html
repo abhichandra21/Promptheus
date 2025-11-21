@@ -698,14 +698,14 @@
                         From vague ideas to precise instructions.
                     </p>
                     <div class="hero-buttons">
-                        <a href="#web-ui" class="btn btn-primary">
-                            🌐 Try Web UI
+                        <a href="documentation.html" class="btn btn-primary">
+                            📚 Read Documentation
                         </a>
                         <a href="#installation" class="btn btn-secondary">
                             💻 Install CLI
                         </a>
-                        <a href="#github" class="btn btn-ghost">
-                            📚 View on GitHub
+                        <a href="https://github.com/abhichandra21/Promptheus" target="_blank" class="btn btn-ghost">
+                            📦 View on GitHub
                         </a>
                     </div>
                 </div>
@@ -992,27 +992,27 @@ promptheus --provider gemini "Create a marketing plan"
                         <li><a href="#features">Features</a></li>
                         <li><a href="#demo">Demo</a></li>
                         <li><a href="#installation">Installation</a></li>
-                        <li><a href="#documentation">Documentation</a></li>
+                        <li><a href="documentation.html">Documentation</a></li>
                     </ul>
                 </div>
 
                 <div class="footer-section">
                     <h4>Resources</h4>
                     <ul class="footer-links">
-                        <li><a href="#github">GitHub</a></li>
-                        <li><a href="#changelog">Changelog</a></li>
-                        <li><a href="#contributing">Contributing</a></li>
-                        <li><a href="#support">Support</a></li>
+                        <li><a href="https://github.com/abhichandra21/Promptheus" target="_blank">GitHub</a></li>
+                        <li><a href="https://github.com/abhichandra21/Promptheus/releases" target="_blank">Changelog</a></li>
+                        <li><a href="documentation.html#contributing">Contributing</a></li>
+                        <li><a href="https://github.com/abhichandra21/Promptheus/issues" target="_blank">Issues</a></li>
                     </ul>
                 </div>
 
                 <div class="footer-section">
-                    <h4>Connect</h4>
+                    <h4>Quick Links</h4>
                     <ul class="footer-links">
-                        <li><a href="#discord">Discord</a></li>
-                        <li><a href="#twitter">Twitter</a></li>
-                        <li><a href="#newsletter">Newsletter</a></li>
-                        <li><a href="#blog">Blog</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#providers">Providers</a></li>
+                        <li><a href="documentation.html#troubleshooting">Troubleshooting</a></li>
+                        <li><a href="documentation.html#examples">Examples</a></li>
                     </ul>
                 </div>
             </div>
@@ -1061,16 +1061,7 @@ promptheus --provider gemini "Create a marketing plan"
             });
         });
 
-        // Add loading state to buttons
-        document.querySelectorAll('.btn').forEach(button => {
-            button.addEventListener('click', function(e) {
-                if (this.getAttribute('href') === '#github') {
-                    e.preventDefault();
-                    // TODO: Add GitHub repository URL
-                    window.open('https://github.com/abhishekchandra/promptheus', '_blank');
-                }
-            });
-        });
+        // Smooth scroll behavior (buttons with # links handled by smooth scroll above)
 
         // Parallax effect for hero section
         window.addEventListener('scroll', () => {
