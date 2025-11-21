@@ -1,0 +1,110 @@
+# Changelog
+
+All notable changes to Promptheus are documented in this file.
+
+## [0.2.0] - 2025-11-21
+
+### Added
+- **Web UI**: Full-featured web interface for prompt refinement and history management
+  - FastAPI-based web server accessible via `promptheus web`
+  - Browser-based interactive session with real-time feedback
+  - History tracking and prompt management in web interface
+  - API key validation and provider selection UI
+- **Keyboard Shortcuts**: Enhanced CLI experience with custom key bindings
+  - Enter to submit prompts
+  - Shift+Enter for multiline input
+  - Ctrl+C for graceful cancellation
+- **Dynamic Model Discovery**: API-driven provider and model discovery
+  - Provider normalization for consistent IDs across platforms
+  - Automatic model fetching from provider endpoints
+  - Enhanced provider configuration with validation
+- **Docker Support**: Containerized deployment
+  - Dockerfile for easy container builds
+  - Support for running CLI and web UI in containers
+- **GitHub Pages Documentation**: Comprehensive online documentation
+  - Live documentation site for all features
+  - Interactive examples and usage guides
+  - Deployment workflow automation
+
+### Changed
+- **Refactored Help System**: Redesigned tooltip and help information
+  - Improved CLI help text visibility and clarity
+  - Better organized command documentation
+  - Enhanced interactive help in web UI
+- **Provider Configuration Precedence**: Improved config hierarchy
+  - Support for provider-scoped environment variables
+  - Better handling of model fallbacks
+  - Clearer precedence rules for configuration
+- **UI/UX Improvements**:
+  - Enhanced interactive mode with better formatting
+  - Improved error messages and user feedback
+  - Better transient message handling in TUI
+- **Updated Dependencies**:
+  - Added `aiohttp` for async HTTP support
+  - Added `fastapi` and `uvicorn` for web server
+  - Updated Google Genai SDK for model compatibility
+
+### Fixed
+- **GitHub Pages Deployment**: Fixed deployment workflow and action configuration
+- **Environment Loading**: Improved `.env` file detection and loading
+- **API Response Handling**: Better error handling and sanitization across all providers
+- **History Management**: Improved session persistence and history access
+
+### Technical Details
+- Implemented Textual-based TUI for interactive mode
+- Added comprehensive logging throughout application
+- Improved asyncio support for concurrent API calls
+- Enhanced test coverage with pytest configuration
+- Support for Python 3.10, 3.11, 3.12, and 3.13+
+
+### Supported Providers
+- Google Gemini (gemini-2.0-flash, gemini-1.5-pro, and more)
+- Anthropic Claude (claude-3-5-sonnet, claude-3-opus)
+- OpenAI (gpt-4o, gpt-4-turbo)
+- Groq (llama-3.3-70b, mixtral-8x7b)
+- Alibaba Qwen (qwen-max, qwen-plus)
+- Zhipu GLM (glm-4-plus, glm-4-air)
+
+## [0.1.2] - 2025-10-15
+
+### Added
+- Multi-provider support framework
+- Session history and persistence
+- Interactive refinement workflow
+- Adaptive task detection (analysis vs generation)
+- Question-answer-refinement pipeline
+- Tab completion for interactive commands
+
+### Changed
+- Improved error handling and messages
+- Enhanced provider abstraction layer
+- Better configuration management
+
+### Fixed
+- API timeout handling
+- Token limit validation
+- Error message sanitization
+
+## [0.1.1] - 2025-09-10
+
+### Initial Features
+- CLI interface for prompt refinement
+- Support for multiple AI providers
+- Basic question generation
+- Session management
+- Interactive mode (REPL)
+
+---
+
+## Release Process Notes
+
+For future releases:
+1. Update version in `pyproject.toml` and `src/promptheus/constants.py`
+2. Update CHANGELOG.md with detailed changes
+3. Run tests: `pytest -q`
+4. Create commit: `git commit -m "Release v{VERSION}"`
+5. Tag release: `git tag v{VERSION}`
+6. Push: `git push origin main && git push origin v{VERSION}`
+7. Build: `poetry build`
+8. Publish: `poetry publish`
+9. Create GitHub release with changelog
