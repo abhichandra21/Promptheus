@@ -2664,6 +2664,105 @@ body::after {
     min-width: 100px;
 }
 
+/* Keyboard Shortcuts Dialog */
+.keyboard-shortcuts-dialog {
+    max-width: 720px;
+    width: 95%;
+}
+
+.keyboard-shortcuts-dialog .confirm-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.shortcuts-body {
+    padding: 0 !important;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    max-height: 65vh;
+    overflow-y: auto;
+}
+
+.shortcuts-section {
+    padding: var(--space-5);
+    border-right: 1px solid var(--border-subtle);
+}
+
+.shortcuts-section:nth-child(odd):last-child {
+    border-right: none;
+}
+
+.shortcuts-section:nth-child(even):last-child {
+    border-right: none;
+    grid-column: span 2;
+}
+
+.shortcuts-section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--color-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-4) 0;
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid rgba(212, 165, 116, 0.4);
+}
+
+.shortcuts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.shortcut-row {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: var(--space-4);
+    align-items: center;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all var(--transition-fast);
+}
+
+.shortcut-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.shortcut-row:hover {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+    margin: 0 calc(-1 * var(--space-2));
+    background: rgba(212, 165, 116, 0.08);
+    border-radius: var(--radius-sm);
+}
+
+.shortcut-keys {
+    font-family: 'Fira Code', 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-gold);
+    background: linear-gradient(135deg, rgba(212, 165, 116, 0.15) 0%, rgba(212, 165, 116, 0.08) 100%);
+    border: 1.5px solid rgba(212, 165, 116, 0.4);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.shortcut-desc {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    line-height: 1.3;
+}
+
 /* ===================================================================
    CUSTOM TOGGLE SWITCH - Alchemical Design
    =================================================================== */

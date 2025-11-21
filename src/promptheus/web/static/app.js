@@ -37,15 +37,6 @@ class PromptheusApp {
         // Main prompt submission
         document.getElementById('submit-btn').addEventListener('click', () => this.submitPrompt());
 
-        // Keyboard shortcuts and input statistics
-        document.getElementById('prompt-input').addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 'Enter') {
-                e.preventDefault();
-                this.submitPrompt();
-            }
-        });
-
-        
         // New prompt button (hidden initially, shown after results)
         document.getElementById('start-over-btn').addEventListener('click', () => {
             this.startNewPrompt();
@@ -113,10 +104,179 @@ class PromptheusApp {
             }
         });
 
-        // Escape key to close settings
+        // Global keyboard shortcuts
         document.addEventListener('keydown', (e) => {
+            // Escape key to close settings, tooltips, dropdowns, and cancel ongoing operations
             if (e.key === 'Escape') {
+                e.preventDefault();
+
+                // Cancel any ongoing request
+                if (this.currentAbortController) {
+                    this.cancelCurrentRequest();
+                }
+
                 this.closeSettings();
+                // Close help tooltips
+                document.querySelectorAll('.help-tooltip.visible').forEach(tooltip => {
+                    tooltip.classList.remove('visible');
+                });
+                document.querySelectorAll('.toolbar-help-icon.active').forEach(icon => {
+                    icon.classList.remove('active');
+                });
+                // Close dropdowns
+                document.querySelectorAll('.alchemical-dropdown.active').forEach(dropdown => {
+                    this.closeDropdown(dropdown);
+                });
+                return;
+            }
+
+            // Don't process other shortcuts when typing in input/textarea
+            const target = e.target;
+            const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+
+            // Alt+Enter or Ctrl+Enter to submit (works even when typing)
+            if ((e.altKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                const submitBtn = document.getElementById('submit-btn');
+                if (!submitBtn.classList.contains('hidden')) {
+                    this.submitPrompt();
+                }
+                return;
+            }
+
+            // Skip other Ctrl shortcuts when typing (except Ctrl+Enter above)
+            if (isTyping && e.ctrlKey && e.key.toLowerCase() !== 'enter') {
+                return;
+            }
+
+            // Ctrl+M - Toggle Mode help tooltip
+            if (e.ctrlKey && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                const modeIcon = document.querySelector('.toolbar-help-icon[data-help-for="mode"]');
+                if (modeIcon) modeIcon.click();
+                return;
+            }
+
+            // Ctrl+Shift+S - Toggle Style help tooltip
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                const styleIcon = document.querySelector('.toolbar-help-icon[data-help-for="style"]');
+                if (styleIcon) styleIcon.click();
+                return;
+            }
+
+            // Ctrl+P - Focus Provider dropdown
+            if (e.ctrlKey && e.key.toLowerCase() === 'p') {
+                e.preventDefault();
+                const providerSelect = document.getElementById('provider-select');
+                providerSelect.focus();
+                return;
+            }
+
+            // Ctrl+L - Focus Model dropdown
+            if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+                e.preventDefault();
+                const modelSelect = document.getElementById('model-select');
+                if (!modelSelect.disabled) {
+                    modelSelect.focus();
+                }
+                return;
+            }
+
+            // Ctrl+, - Open Settings
+            if (e.ctrlKey && e.key === ',') {
+                e.preventDefault();
+                this.openSettings();
+                return;
+            }
+
+            // Ctrl+I - Focus Input textarea
+            if (e.ctrlKey && e.key.toLowerCase() === 'i') {
+                e.preventDefault();
+                const promptInput = document.getElementById('prompt-input');
+                promptInput.focus();
+                return;
+            }
+
+            // Ctrl+Shift+C - Copy output
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+                e.preventDefault();
+                const copyBtn = document.getElementById('copy-btn');
+                if (!copyBtn.classList.contains('hidden')) {
+                    this.copyOutputToClipboard();
+                }
+                return;
+            }
+
+            // Ctrl+T - Tweak prompt
+            if (e.ctrlKey && e.key.toLowerCase() === 't') {
+                e.preventDefault();
+                const tweakBtn = document.getElementById('tweak-btn');
+                if (!tweakBtn.classList.contains('hidden')) {
+                    this.showTweakPromptDialog();
+                }
+                return;
+            }
+
+            // Ctrl+N - Start Over (New prompt)
+            if (e.ctrlKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                const startOverBtn = document.getElementById('start-over-btn');
+                if (!startOverBtn.classList.contains('hidden')) {
+                    this.startNewPrompt();
+                }
+                return;
+            }
+
+            // Ctrl+Shift+X - Cancel operation
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'x') {
+                e.preventDefault();
+                const cancelBtn = document.getElementById('cancel-btn');
+                if (!cancelBtn.classList.contains('hidden')) {
+                    this.cancelCurrentRequest();
+                }
+                return;
+            }
+
+            // Ctrl+Shift+H - Clear History
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
+                e.preventDefault();
+                const clearHistoryBtn = document.getElementById('clear-history-btn');
+                if (clearHistoryBtn) {
+                    this.showConfirmDialog(
+                        'Clear All History',
+                        'Are you sure you want to clear all history? This action cannot be undone.',
+                        () => this.clearHistory()
+                    );
+                }
+                return;
+            }
+
+            // Ctrl+[ - Previous history page
+            if (e.ctrlKey && e.key === '[') {
+                e.preventDefault();
+                const prevBtn = document.getElementById('prev-page-btn');
+                if (!prevBtn.disabled) {
+                    this.previousHistoryPage();
+                }
+                return;
+            }
+
+            // Ctrl+] - Next history page
+            if (e.ctrlKey && e.key === ']') {
+                e.preventDefault();
+                const nextBtn = document.getElementById('next-page-btn');
+                if (!nextBtn.disabled) {
+                    this.nextHistoryPage();
+                }
+                return;
+            }
+
+            // ? - Show keyboard shortcuts help
+            if (e.key === '?' && !isTyping) {
+                e.preventDefault();
+                this.showKeyboardShortcuts();
+                return;
             }
         });
 
@@ -2250,6 +2410,152 @@ class PromptheusApp {
         setTimeout(() => overlay.remove(), 300);
     }
 
+    showKeyboardShortcuts() {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-dialog-overlay';
+
+        // Create dialog
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog keyboard-shortcuts-dialog';
+
+        dialog.innerHTML = `
+            <div class="confirm-dialog-header">
+                <h3 class="confirm-dialog-title">⌨️ Keyboard Shortcuts</h3>
+                <button class="help-tooltip-close" aria-label="Close">✕</button>
+            </div>
+            <div class="confirm-dialog-body shortcuts-body">
+                <div class="shortcuts-section">
+                    <h4 class="shortcuts-section-title">Primary Actions</h4>
+                    <div class="shortcuts-list">
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + ↵</div>
+                            <div class="shortcut-desc">Submit/Optimize Prompt</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + N</div>
+                            <div class="shortcut-desc">Start Over</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + Shift + X</div>
+                            <div class="shortcut-desc">Cancel</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + Shift + C</div>
+                            <div class="shortcut-desc">Copy output</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + T</div>
+                            <div class="shortcut-desc">Tweak prompt</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shortcuts-section">
+                    <h4 class="shortcuts-section-title">Configuration</h4>
+                    <div class="shortcuts-list">
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + M</div>
+                            <div class="shortcut-desc">Mode help</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + Shift + S</div>
+                            <div class="shortcut-desc">Style help</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + P</div>
+                            <div class="shortcut-desc">Provider</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + L</div>
+                            <div class="shortcut-desc">Model</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + ,</div>
+                            <div class="shortcut-desc">Settings</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shortcuts-section">
+                    <h4 class="shortcuts-section-title">Navigation</h4>
+                    <div class="shortcuts-list">
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + I</div>
+                            <div class="shortcut-desc">Focus input</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + Shift + H</div>
+                            <div class="shortcut-desc">Clear history</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + [</div>
+                            <div class="shortcut-desc">Prev page</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Ctrl + ]</div>
+                            <div class="shortcut-desc">Next page</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shortcuts-section">
+                    <h4 class="shortcuts-section-title">General</h4>
+                    <div class="shortcuts-list">
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">Esc</div>
+                            <div class="shortcut-desc">Close all & cancel</div>
+                        </div>
+                        <div class="shortcut-row">
+                            <div class="shortcut-keys">?</div>
+                            <div class="shortcut-desc">Show this help</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="confirm-dialog-actions">
+                <button class="btn btn-primary confirm-dialog-confirm">Got it</button>
+            </div>
+        `;
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        // Trigger animation
+        setTimeout(() => {
+            overlay.classList.add('active');
+            dialog.classList.add('active');
+        }, 10);
+
+        // Handle close button
+        const closeBtn = dialog.querySelector('.help-tooltip-close');
+        closeBtn.addEventListener('click', () => {
+            this.closeConfirmDialog(overlay, dialog);
+        });
+
+        // Handle confirm button
+        const confirmBtn = dialog.querySelector('.confirm-dialog-confirm');
+        confirmBtn.addEventListener('click', () => {
+            this.closeConfirmDialog(overlay, dialog);
+        });
+
+        // Handle overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.closeConfirmDialog(overlay, dialog);
+            }
+        });
+
+        // Handle escape key
+        const escapeHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeConfirmDialog(overlay, dialog);
+                document.removeEventListener('keydown', escapeHandler);
+            }
+        };
+        document.addEventListener('keydown', escapeHandler);
+    }
+
     showMessage(type, message) {
         const outputDiv = document.getElementById('output');
         const iconMap = {
@@ -2547,21 +2853,6 @@ class PromptheusApp {
             }
             // Close help tooltips when clicking outside
             if (!e.target.closest('.toolbar-help-icon') && !e.target.closest('.help-tooltip')) {
-                document.querySelectorAll('.help-tooltip.visible').forEach(tooltip => {
-                    tooltip.classList.remove('visible');
-                });
-                document.querySelectorAll('.toolbar-help-icon.active').forEach(icon => {
-                    icon.classList.remove('active');
-                });
-            }
-        });
-
-        // Close dropdowns and tooltips on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.alchemical-dropdown.active').forEach(dropdown => {
-                    this.closeDropdown(dropdown);
-                });
                 document.querySelectorAll('.help-tooltip.visible').forEach(tooltip => {
                     tooltip.classList.remove('visible');
                 });
