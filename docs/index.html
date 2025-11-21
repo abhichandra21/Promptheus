@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promptheus - AI-Powered Prompt Optimization Tool</title>
+    <meta name="description" content="Transform raw prompts into polished, effective prompts for LLMs. Multi-provider support with intelligent question-asking and beautiful alchemical interface.">
+
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- Critical CSS -->
+    <style>
+        /* CSS Reset & Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0A0E1A;
+            --bg-secondary: #151F2E;
+            --bg-tertiary: #1E293B;
+            --accent-gold: #D4A574;
+            --accent-gold-light: #E5B88A;
+            --accent-gold-dark: #B8935F;
+            --text-primary: #E2E8F0;
+            --text-secondary: #94A3B8;
+            --text-muted: #64748B;
+            --gradient-primary: linear-gradient(135deg, #0A0E1A 0%, #151F2E 50%, #1E293B 100%);
+            --gradient-gold: linear-gradient(135deg, #D4A574 0%, #E5B88A 100%);
+            --shadow-gold: 0 0 30px rgba(212, 165, 116, 0.3);
+            --shadow-glow: 0 0 60px rgba(212, 165, 116, 0.2);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+
+        h1 { font-size: clamp(2.5rem, 5vw, 4rem); }
+        h2 { font-size: clamp(2rem, 4vw, 3rem); }
+        h3 { font-size: clamp(1.5rem, 3vw, 2rem); }
+        h4 { font-size: 1.25rem; }
+
+        p { margin-bottom: 1rem; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: var(--gradient-gold);
+            color: var(--bg-primary);
+            box-shadow: 0 4px 15px rgba(212, 165, 116, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(212, 165, 116, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--accent-gold);
+            border: 2px solid var(--accent-gold);
+        }
+
+        .btn-secondary:hover {
+            background: var(--accent-gold);
+            color: var(--bg-primary);
+            transform: translateY(-2px);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--text-muted);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-gold);
+            color: var(--text-primary);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+            background: var(--gradient-primary);
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 50%, rgba(212, 165, 116, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(212, 165, 116, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-text h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: var(--gradient-gold);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-text .subheadline {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            line-height: 1.8;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+
+        .hero-buttons .btn {
+            min-width: 180px;
+        }
+
+        .hero-visual {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+            position: relative;
+        }
+
+        .alchemical-circle {
+            width: 300px;
+            height: 300px;
+            border: 3px solid var(--accent-gold);
+            border-radius: 50%;
+            position: relative;
+            background: radial-gradient(circle, rgba(212, 165, 116, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+
+        .alchemical-circle::before {
+            content: '⚗️';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4rem;
+            color: var(--accent-gold);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .alchemical-circle::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 1px solid var(--accent-gold-light);
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: rotate 15s linear infinite reverse;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        /* Features Section */
+        .features {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .section-header h2 {
+            font-weight: 800;
+            background: var(--gradient-gold);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section-header .description {
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: var(--bg-tertiary);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top right, rgba(212, 165, 116, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-gold);
+            box-shadow: var(--shadow-gold);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--gradient-gold);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            color: var(--accent-gold);
+            margin-bottom: 1rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Demo Section */
+        .demo {
+            padding: 6rem 0;
+            background: var(--bg-primary);
+        }
+
+        .demo-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            align-items: center;
+        }
+
+        .demo-content h3 {
+            color: var(--accent-gold);
+            margin-bottom: 1.5rem;
+        }
+
+        .demo-examples {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .demo-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border-left: 4px solid var(--accent-gold);
+        }
+
+        .demo-card h4 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .demo-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .demo-visual {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .mock-ui {
+            width: 100%;
+            max-width: 500px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            border: 1px solid var(--accent-gold);
+        }
+
+        .mock-ui-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(212, 165, 116, 0.2);
+        }
+
+        .mock-ui-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-gold);
+        }
+
+        .mock-ui-content {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        /* How It Works Section */
+        .how-it-works {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
+        }
+
+        .workflow-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .workflow-step {
+            text-align: center;
+            position: relative;
+        }
+
+        .workflow-step::before {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            right: -100%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent-gold), transparent);
+            z-index: 1;
+        }
+
+        .workflow-step:last-child::before {
+            display: none;
+        }
+
+        .workflow-number {
+            width: 80px;
+            height: 80px;
+            background: var(--gradient-gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 800;
+            margin: 0 auto 1rem;
+            color: var(--bg-primary);
+            position: relative;
+            z-index: 2;
+        }
+
+        .workflow-title {
+            color: var(--accent-gold);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .workflow-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        /* Providers Section */
+        .providers {
+            padding: 6rem 0;
+            background: var(--bg-primary);
+        }
+
+        .providers-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .provider-badge {
+            background: var(--bg-secondary);
+            border: 1px solid rgba(212, 165, 116, 0.3);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .provider-badge:hover {
+            border-color: var(--accent-gold);
+            transform: translateY(-2px);
+        }
+
+        .provider-badge span {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Installation Section */
+        .installation {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
+        }
+
+        .install-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+        }
+
+        .install-code {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 2rem;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+
+        .install-code code {
+            color: #E2E8F0;
+        }
+
+        .install-steps {
+            padding-left: 0;
+        }
+
+        .install-steps li {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--accent-gold);
+        }
+
+        .install-steps h4 {
+            color: var(--accent-gold);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--bg-primary);
+            padding: 3rem 0 2rem;
+            border-top: 1px solid rgba(212, 165, 116, 0.2);
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .footer-section h4 {
+            color: var(--accent-gold);
+            margin-bottom: 1rem;
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--accent-gold);
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(212, 165, 116, 0.1);
+            color: var(--text-muted);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .hero-content {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+                text-align: center;
+            }
+
+            .hero-buttons {
+                justify-content: center;
+            }
+
+            .demo-container,
+            .install-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .providers-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--accent-gold-light);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Smooth Scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Visibility Animation */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Utility Classes */
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .mb-2 { margin-bottom: 2rem; }
+        .mb-4 { margin-bottom: 4rem; }
+        .text-muted { color: var(--text-muted); }
+
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Focus styles */
+        *:focus {
+            outline: 2px solid var(--accent-gold);
+            outline-offset: 2px;
+        }
+
+        /* Skip to content link */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--accent-gold);
+            color: var(--bg-primary);
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            border-radius: 0 0 8px 0;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+    </style>
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+
+    <!-- Hero Section -->
+    <section class="hero" id="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <h1>Transform Raw Prompts into AI Gold</h1>
+                    <p class="subheadline">
+                        Promptheus uses advanced AI to transform your basic prompts into polished,
+                        effective queries that get superior results from any LLM.
+                        From vague ideas to precise instructions.
+                    </p>
+                    <div class="hero-buttons">
+                        <a href="#web-ui" class="btn btn-primary">
+                            🌐 Try Web UI
+                        </a>
+                        <a href="#installation" class="btn btn-secondary">
+                            💻 Install CLI
+                        </a>
+                        <a href="#github" class="btn btn-ghost">
+                            📚 View on GitHub
+                        </a>
+                    </div>
+                </div>
+                <div class="hero-visual">
+                    <div class="alchemical-circle"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <main id="main-content">
+        <!-- Features Section -->
+        <section class="features" id="features">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Alchemical Intelligence</h2>
+                    <p class="description">
+                        Just as ancient alchemists transformed base metals into gold,
+                        Promptheus transforms your raw ideas into refined, powerful prompts.
+                    </p>
+                </div>
+
+                <div class="features-grid">
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">🔮</div>
+                        <h3>Multi-Provider Support</h3>
+                        <p>
+                            Works with Google Gemini, OpenAI, Anthropic Claude, Groq, Qwen, and GLM.
+                            No vendor lock-in - transform prompts for any AI system.
+                        </p>
+                    </div>
+
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">❓</div>
+                        <h3>Intelligent Questioning</h3>
+                        <p>
+                            Automatically asks clarifying questions to understand your intent,
+                            then crafts the perfect prompt with all the right details.
+                        </p>
+                    </div>
+
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">🎭</div>
+                        <h3>Multiple Output Styles</h3>
+                        <p>
+                            Choose from bullets, steps, plain text, or concise formats.
+                            Get your refined prompt in the style that best suits your needs.
+                        </p>
+                    </div>
+
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">⌨️</div>
+                        <h3>Powerful CLI Interface</h3>
+                        <p>
+                            Built for developers and power users with keyboard shortcuts,
+                            command history, and seamless pipe integration.
+                        </p>
+                    </div>
+
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">🖥️</div>
+                        <h3>Beautiful Web Interface</h3>
+                        <p>
+                            Experience prompt enhancement in a modern, alchemical-themed web UI
+                            with smooth animations and intuitive controls.
+                        </p>
+                    </div>
+
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">📊</div>
+                        <h3>History & Session Management</h3>
+                        <p>
+                            Track your prompt evolution with built-in history.
+                            Load previous refinements and build on your best work.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Demo Section -->
+        <section class="demo" id="demo">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Witness the Transformation</h2>
+                    <p class="description">
+                        See how Promptheus transforms simple prompts into powerful, detailed instructions.
+                    </p>
+                </div>
+
+                <div class="demo-container">
+                    <div class="demo-content">
+                        <h3>Before & After Examples</h3>
+                        <div class="demo-examples">
+                            <div class="demo-card">
+                                <h4>❌ Basic Prompt</h4>
+                                <p>Write a story about a dragon who loses its fire and has to find it again.</p>
+                            </div>
+                            <div class="demo-card">
+                                <h4>✅ Transformed Prompt</h4>
+                                <p>Create a 1000-word fantasy story about Ember, a young dragon who accidentally loses their fire-breathing ability after a magical storm. Include themes of perseverance, self-discovery, and unlikely friendships. The story should have three distinct acts: 1) The accident and Ember's despair, 2) A journey through the forest to find the lost flame, 3) The emotional climax where Ember realizes true power comes from within.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="demo-visual">
+                        <div class="mock-ui">
+                            <div class="mock-ui-header">
+                                <div class="mock-ui-dot"></div>
+                                <div class="mock-ui-dot"></div>
+                                <div class="mock-ui-dot"></div>
+                            </div>
+                            <div class="mock-ui-content">
+                                <strong>🔮 Promptheus Web Interface</strong><br><br>
+                                Enter your raw prompt:<br>
+                                "Help me write an email to my boss"<br><br>
+                                <span style="color: #D4A574;">✨ AI Analysis:</span><br>
+                                • Purpose: Professional communication<br>
+                                • Audience: Manager/supervisor<br>
+                                • Context: Workplace setting<br><br>
+                                <span style="color: #D4A574;">🎯 Clarifying Questions:</span><br>
+                                • What's the purpose of the email?<br>
+                                • What tone should we use?<br>
+                                • Any specific topics to include?
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section class="how-it-works" id="how-it-works">
+            <div class="container">
+                <div class="section-header">
+                    <h2>The Alchemical Process</h2>
+                    <p class="description">
+                        Four simple steps to transform your raw ideas into AI gold.
+                    </p>
+                </div>
+
+                <div class="workflow-container">
+                    <div class="workflow-step fade-in">
+                        <div class="workflow-number">1</div>
+                        <h3 class="workflow-title">Gather Raw Materials</h3>
+                        <p class="workflow-description">
+                            Start with your basic idea or rough prompt.
+                            No need for perfect phrasing - just your raw intention.
+                        </p>
+                    </div>
+
+                    <div class="workflow-step fade-in">
+                        <div class="workflow-number">2</div>
+                        <h3 class="workflow-title">Apply AI Heat</h3>
+                        <p class="workflow-description">
+                            Our intelligent AI analyzes your intent and asks clarifying questions
+                            to understand exactly what you want to achieve.
+                        </p>
+                    </div>
+
+                    <div class="workflow-step fade-in">
+                        <div class="workflow-number">3</div>
+                        <h3 class="workflow-title">Transmutation</h3>
+                        <p class="workflow-description">
+                            The alchemical transformation begins. We refine your concept,
+                            add structure, and craft a precise, effective prompt.
+                        </p>
+                    </div>
+
+                    <div class="workflow-step fade-in">
+                        <div class="workflow-number">4</div>
+                        <h3 class="workflow-title">Extract the Gold</h3>
+                        <p class="workflow-description">
+                            Receive your polished prompt ready for any AI.
+                            Better clarity, better results - the transformation is complete.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Providers Section -->
+        <section class="providers" id="providers">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Supported AI Providers</h2>
+                    <p class="description">
+                        Transform prompts for any AI system. No vendor lock-in here.
+                    </p>
+                </div>
+
+                <div class="providers-grid">
+                    <div class="provider-badge fade-in">
+                        <span>🔵 Google Gemini</span>
+                    </div>
+                    <div class="provider-badge fade-in">
+                        <span>🟢 OpenAI</span>
+                    </div>
+                    <div class="provider-badge fade-in">
+                        <span>🦉 Anthropic Claude</span>
+                    </div>
+                    <div class="provider-badge fade-in">
+                        <span>⚡ Groq</span>
+                    </div>
+                    <div class="provider-badge fade-in">
+                        <span>🌙 Qwen</span>
+                    </div>
+                    <div class="provider-badge fade-in">
+                        <span>🤖 GLM</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Installation Section -->
+        <section class="installation" id="installation">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Get Started in Minutes</h2>
+                    <p class="description">
+                        Install Promptheus and start transforming your prompts today.
+                    </p>
+                </div>
+
+                <div class="install-grid">
+                    <div>
+                        <h3>Quick Installation</h3>
+                        <div class="install-code">
+<code>pip install promptheus</code>
+                        </div>
+
+                        <h3>Usage Examples</h3>
+                        <div class="install-code">
+<code># Basic usage
+promptheus "Write a poem about AI"
+
+# Skip questions
+promptheus -s "Explain quantum computing"
+
+# Interactive mode
+promptheus
+
+# Different providers
+promptheus --provider gemini "Create a marketing plan"
+</code>
+                        </div>
+                    </div>
+
+                    <div>
+                        <ul class="install-steps">
+                            <li>
+                                <h4>Step 1: Install Python</h4>
+                                <p>Ensure you have Python 3.8+ installed. Check with:</p>
+                                <code>python --version</code>
+                            </li>
+                            <li>
+                                <h4>Step 2: Install Promptheus</h4>
+                                <p>Install the package using pip:</p>
+                                <code>pip install promptheus</code>
+                            </li>
+                            <li>
+                                <h4>Step 3: Set Up API Keys</h4>
+                                <p>Add your API keys to environment variables:</p>
+                                <code>export OPENAI_API_KEY="your-key"</code>
+                            </li>
+                            <li>
+                                <h4>Step 4: Start Transforming</h4>
+                                <p>Run Promptheus and watch your prompts transform:</p>
+                                <code>promptheus "Your prompt here"</code>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Product</h4>
+                    <ul class="footer-links">
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#demo">Demo</a></li>
+                        <li><a href="#installation">Installation</a></li>
+                        <li><a href="#documentation">Documentation</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul class="footer-links">
+                        <li><a href="#github">GitHub</a></li>
+                        <li><a href="#changelog">Changelog</a></li>
+                        <li><a href="#contributing">Contributing</a></li>
+                        <li><a href="#support">Support</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Connect</h4>
+                    <ul class="footer-links">
+                        <li><a href="#discord">Discord</a></li>
+                        <li><a href="#twitter">Twitter</a></li>
+                        <li><a href="#newsletter">Newsletter</a></li>
+                        <li><a href="#blog">Blog</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2024 Promptheus. Open source project. MIT License.
+                   <!-- TODO: Add GitHub star count dynamically -->
+                   <!-- <span id="github-stars">⭐ Stars: <span class="loading"></span></span> -->
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        // Observe all fade-in elements
+        document.querySelectorAll('.fade-in').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth scroll for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Add loading state to buttons
+        document.querySelectorAll('.btn').forEach(button => {
+            button.addEventListener('click', function(e) {
+                if (this.getAttribute('href') === '#github') {
+                    e.preventDefault();
+                    // TODO: Add GitHub repository URL
+                    window.open('https://github.com/abhishekchandra/promptheus', '_blank');
+                }
+            });
+        });
+
+        // Parallax effect for hero section
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const hero = document.querySelector('.hero');
+            const heroContent = document.querySelector('.hero-content');
+
+            if (hero && heroContent) {
+                const parallax = scrolled * 0.5;
+                heroContent.style.transform = `translateY(${parallax}px)`;
+            }
+        });
+
+        // Animate counter for GitHub stars (placeholder)
+        function animateCounter(element, target) {
+            let current = 0;
+            const increment = target / 100;
+            const timer = setInterval(() => {
+                current += increment;
+                if (current >= target) {
+                    current = target;
+                    clearInterval(timer);
+                }
+                element.textContent = Math.floor(current);
+            }, 20);
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add any initialization code here
+            console.log('Promptheus landing page loaded');
+
+            // You can add GitHub star count fetching here
+            // fetchGitHubStars();
+        });
+
+        // GitHub stars fetching (if needed)
+        async function fetchGitHubStars() {
+            // TODO: Add GitHub API call to fetch star count
+            // const response = await fetch('https://api.github.com/repos/abhishekchandra/promptheus');
+            // const data = await response.json();
+            // const stars = data.stargazers_count;
+            // document.getElementById('github-stars').innerHTML = `⭐ Stars: ${stars}`;
+        }
+    </script>
+</body>
+</html>
