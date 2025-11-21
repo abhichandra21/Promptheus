@@ -56,6 +56,9 @@
                         <div class="toolbar-item">
                             <label class="toolbar-label" for="question-mode" id="mode-label">
                                 <span class="toolbar-text">Mode</span>
+                                <button class="toolbar-help-icon" data-help-for="mode" aria-label="Mode help">
+                                    <span>ℹ</span>
+                                </button>
                             </label>
                             <div class="alchemical-dropdown" id="mode-dropdown">
                                 <select id="question-mode" class="toolbar-select" aria-labelledby="mode-label">
@@ -69,15 +72,34 @@
                                     <div class="alchemical-option" data-value="skip">Skip Questions</div>
                                 </div>
                             </div>
-                            <button class="help-icon-btn toolbar-help" id="mode-help-btn"
-                                    title="Click to see mode descriptions"
-                                    aria-label="Mode help">
-                                <span>ℹ</span>
-                            </button>
+                            <!-- Help tooltip for Mode -->
+                            <div class="help-tooltip" id="mode-help-tooltip">
+                                <div class="help-tooltip-header">
+                                    <span>Mode Options</span>
+                                    <button class="help-tooltip-close" aria-label="Close help">✕</button>
+                                </div>
+                                <div class="help-tooltip-content">
+                                    <div class="help-option">
+                                        <div class="help-option-name">Auto</div>
+                                        <div class="help-option-description">AI intelligently detects your task type and decides whether to ask clarifying questions. Best for most users.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Always Ask</div>
+                                        <div class="help-option-description">Always asks clarifying questions to ensure the best possible optimization, even for simple prompts.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Skip Questions</div>
+                                        <div class="help-option-description">Optimizes immediately without any questions. Fastest option when you know what you want.</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="toolbar-item">
                             <label class="toolbar-label" for="style-select" id="style-label">
                                 <span class="toolbar-text">Style</span>
+                                <button class="toolbar-help-icon" data-help-for="style" aria-label="Style help">
+                                    <span>ℹ</span>
+                                </button>
                             </label>
                             <div class="alchemical-dropdown" id="style-dropdown">
                                 <select id="style-select" class="toolbar-select" aria-labelledby="style-label">
@@ -95,11 +117,35 @@
                                     <div class="alchemical-option" data-value="concise">Concise</div>
                                 </div>
                             </div>
-                            <button class="help-icon-btn toolbar-help" id="style-help-btn"
-                                    title="Click to see style descriptions"
-                                    aria-label="Style help">
-                                <span>ℹ</span>
-                            </button>
+                            <!-- Help tooltip for Style -->
+                            <div class="help-tooltip" id="style-help-tooltip">
+                                <div class="help-tooltip-header">
+                                    <span>Style Options</span>
+                                    <button class="help-tooltip-close" aria-label="Close help">✕</button>
+                                </div>
+                                <div class="help-tooltip-content">
+                                    <div class="help-option">
+                                        <div class="help-option-name">Default</div>
+                                        <div class="help-option-description">No specific formatting - AI decides the best structure based on your prompt content and context.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Bullets</div>
+                                        <div class="help-option-description">Format the final response as concise bullet points for easy scanning and quick comprehension.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Steps</div>
+                                        <div class="help-option-description">Return a numbered, step-by-step plan with clear sequential instructions for following processes.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Plain</div>
+                                        <div class="help-option-description">Use natural sentences without heavy formatting or special structural elements.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Concise</div>
+                                        <div class="help-option-description">Be brief and to the point while preserving key details and essential information.</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="toolbar-right">
@@ -240,11 +286,8 @@
                 </div>
 
                 <!-- System Status Section -->
-                <section class="settings-section">
-                    <h3 class="settings-section-title">
-                        <span>🔄</span>
-                        <span>System Status</span>
-                    </h3>
+                <section class="settings-category system-status-section">
+                    <h3 class="settings-category-heading">System Status</h3>
 
                     <div class="system-status-actions">
                         <button id="validate-all-providers-btn" class="btn btn-secondary btn-sm">
@@ -283,13 +326,10 @@
                 </section>
 
                 <!-- About Section -->
-                <section class="settings-section">
-                    <h3 class="settings-section-title">
-                        <span>ℹ</span>
-                        <span>About</span>
-                    </h3>
+                <section class="settings-category about-section">
+                    <h3 class="settings-category-heading">About</h3>
                     <div class="settings-item">
-                        <p style="font-family: var(--font-body); font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.6;">
+                        <p class="settings-description">
                             Promptheus - AI-powered prompt optimization tool
                         </p>
                     </div>
@@ -298,6 +338,6 @@
         </aside>
     </div>
 
-    <script src="app.js?v=1763698713"></script>
+    <script src="app.js?v=1763735543"></script>
 </body>
 </html>
