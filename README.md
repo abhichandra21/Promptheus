@@ -2,7 +2,7 @@
 
 **Refine and optimize prompts for LLMs**
 
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/downloads/) [![PyPI Version](https://img.shields.io/pypi/v/promptheus)](https://pypi.org/project/promptheus/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/abhichandra21/Promptheus?style=social)](https://github.com/abhichandra21/Promptheus)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/downloads/) [![PyPI Version](https://img.shields.io/pypi/v/promptheus)](https://pypi.org/project/promptheus/) [![Release Version](https://img.shields.io/badge/release-v0.2.0-brightgreen)](CHANGELOG.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/abhichandra21/Promptheus?style=social)](https://github.com/abhichandra21/Promptheus)
 
 ## Quick Start
 
