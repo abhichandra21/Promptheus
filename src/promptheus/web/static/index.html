@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Promptheus - Transform raw prompts into optimized gold through digital alchemy">
+    <title>Promptheus - Alchemical Prompt Optimization</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+        <div class="top-bar-content">
+            <a href="#" class="logo">
+                <span class="logo-icon">⚗</span>
+                <span class="logo-text">Promptheus</span>
+            </a>
+            <div class="top-bar-controls">
+                <div class="provider-selector">
+                    <span>Provider:</span>
+                    <select id="provider-select">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="provider-selector">
+                    <span>Model:</span>
+                    <select id="model-select" disabled>
+                        <option value="">Auto</option>
+                    </select>
+                </div>
+                <button id="settings-btn" class="btn btn-secondary" aria-label="Open settings">
+                    <span>⚙</span>
+                    <span>Settings</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+        <!-- Workspace Container - Side by Side -->
+        <div class="workspace-container">
+            <!-- Prompt Input Canvas -->
+            <section class="prompt-canvas" aria-label="Prompt input section">
+            <div class="prompt-input-wrapper">
+                <label for="prompt-input" class="sr-only">Enter your prompt</label>
+                <textarea
+                    id="prompt-input"
+                    placeholder="Enter your prompt here..."
+                    aria-describedby="prompt-hint"
+                ></textarea>
+                <span id="prompt-hint" class="sr-only">Type your prompt and press the optimize button to improve it</span>
+            </div>
+
+            <div class="prompt-controls">
+                <div class="prompt-controls-left">
+                    <label class="select-label">
+                        <span>Mode:</span>
+                        <select id="question-mode" aria-label="Question mode">
+                            <option value="auto">Auto</option>
+                            <option value="force">Always Ask</option>
+                            <option value="skip">Skip Questions</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="prompt-controls-right">
+                    <button id="cancel-btn" class="btn btn-danger hidden" aria-label="Cancel current operation">
+                        <span>✕</span>
+                        <span>Cancel</span>
+                    </button>
+                    <button id="start-over-btn" class="btn btn-secondary hidden" aria-label="Start new optimization">
+                        <span>↻</span>
+                        <span>Start Over</span>
+                    </button>
+                    <button id="submit-btn" class="btn btn-primary" aria-label="Optimize prompt">
+                        <span>Optimize Prompt</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Output Section -->
+        <section class="output-section" aria-label="Optimized prompt output">
+            <div class="output-header">
+                <h2 class="output-title">
+                    <span>🜃</span>
+                    <span>Optimized Prompt</span>
+                </h2>
+                <div class="output-actions">
+                    <button id="tweak-btn" class="btn btn-secondary hidden" title="Tweak this prompt" aria-label="Tweak optimized prompt">
+                        <span>🔧</span>
+                        <span>Tweak</span>
+                    </button>
+                    <button id="copy-btn" class="btn btn-secondary hidden" title="Copy to clipboard" aria-label="Copy optimized prompt">
+                        <span>📋</span>
+                        <span>Copy</span>
+                    </button>
+                </div>
+            </div>
+            <div id="output" aria-live="polite" aria-atomic="true">
+                <p class="message message-info">
+                    <span>💡</span>
+                    <span>Your optimized prompt will appear here</span>
+                </p>
+            </div>
+        </section>
+        </div>
+
+        <!-- History Section -->
+        <section class="history-section" aria-label="Prompt history">
+            <div class="history-header">
+                <h2 class="history-title">History</h2>
+                <button id="clear-history-btn" class="btn btn-secondary btn-sm" title="Clear all history" aria-label="Clear history">
+                    <span>🗑</span>
+                    <span>Clear History</span>
+                </button>
+            </div>
+
+            <div id="history-list" class="history-grid" role="list">
+                <!-- History cards will be dynamically inserted here -->
+            </div>
+
+            <div class="history-pagination">
+                <button
+                    id="prev-page-btn"
+                    class="btn btn-secondary"
+                    aria-label="Previous page"
+                    disabled
+                >
+                    <span>←</span>
+                    <span>Previous</span>
+                </button>
+
+                <div class="pagination-info">
+                    <span class="pagination-current" id="current-page" aria-live="polite">1 of 1</span>
+                </div>
+
+                <button
+                    id="next-page-btn"
+                    class="btn btn-secondary"
+                    aria-label="Next page"
+                    disabled
+                >
+                    <span>Next</span>
+                    <span>→</span>
+                </button>
+
+                <div class="page-size-selector">
+                    <label for="page-size-select" class="sr-only">Items per page</label>
+                    <select id="page-size-select" aria-label="Items per page">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                    </select>
+                    <span>per page</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Settings Panel (Slide-out) -->
+    <div id="settings-overlay" class="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <aside id="settings-panel" class="settings-panel">
+            <header class="settings-header">
+                <div class="settings-header-content">
+                    <h2 id="settings-title" class="settings-title">
+                        <span>⚙</span>
+                        <span>Settings</span>
+                    </h2>
+                    <button id="settings-close-btn" class="btn btn-icon btn-secondary" aria-label="Close settings">
+                        <span>✕</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="settings-content">
+                <!-- API Keys Section -->
+                <section class="settings-section">
+                    <h3 class="settings-section-title">
+                        <span>🔑</span>
+                        <span>API Keys</span>
+                    </h3>
+                    <div id="settings-form">
+                        <!-- Settings form will be dynamically inserted here -->
+                    </div>
+                </section>
+
+                <!-- About Section -->
+                <section class="settings-section">
+                    <h3 class="settings-section-title">
+                        <span>ℹ</span>
+                        <span>About</span>
+                    </h3>
+                    <div class="settings-item">
+                        <p style="font-size: var(--text-sm); color: var(--text-secondary);">
+                            Promptheus - AI-powered prompt optimization tool
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </aside>
+    </div>
+
+    <script src="app.js?v=1763616716"></script>
+</body>
+</html>

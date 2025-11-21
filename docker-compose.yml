@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  promptheus-web:
+    image: promptheus-web:fresh
+    container_name: promptheus-test
+    platform: linux/arm64
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - promptheus-history:/root/.promptheus
+    restart: unless-stopped
+
+volumes:
+  promptheus-history:

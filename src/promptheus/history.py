@@ -10,7 +10,7 @@ import sys
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from promptheus.utils import sanitize_error_message
 
@@ -45,6 +45,8 @@ class HistoryEntry:
     original_prompt: str
     refined_prompt: str
     task_type: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
     def to_dict(self):
         """Convert to dictionary."""
@@ -108,7 +110,9 @@ class PromptHistory:
         self,
         original_prompt: str,
         refined_prompt: str,
-        task_type: Optional[str] = None
+        task_type: Optional[str] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None
     ) -> None:
         """
         Save a history entry in O(1) time using append-only JSONL format.
@@ -117,6 +121,8 @@ class PromptHistory:
             original_prompt: The original user prompt
             refined_prompt: The final refined/accepted prompt
             task_type: Type of task (analysis, generation, etc.)
+            provider: The provider used for the prompt
+            model: The model used for the prompt
         """
         # Check if history is enabled
         if not self.enabled:
@@ -127,7 +133,9 @@ class PromptHistory:
             timestamp=datetime.now().isoformat(),
             original_prompt=original_prompt,
             refined_prompt=refined_prompt,
-            task_type=task_type
+            task_type=task_type,
+            provider=provider,
+            model=model
         )
 
         try:
@@ -211,6 +219,37 @@ class PromptHistory:
         history = self._load_history()
         return list(reversed(history))
 
+    def get_total_count(self) -> int:
+        """
+        Get the total number of history entries.
+
+        Returns:
+            Total number of history entries
+        """
+        history = self._load_history()
+        return len(history)
+
+    def get_paginated(self, offset: int = 0, limit: int = 50) -> Tuple[List[HistoryEntry], int]:
+        """
+        Get paginated history entries.
+
+        Args:
+            offset: Number of entries to skip
+            limit: Maximum number of entries to return
+
+        Returns:
+            Tuple of (list of entries, total count)
+        """
+        all_entries = self.get_all()
+        total_count = len(all_entries)
+        paginated_entries = all_entries[offset:offset+limit]
+        return paginated_entries, total_count
+
+    def get_all(self) -> List[HistoryEntry]:
+        """Get all history entries, most recent first."""
+        history = self._load_history()
+        return list(reversed(history))
+
     def get_by_index(self, index: int) -> Optional[HistoryEntry]:
         """
         Get a history entry by index (1-based, from most recent).
@@ -251,6 +290,46 @@ class PromptHistory:
         except (OSError, json.JSONDecodeError, IndexError) as exc:
             logger.warning(f"Failed to get history entry by index {index}: {exc}")
             return None
+
+    def delete_by_timestamp(self, timestamp: str) -> bool:
+        """
+        Delete a history entry by timestamp.
+
+        Args:
+            timestamp: ISO format timestamp of the entry to delete
+
+        Returns:
+            True if entry was deleted, False if not found
+        """
+        if not self.history_file.exists():
+            return False
+
+        try:
+            # Load all entries
+            entries = self._load_history()
+
+            # Filter out the entry to delete
+            filtered_entries = [e for e in entries if e.timestamp != timestamp]
+
+            # Check if anything was removed
+            if len(filtered_entries) == len(entries):
+                return False  # Entry not found
+
+            # Rewrite the file without the deleted entry
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                for entry in filtered_entries:
+                    json.dump(entry.to_dict(), f)
+                    f.write('\n')
+
+            logger.info(f"Deleted history entry: {timestamp}")
+            return True
+
+        except OSError as exc:
+            logger.error(
+                "Failed to delete history entry: %s",
+                sanitize_error_message(str(exc)),
+            )
+            return False
 
     def clear(self) -> None:
         """Clear all history."""

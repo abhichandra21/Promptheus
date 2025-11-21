@@ -155,9 +155,9 @@ The system intelligently detects task types:
 
 **Configuration Hierarchy**
 1. Explicit CLI arguments (`--provider`, `--model`)
-2. Environment variables (`PROMPTHEUS_PROVIDER`, `PROMPTHEUS_MODEL`)
-3. Auto-detection based on available API keys
-4. Default fallbacks per provider
+2. Provider-scoped environment variables (`PROMPTHEUS_PROVIDER`, `OPENAI_MODEL`, etc.)
+3. `PROMPTHEUS_MODEL` as the global fallback when the provider was auto-detected or injected via `PROMPTHEUS_PROVIDER`
+4. Default fallbacks per provider (always used after manual provider switches unless you also specify `--model` or a provider-scoped env var)
 
 ### Important Implementation Details
 

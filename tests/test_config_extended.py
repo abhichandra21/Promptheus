@@ -83,9 +83,26 @@ def test_message_consumption(config):
     assert config.consume_status_messages() == []
     assert config.consume_error_messages() == []
 
+PROVIDER_ENV_VARS = [
+    "PROMPTHEUS_PROVIDER",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GROQ_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "ZAI_API_KEY",
+]
+
+
+def clear_provider_envs(monkeypatch):
+    for key in PROVIDER_ENV_VARS:
+        monkeypatch.delenv(key, raising=False)
+
 
 def test_provider_property_auto_detection(monkeypatch, config):
     """Test provider auto-detection based on environment variables."""
+    clear_provider_envs(monkeypatch)
     monkeypatch.setenv("GEMINI_API_KEY", "AIza-test-key")
     
     # Reset config to trigger auto-detection
@@ -97,6 +114,7 @@ def test_provider_property_auto_detection(monkeypatch, config):
 
 def test_provider_property_multiple_env_vars(monkeypatch, config):
     """Test provider auto-detection with multiple API keys."""
+    clear_provider_envs(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
     monkeypatch.setenv("GEMINI_API_KEY", "AIza-test-key")
     
@@ -161,11 +179,23 @@ def test_get_model_default(config, monkeypatch):
 
 def test_get_model_from_env(monkeypatch, config):
     """Test getting model from environment variable."""
+    monkeypatch.setenv("PROMPTHEUS_PROVIDER", "gemini")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
     monkeypatch.setenv("PROMPTHEUS_MODEL", "env-model")
-    
+
     model = config.get_model()
-    
+
     assert model == "env-model"
+
+
+def test_manual_provider_ignores_global_model(monkeypatch, config):
+    """Manual provider changes should use provider defaults unless overridden explicitly."""
+    monkeypatch.setenv("PROMPTHEUS_MODEL", "env-model")
+    config.set_provider("anthropic")
+
+    provider_default = config._ensure_provider_config()["providers"]["anthropic"]["default_model"]
+
+    assert config.get_model() == provider_default
 
 
 def test_get_provider_config_gemini(monkeypatch, config):

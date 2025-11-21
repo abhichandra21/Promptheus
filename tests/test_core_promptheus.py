@@ -1,9 +1,12 @@
 """Essential tests for core Promptheus functionality."""
 
 import os
-from unittest.mock import Mock, patch, MagicMock
-import pytest
+from io import StringIO
 from argparse import Namespace
+from unittest.mock import Mock, patch, MagicMock
+
+import pytest
+from rich.console import Console
 
 from promptheus.main import (
     process_single_prompt,
@@ -11,9 +14,11 @@ from promptheus.main import (
     ask_clarifying_questions,
     generate_final_prompt,
     iterative_refinement,
-    convert_json_to_question_definitions
+    convert_json_to_question_definitions,
+    QuestionPlan,
 )
 from promptheus.config import Config
+from promptheus.io_context import IOContext
 from promptheus.providers import LLMProvider
 from promptheus.history import PromptHistory
 
@@ -196,3 +201,193 @@ def test_process_single_prompt_with_refinement(mock_provider, mock_config, mock_
             if result:
                 final_prompt, task_type = result
                 assert final_prompt == "refined prompt"
+
+
+class DummyConfig:
+    """Simple config stub for end-to-end style tests."""
+
+    provider = "gemini"
+
+    def get_model(self) -> str:
+        return "gemini-1.5-pro"
+
+    def get_configured_providers(self):
+        return ["gemini", "openai"]
+
+
+class FullFlowProvider:
+    """Provider stub that behaves like a happy-path generation backend."""
+
+    name = "stub-gemini"
+
+    def generate_questions(self, initial_prompt: str, system_instruction: str):
+        return {
+            "task_type": "generation",
+            "questions": [
+                {
+                    "question": "What details should the AI include?",
+                    "type": "text",
+                    "required": True,
+                }
+            ],
+        }
+
+    def refine_from_answers(self, initial_prompt, answers, mapping, system_instruction):
+        return f"Refined: {answers.get('q0', '')}"
+
+    def light_refine(self, prompt, system_instruction):  # pragma: no cover - safety net for misuse
+        raise AssertionError("Light refinement should not run in this flow")
+
+
+class FailingLightRefineProvider:
+    """Provider stub that raises when light refinement is attempted."""
+
+    name = "stub-anthropic"
+
+    def light_refine(self, prompt, system_instruction):
+        raise RuntimeError("Simulated provider outage")
+
+
+class StaticPrompter:
+    """Lightweight QuestionPrompter substitute returning canned responses."""
+
+    def __init__(self, text_answers, confirm=True):
+        self._answers = iter(text_answers)
+        self._confirm = confirm
+
+    def prompt_confirmation(self, message, default=True):
+        return self._confirm
+
+    def prompt_text(self, message, default=""):
+        return next(self._answers)
+
+    def prompt_radio(self, message, choices):  # pragma: no cover - fallback behavior
+        return choices[0] if choices else ""
+
+    def prompt_checkbox(self, message, choices):  # pragma: no cover - fallback behavior
+        return []
+
+
+def _build_io_context(*, quiet_output: bool, stdin_is_tty: bool, stdout_is_tty: bool):
+    stdout_buffer = StringIO()
+    stderr_buffer = StringIO()
+    notifications = []
+
+    def notifier(message: str):
+        notifications.append(message)
+
+    io_ctx = IOContext(
+        stdin_is_tty=stdin_is_tty,
+        stdout_is_tty=stdout_is_tty,
+        console_out=Console(file=stdout_buffer, force_terminal=False, color_system=None),
+        console_err=Console(file=stderr_buffer, force_terminal=False, color_system=None),
+        notify=notifier,
+        quiet_output=quiet_output,
+        plain_mode=False,
+    )
+    return io_ctx, notifications
+
+
+def test_process_single_prompt_runs_full_generation_flow(monkeypatch):
+    """End-to-end: question confirmation, answers, refinement, and history save."""
+
+    io_ctx, _ = _build_io_context(quiet_output=True, stdin_is_tty=True, stdout_is_tty=False)
+    provider = FullFlowProvider()
+    args = Namespace(skip_questions=False, quick=False, copy=False, edit=False, refine=False)
+    config = DummyConfig()
+
+    def fake_create_prompter(io_unused):
+        return StaticPrompter(["Detailed onboarding brief"])
+
+    saved_entry = {}
+
+    class DummyHistory:
+        def save_entry(self, **payload):
+            saved_entry.update(payload)
+
+    monkeypatch.setattr("promptheus.main.create_prompter", fake_create_prompter)
+    monkeypatch.setattr("promptheus.main.get_history", lambda cfg: DummyHistory())
+    monkeypatch.setattr("promptheus.main.display_output", lambda prompt, io, is_refined=True: None)
+
+    result = process_single_prompt(provider, "Draft onboarding brief", args, False, False, io_ctx, config)
+
+    assert result == ("Refined: Detailed onboarding brief", "generation")
+    assert saved_entry["original_prompt"] == "Draft onboarding brief"
+    assert saved_entry["refined_prompt"] == "Refined: Detailed onboarding brief"
+    assert saved_entry["task_type"] == "generation"
+
+
+def test_process_single_prompt_light_refine_failure_keeps_original(monkeypatch):
+    """Integration: provider failure during light refinement falls back to input."""
+
+    io_ctx, notifications = _build_io_context(quiet_output=True, stdin_is_tty=True, stdout_is_tty=False)
+    provider = FailingLightRefineProvider()
+    args = Namespace(skip_questions=False, quick=False, copy=False, edit=False, refine=False)
+    config = DummyConfig()
+
+    monkeypatch.setattr(
+        "promptheus.main.determine_question_plan",
+        lambda *call_args, **kwargs: QuestionPlan(True, "analysis", [], {}),
+    )
+
+    saved_entry = {}
+
+    class DummyHistory:
+        def save_entry(self, **payload):
+            saved_entry.update(payload)
+
+    monkeypatch.setattr("promptheus.main.get_history", lambda cfg: DummyHistory())
+    monkeypatch.setattr("promptheus.main.display_output", lambda prompt, io, is_refined=True: None)
+
+    result = process_single_prompt(provider, "Need graceful fallback", args, False, False, io_ctx, config)
+
+    assert result == ("Need graceful fallback", "analysis")
+    assert any("Light refinement failed" in msg for msg in notifications)
+    assert saved_entry["refined_prompt"] == "Need graceful fallback"
+
+
+def test_determine_question_plan_declined_questions_use_light_refinement(monkeypatch):
+    """Unit: declining clarifying questions should trigger light refinement path."""
+
+    io_ctx, _ = _build_io_context(quiet_output=False, stdin_is_tty=True, stdout_is_tty=True)
+    provider = FullFlowProvider()
+    args = Namespace(skip_questions=False, refine=False)
+    config = DummyConfig()
+
+    def declining_prompter(io_unused):
+        return StaticPrompter(["unused"], confirm=False)
+
+    monkeypatch.setattr("promptheus.main.create_prompter", declining_prompter)
+
+    plan = determine_question_plan(provider, "Scope new onboarding doc", args, False, io_ctx, config)
+
+    assert plan.skip_questions is True
+    assert plan.use_light_refinement is True
+    assert plan.questions == []
+
+
+def test_process_single_prompt_history_failure_does_not_abort(monkeypatch):
+    """Regression: history persistence errors should not prevent returning prompts."""
+
+    io_ctx, _ = _build_io_context(quiet_output=True, stdin_is_tty=True, stdout_is_tty=False)
+    provider = FullFlowProvider()
+    args = Namespace(skip_questions=False, quick=False, copy=False, edit=False, refine=False)
+    config = DummyConfig()
+
+    def fake_history(_cfg):
+        raise RuntimeError("disk full")
+
+    logger_mock = Mock()
+    logger_mock.debug = Mock()
+    logger_mock.warning = Mock()
+    logger_mock.exception = Mock()
+
+    monkeypatch.setattr("promptheus.main.create_prompter", lambda io_unused: StaticPrompter(["Plan outputs"]))
+    monkeypatch.setattr("promptheus.main.display_output", lambda prompt, io, is_refined=True: None)
+    monkeypatch.setattr("promptheus.main.get_history", fake_history)
+    monkeypatch.setattr("promptheus.main.logger", logger_mock)
+
+    result = process_single_prompt(provider, "Persist this prompt", args, False, False, io_ctx, config)
+
+    assert result == ("Refined: Plan outputs", "generation")
+    logger_mock.warning.assert_called_once()
