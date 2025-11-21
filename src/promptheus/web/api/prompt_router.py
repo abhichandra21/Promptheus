@@ -18,8 +18,18 @@ from promptheus.prompts import (
     GENERATION_SYSTEM_INSTRUCTION,
     TWEAK_SYSTEM_INSTRUCTION,
 )
+from promptheus.utils import sanitize_error_message
 
 LOAD_ALL_MODELS_SENTINEL = "__load_all__"
+
+
+STYLE_INSTRUCTIONS = {
+    "default": "",
+    "bullets": "Format the final response as concise bullet points.",
+    "steps": "Return a numbered, step-by-step plan.",
+    "plain": "Use plain sentences without heavy formatting.",
+    "concise": "Be brief and to the point while preserving key details.",
+}
 
 
 router = APIRouter()
@@ -32,14 +42,23 @@ async def process_prompt_web(
     mapping: Optional[Dict[str, str]],  # Maps question keys to question text
     skip_questions: bool,
     refine: bool,
-    app_config: Config
+    app_config: Config,
+    style: str = "default",
 ) -> Tuple[str, str]:  # Returns (final_prompt, task_type)
     """
     Web-compatible prompt processing function that replicates the main logic
     but without CLI-specific features like terminal I/O.
     """
-    from promptheus.utils import sanitize_error_message
-    
+    def _apply_style(system_instruction: str) -> str:
+        suffix = STYLE_INSTRUCTIONS.get(style or "default", "")
+        if not suffix:
+            return system_instruction
+        return f"{system_instruction}\n\nOutput formatting: {suffix}"
+
+    def _is_rate_limit_error(message: str) -> bool:
+        lowered = message.lower()
+        return any(token in lowered for token in ["rate limit", "too many requests", "429"])
+
     # Import here to avoid circular imports
     should_ask_questions = (not skip_questions) or refine
 
@@ -56,19 +75,19 @@ async def process_prompt_web(
                 if answers and mapping:
                     # Refine using the answers
                     final_prompt = provider.refine_from_answers(
-                        initial_prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
+                        initial_prompt, answers, mapping, _apply_style(GENERATION_SYSTEM_INSTRUCTION)
                     )
                     return final_prompt, task_type
                 elif not questions_json:
                     # No questions needed, apply light refinement
                     final_prompt = provider.light_refine(
-                        initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+                        initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
                     )
                     return final_prompt, task_type
                 elif task_type == "analysis":
                     # Analysis task, apply light refinement
                     final_prompt = provider.light_refine(
-                        initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+                        initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
                     )
                     return final_prompt, task_type
                 else:
@@ -77,16 +96,18 @@ async def process_prompt_web(
             else:
                 # Fallback to light refinement if no result from API
                 final_prompt = provider.light_refine(
-                    initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+                    initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
                 )
                 return final_prompt, "analysis"
         except Exception as exc:
             sanitized = sanitize_error_message(str(exc))
+            if _is_rate_limit_error(sanitized):
+                raise HTTPException(status_code=429, detail=f"Rate limit encountered: {sanitized}")
             raise HTTPException(status_code=500, detail=f"Failed to generate questions: {sanitized}")
     else:
         # Skip questions mode - apply light refinement
         final_prompt = provider.light_refine(
-            initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
+            initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
         )
         return final_prompt, "analysis"
 
@@ -100,6 +121,7 @@ class PromptRequest(BaseModel):
     output_format: str = "plain"
     answers: Optional[Dict[str, Any]] = None  # Answers to clarifying questions
     question_mapping: Optional[Dict[str, str]] = None
+    style: str = "default"
 
 
 class TweakRequest(BaseModel):
@@ -169,7 +191,8 @@ async def submit_prompt(request: PromptRequest):
             mapping=mapping,
             skip_questions=request.skip_questions,
             refine=request.refine,
-            app_config=app_config
+            app_config=app_config,
+            style=request.style,
         )
         
         # Save to history
@@ -245,7 +268,8 @@ async def stream_prompt(
     skip_questions: bool = False,
     refine: bool = False,
     provider: Optional[str] = None,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    style: str = "default"
 ):
     """Stream prompt refinement using Server-Sent Events (SSE)."""
     async def event_generator():
@@ -269,7 +293,8 @@ async def stream_prompt(
                 mapping=None,
                 skip_questions=skip_questions,
                 refine=refine,
-                app_config=app_config
+                app_config=app_config,
+                style=style,
             )
 
             # Save to history
@@ -299,9 +324,13 @@ async def stream_prompt(
             yield f"data: {json.dumps(completion_data)}\n\n"
 
         except Exception as e:
+            sanitized = sanitize_error_message(str(e))
+            msg = sanitized
+            if "rate limit" in sanitized.lower() or "429" in sanitized.lower() or "too many requests" in sanitized.lower():
+                msg = f"Rate limit detected. Retry after a pause or switch provider. Details: {sanitized}"
             error_data = {
                 "type": "error",
-                "content": str(e)
+                "content": msg
             }
             yield f"data: {json.dumps(error_data)}\n\n"
 

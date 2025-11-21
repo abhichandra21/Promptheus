@@ -17,17 +17,22 @@
                 <span class="logo-text">Promptheus</span>
             </a>
             <div class="top-bar-controls">
-                <div class="provider-selector">
-                    <span>Provider:</span>
-                    <select id="provider-select">
-                        <option value="">Loading...</option>
-                    </select>
-                </div>
-                <div class="provider-selector">
-                    <span>Model:</span>
-                    <select id="model-select" disabled>
-                        <option value="">Auto</option>
-                    </select>
+                <div class="provider-config-group">
+                    <div class="provider-selector">
+                        <span>Provider:</span>
+                        <select id="provider-select">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="provider-selector">
+                        <span>Model:</span>
+                        <select id="model-select" disabled>
+                            <option value="">Auto</option>
+                        </select>
+                    </div>
+                    <button class="provider-status-indicator" id="provider-status-btn" title="System status" aria-label="System status">
+                        <span class="status-dot status-ok"></span>
+                    </button>
                 </div>
                 <button id="settings-btn" class="btn btn-secondary" aria-label="Open settings">
                     <span>⚙</span>
@@ -45,6 +50,109 @@
             <!-- Prompt Input Canvas -->
             <section class="prompt-canvas" aria-label="Prompt input section">
             <div class="prompt-input-wrapper">
+                <!-- Floating Toolbar for Mode and Style Controls -->
+                <div class="prompt-toolbar" role="toolbar" aria-label="Prompt controls">
+                    <div class="toolbar-left">
+                        <div class="toolbar-item">
+                            <label class="toolbar-label" for="question-mode" id="mode-label">
+                                <span class="toolbar-text">Mode</span>
+                                <button class="toolbar-help-icon" data-help-for="mode" aria-label="Mode help">
+                                    <span>ℹ</span>
+                                </button>
+                            </label>
+                            <div class="alchemical-dropdown" id="mode-dropdown">
+                                <select id="question-mode" class="toolbar-select" aria-labelledby="mode-label">
+                                    <option value="auto">Auto</option>
+                                    <option value="force">Always Ask</option>
+                                    <option value="skip">Skip Questions</option>
+                                </select>
+                                <div class="alchemical-dropdown-panel">
+                                    <div class="alchemical-option" data-value="auto">Auto</div>
+                                    <div class="alchemical-option" data-value="force">Always Ask</div>
+                                    <div class="alchemical-option" data-value="skip">Skip Questions</div>
+                                </div>
+                            </div>
+                            <!-- Help tooltip for Mode -->
+                            <div class="help-tooltip" id="mode-help-tooltip">
+                                <div class="help-tooltip-header">
+                                    <span>Mode Options</span>
+                                    <button class="help-tooltip-close" aria-label="Close help">✕</button>
+                                </div>
+                                <div class="help-tooltip-content">
+                                    <div class="help-option">
+                                        <div class="help-option-name">Auto</div>
+                                        <div class="help-option-description">AI intelligently detects your task type and decides whether to ask clarifying questions. Best for most users.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Always Ask</div>
+                                        <div class="help-option-description">Always asks clarifying questions to ensure the best possible optimization, even for simple prompts.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Skip Questions</div>
+                                        <div class="help-option-description">Optimizes immediately without any questions. Fastest option when you know what you want.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="toolbar-item">
+                            <label class="toolbar-label" for="style-select" id="style-label">
+                                <span class="toolbar-text">Style</span>
+                                <button class="toolbar-help-icon" data-help-for="style" aria-label="Style help">
+                                    <span>ℹ</span>
+                                </button>
+                            </label>
+                            <div class="alchemical-dropdown" id="style-dropdown">
+                                <select id="style-select" class="toolbar-select" aria-labelledby="style-label">
+                                    <option value="default">Default</option>
+                                    <option value="bullets">Bullets</option>
+                                    <option value="steps">Steps</option>
+                                    <option value="plain">Plain</option>
+                                    <option value="concise">Concise</option>
+                                </select>
+                                <div class="alchemical-dropdown-panel">
+                                    <div class="alchemical-option" data-value="default">Default</div>
+                                    <div class="alchemical-option" data-value="bullets">Bullets</div>
+                                    <div class="alchemical-option" data-value="steps">Steps</div>
+                                    <div class="alchemical-option" data-value="plain">Plain</div>
+                                    <div class="alchemical-option" data-value="concise">Concise</div>
+                                </div>
+                            </div>
+                            <!-- Help tooltip for Style -->
+                            <div class="help-tooltip" id="style-help-tooltip">
+                                <div class="help-tooltip-header">
+                                    <span>Style Options</span>
+                                    <button class="help-tooltip-close" aria-label="Close help">✕</button>
+                                </div>
+                                <div class="help-tooltip-content">
+                                    <div class="help-option">
+                                        <div class="help-option-name">Default</div>
+                                        <div class="help-option-description">No specific formatting - AI decides the best structure based on your prompt content and context.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Bullets</div>
+                                        <div class="help-option-description">Format the final response as concise bullet points for easy scanning and quick comprehension.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Steps</div>
+                                        <div class="help-option-description">Return a numbered, step-by-step plan with clear sequential instructions for following processes.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Plain</div>
+                                        <div class="help-option-description">Use natural sentences without heavy formatting or special structural elements.</div>
+                                    </div>
+                                    <div class="help-option">
+                                        <div class="help-option-name">Concise</div>
+                                        <div class="help-option-description">Be brief and to the point while preserving key details and essential information.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="toolbar-right">
+                        <!-- Space for future features -->
+                    </div>
+                </div>
+
                 <label for="prompt-input" class="sr-only">Enter your prompt</label>
                 <textarea
                     id="prompt-input"
@@ -54,18 +162,11 @@
                 <span id="prompt-hint" class="sr-only">Type your prompt and press the optimize button to improve it</span>
             </div>
 
+            <!-- Simplified Controls Area -->
             <div class="prompt-controls">
                 <div class="prompt-controls-left">
-                    <label class="select-label">
-                        <span>Mode:</span>
-                        <select id="question-mode" aria-label="Question mode">
-                            <option value="auto">Auto</option>
-                            <option value="force">Always Ask</option>
-                            <option value="skip">Skip Questions</option>
-                        </select>
-                    </label>
+                    <!-- Space for future stats or indicators -->
                 </div>
-
                 <div class="prompt-controls-right">
                     <button id="cancel-btn" class="btn btn-danger hidden" aria-label="Cancel current operation">
                         <span>✕</span>
@@ -178,25 +279,57 @@
             </header>
 
             <div class="settings-content">
-                <!-- API Keys Section -->
-                <section class="settings-section">
-                    <h3 class="settings-section-title">
-                        <span>🔑</span>
-                        <span>API Keys</span>
-                    </h3>
-                    <div id="settings-form">
-                        <!-- Settings form will be dynamically inserted here -->
+                <!-- Settings Form Container -->
+                <div id="settings-form">
+                    <!-- Settings form will be dynamically inserted here -->
+                    <!-- Includes: General Settings, API Keys -->
+                </div>
+
+                <!-- System Status Section -->
+                <section class="settings-category system-status-section">
+                    <h3 class="settings-category-heading">System Status</h3>
+
+                    <div class="system-status-actions">
+                        <button id="validate-all-providers-btn" class="btn btn-secondary btn-sm">
+                            <span>✓</span>
+                            <span>Validate All Providers</span>
+                        </button>
+                    </div>
+
+                    <div class="provider-status-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Provider</th>
+                                    <th>Status</th>
+                                    <th>Models</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody id="provider-status-tbody">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: var(--text-tertiary); padding: var(--space-6);">
+                                        Click "Validate All Providers" to check status
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="cache-management">
+                        <button id="refresh-models-cache-btn" class="btn btn-secondary btn-sm">
+                            <span>🔄</span>
+                            <span>Refresh Model Cache</span>
+                        </button>
+                        <span class="cache-timestamp" id="cache-timestamp-settings">Last updated: --</span>
                     </div>
                 </section>
 
                 <!-- About Section -->
-                <section class="settings-section">
-                    <h3 class="settings-section-title">
-                        <span>ℹ</span>
-                        <span>About</span>
-                    </h3>
+                <section class="settings-category about-section">
+                    <h3 class="settings-category-heading">About</h3>
                     <div class="settings-item">
-                        <p style="font-size: var(--text-sm); color: var(--text-secondary);">
+                        <p class="settings-description">
                             Promptheus - AI-powered prompt optimization tool
                         </p>
                     </div>
@@ -205,6 +338,6 @@
         </aside>
     </div>
 
-    <script src="app.js?v=1763616716"></script>
+    <script src="app.js?v=1763735543"></script>
 </body>
 </html>

@@ -29,7 +29,6 @@ def generate_template(config: Config, console: Console, providers_input: str) ->
     provider_names = [p.strip() for p in providers_input.split(',')]
     logger.debug("Generating .env template for providers: %s", provider_names)
     provider_data = config._ensure_provider_config().get("providers", {})
-    provider_aliases = config._ensure_provider_config().get("provider_aliases", {})
 
     invalid_providers = [p for p in provider_names if p not in provider_data]
     if invalid_providers:
@@ -46,7 +45,7 @@ def generate_template(config: Config, console: Console, providers_input: str) ->
 
     for idx, provider_name in enumerate(provider_names):
         provider_info = provider_data[provider_name]
-        display_name = provider_aliases.get(provider_name, provider_name.capitalize())
+        display_name = config.get_display_name(provider_name, provider_info)
 
         template_lines = []
         if idx > 0:

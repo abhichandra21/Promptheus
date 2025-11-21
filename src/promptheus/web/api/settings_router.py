@@ -59,7 +59,7 @@ async def get_settings():
             description="Select the AI provider to use for prompt refinement",
             type="select",
             value=app_config.provider or "",
-            options=["", "gemini", "anthropic", "openai", "groq", "qwen", "glm"],
+            options=["", "google", "anthropic", "openai", "groq", "qwen", "glm"],
             category="provider"
         ))
 
@@ -86,12 +86,12 @@ async def get_settings():
 
         # API Keys
         api_keys = [
-            ("GEMINI_API_KEY", "Google Gemini API Key", "API key for Google Gemini models"),
+            ("GOOGLE_API_KEY", "Google Gemini API Key", "API key for Google Gemini models"),
             ("OPENAI_API_KEY", "OpenAI API Key", "API key for OpenAI GPT models"),
             ("ANTHROPIC_API_KEY", "Anthropic API Key", "API key for Claude models"),
             ("GROQ_API_KEY", "Groq API Key", "API key for Groq models"),
-            ("QWEN_API_KEY", "Qwen API Key", "API key for Qwen/DashScope models"),
-            ("GLM_API_KEY", "GLM API Key", "API key for Zhipu GLM models"),
+            ("DASHSCOPE_API_KEY", "Qwen API Key", "API key for Qwen/DashScope models"),
+            ("ZHIPUAI_API_KEY", "GLM API Key", "API key for Zhipu GLM models"),
         ]
 
         for key, label, description in api_keys:
@@ -126,8 +126,8 @@ async def update_settings(update: SettingsUpdate):
         # Validate the setting key
         valid_keys = [
             "PROMPTHEUS_PROVIDER", "PROMPTHEUS_MODEL", "PROMPTHEUS_ENABLE_HISTORY",
-            "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", 
-            "GROQ_API_KEY", "QWEN_API_KEY", "GLM_API_KEY"
+            "GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", 
+            "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZHIPUAI_API_KEY"
         ]
         
         if update.key not in valid_keys:
@@ -162,16 +162,23 @@ async def validate_api_key(request: ValidationRequest):
         from promptheus.utils import sanitize_error_message
 
         provider_id = request.provider.lower()
+        # Normalize legacy aliases
+        if provider_id == "dashscope":
+            provider_id = "qwen"
+        if provider_id == "gemini":
+            provider_id = "google"
+        if provider_id in {"zai", "zhipuai"}:
+            provider_id = "glm"
         api_key = request.api_key
 
         # Temporarily set the API key in environment for validation
         env_key_map = {
-            "gemini": "GEMINI_API_KEY",
+            "google": "GOOGLE_API_KEY",
             "openai": "OPENAI_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
             "groq": "GROQ_API_KEY",
-            "qwen": "QWEN_API_KEY",
-            "glm": "GLM_API_KEY"
+            "qwen": "DASHSCOPE_API_KEY",
+            "glm": "ZHIPUAI_API_KEY"
         }
 
         if provider_id not in env_key_map:

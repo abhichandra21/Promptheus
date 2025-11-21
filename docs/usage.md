@@ -171,7 +171,7 @@ The `auth` subcommand provides an interactive workflow for configuring provider 
 promptheus auth
 
 # Direct provider specification
-promptheus auth gemini
+promptheus auth google
 promptheus auth anthropic
 promptheus auth openai
 
@@ -207,7 +207,7 @@ promptheus validate
 promptheus validate --test-connection
 
 # Provider-specific validation
-promptheus validate --providers openai,gemini
+promptheus validate --providers openai,google
 ```
 
 ### Model Discovery
@@ -225,7 +225,7 @@ promptheus list-models --limit 10
 ### Environment Template Generation
 ```bash
 # Generate multi-provider template
-promptheus template openai,gemini
+promptheus template openai,google
 
 # Alternative syntax
 promptheus template --providers openai,anthropic
@@ -277,13 +277,13 @@ Flags may be combined. Example: `promptheus -s -c @brief.md`
 ## Provider and Model Selection
 
 ### Auto-Detection
-The system auto-detects available providers based on configured API keys in the `.env` file. The supported providers are: gemini, anthropic, openai, groq, qwen, glm.
+The system auto-detects available providers based on configured API keys in the `.env` file. The supported providers are: google, anthropic, openai, groq, qwen, glm.
 
 ### Manual Override
 
 **Provider Selection:**
 ```bash
-promptheus --provider gemini "Idea"
+promptheus --provider google "Idea"
 promptheus --provider anthropic "Idea"
 promptheus --provider openai "Idea"
 promptheus --provider groq "Idea"
@@ -299,12 +299,25 @@ promptheus --model gpt-4o "Idea"
 promptheus --model llama-3.1-70b-versatile "Idea"
 ```
 
-**Supported Providers:** gemini, anthropic, openai, groq, qwen, glm
+**Supported Providers:** google, anthropic, openai, groq, qwen, glm
 
 **Model Discovery:**
 ```bash
 promptheus list-models
-promptheus list-models --providers openai,gemini
+promptheus list-models --providers openai,google
+
+# Include non-text-generation models (embeddings, TTS, etc.)
+promptheus list-models --include-nontext
+```
+
+**Model Cache Management:**
+Model information is dynamically fetched from the models.dev API and cached locally for 24 hours:
+```bash
+# Cache location: ~/.promptheus/models_cache.json
+# Cache refreshes automatically when expired
+
+# In Web UI:
+# Use the "Refresh Model Cache" button in Settings to manually refresh cache
 ```
 
 ### Provider Validation and Configuration
@@ -316,13 +329,13 @@ promptheus auth
 
 # Setup for specific provider
 promptheus auth openai
-promptheus auth gemini
+promptheus auth google
 ```
 
 **Validation:**
 ```bash
 # Validate provider configuration
-promptheus validate --providers gemini,openai
+promptheus validate --providers google,openai
 
 # Test API connectivity
 promptheus validate --test-connection
@@ -339,12 +352,12 @@ The web interface provides comprehensive provider management features:
 - **Provider-Specific Configuration:** Model-specific settings and options
 
 **Supported Provider Configuration:**
-- Google Gemini: Requires `GEMINI_API_KEY`
+- Google: Requires `GOOGLE_API_KEY`
 - OpenAI: Requires `OPENAI_API_KEY`
 - Anthropic Claude: Requires `ANTHROPIC_API_KEY`
 - Groq: Requires `GROQ_API_KEY`
-- Alibaba Cloud Qwen: Requires `QWEN_API_KEY`
-- Zhipu AI GLM: Requires `GLM_API_KEY`
+- Alibaba Cloud Qwen: Requires `DASHSCOPE_API_KEY`
+- Zhipu AI GLM: Requires `ZHIPUAI_API_KEY`
 
 ## Output Control Flags
 
@@ -467,7 +480,7 @@ Generate `.env` file templates for provider configuration:
 promptheus template openai > .env
 
 # Multi-provider template
-promptheus template openai,gemini,anthropic > .env
+promptheus template openai,google,anthropic > .env
 ```
 
 ## Python Version Compatibility

@@ -25,7 +25,7 @@ from promptheus.exceptions import ProviderAPIError
 logger = logging.getLogger(__name__)
 
 # Providers with full runtime support (keep in sync with promptheus.config.SUPPORTED_PROVIDER_IDS)
-SUPPORTED_PROVIDER_IDS = {"gemini", "anthropic", "openai", "groq", "qwen", "glm"}
+SUPPORTED_PROVIDER_IDS = {"google", "anthropic", "openai", "groq", "qwen", "glm"}
 
 
 def _print_user_error(message: str) -> None:
@@ -610,7 +610,7 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
     provider_config = config.get_provider_config()
     model_to_use = model_name or config.get_model()
 
-    if provider_name == "gemini":
+    if provider_name == "google":
         return GeminiProvider(
             api_key=provider_config["api_key"],
             model_name=model_to_use,
@@ -659,17 +659,14 @@ def get_available_providers(config) -> Dict[str, Any]:
         provider_info = providers_data.get(provider_id, {})
         if not provider_info:
             continue
-            
+
         # Check if this provider has API key configured
         api_key_env = provider_info.get("api_key_env")
-        is_configured = False
-        if isinstance(api_key_env, list):
-            is_configured = any(os.getenv(key_env) for key_env in api_key_env)
-        else:
-            is_configured = bool(os.getenv(api_key_env))
+        keys = api_key_env if isinstance(api_key_env, list) else [api_key_env]
+        is_configured = any(os.getenv(key_env) for key_env in keys if key_env)
         
         available_providers[provider_id] = {
-            "name": provider_info.get("name", provider_id.title()),
+            "name": provider_info.get("display_name", provider_info.get("name", provider_id.title())),
             "available": is_configured,
             "default_model": provider_info.get("default_model", "")
         }

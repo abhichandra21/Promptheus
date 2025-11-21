@@ -37,6 +37,15 @@ class PromptheusApp {
         // Main prompt submission
         document.getElementById('submit-btn').addEventListener('click', () => this.submitPrompt());
 
+        // Keyboard shortcuts and input statistics
+        document.getElementById('prompt-input').addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                this.submitPrompt();
+            }
+        });
+
+        
         // New prompt button (hidden initially, shown after results)
         document.getElementById('start-over-btn').addEventListener('click', () => {
             this.startNewPrompt();
@@ -104,179 +113,10 @@ class PromptheusApp {
             }
         });
 
-        // Global keyboard shortcuts
+        // Escape key to close settings
         document.addEventListener('keydown', (e) => {
-            // Escape key to close settings, tooltips, dropdowns, and cancel ongoing operations
             if (e.key === 'Escape') {
-                e.preventDefault();
-
-                // Cancel any ongoing request
-                if (this.currentAbortController) {
-                    this.cancelCurrentRequest();
-                }
-
                 this.closeSettings();
-                // Close help tooltips
-                document.querySelectorAll('.help-tooltip.visible').forEach(tooltip => {
-                    tooltip.classList.remove('visible');
-                });
-                document.querySelectorAll('.toolbar-help-icon.active').forEach(icon => {
-                    icon.classList.remove('active');
-                });
-                // Close dropdowns
-                document.querySelectorAll('.alchemical-dropdown.active').forEach(dropdown => {
-                    this.closeDropdown(dropdown);
-                });
-                return;
-            }
-
-            // Don't process other shortcuts when typing in input/textarea
-            const target = e.target;
-            const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
-
-            // Alt+Enter or Ctrl+Enter to submit (works even when typing)
-            if ((e.altKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                const submitBtn = document.getElementById('submit-btn');
-                if (!submitBtn.classList.contains('hidden')) {
-                    this.submitPrompt();
-                }
-                return;
-            }
-
-            // Skip other Ctrl shortcuts when typing (except Ctrl+Enter above)
-            if (isTyping && e.ctrlKey && e.key.toLowerCase() !== 'enter') {
-                return;
-            }
-
-            // Ctrl+M - Toggle Mode help tooltip
-            if (e.ctrlKey && e.key.toLowerCase() === 'm') {
-                e.preventDefault();
-                const modeIcon = document.querySelector('.toolbar-help-icon[data-help-for="mode"]');
-                if (modeIcon) modeIcon.click();
-                return;
-            }
-
-            // Ctrl+Shift+S - Toggle Style help tooltip
-            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
-                e.preventDefault();
-                const styleIcon = document.querySelector('.toolbar-help-icon[data-help-for="style"]');
-                if (styleIcon) styleIcon.click();
-                return;
-            }
-
-            // Ctrl+P - Focus Provider dropdown
-            if (e.ctrlKey && e.key.toLowerCase() === 'p') {
-                e.preventDefault();
-                const providerSelect = document.getElementById('provider-select');
-                providerSelect.focus();
-                return;
-            }
-
-            // Ctrl+L - Focus Model dropdown
-            if (e.ctrlKey && e.key.toLowerCase() === 'l') {
-                e.preventDefault();
-                const modelSelect = document.getElementById('model-select');
-                if (!modelSelect.disabled) {
-                    modelSelect.focus();
-                }
-                return;
-            }
-
-            // Ctrl+, - Open Settings
-            if (e.ctrlKey && e.key === ',') {
-                e.preventDefault();
-                this.openSettings();
-                return;
-            }
-
-            // Ctrl+I - Focus Input textarea
-            if (e.ctrlKey && e.key.toLowerCase() === 'i') {
-                e.preventDefault();
-                const promptInput = document.getElementById('prompt-input');
-                promptInput.focus();
-                return;
-            }
-
-            // Ctrl+Shift+C - Copy output
-            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') {
-                e.preventDefault();
-                const copyBtn = document.getElementById('copy-btn');
-                if (!copyBtn.classList.contains('hidden')) {
-                    this.copyOutputToClipboard();
-                }
-                return;
-            }
-
-            // Ctrl+T - Tweak prompt
-            if (e.ctrlKey && e.key.toLowerCase() === 't') {
-                e.preventDefault();
-                const tweakBtn = document.getElementById('tweak-btn');
-                if (!tweakBtn.classList.contains('hidden')) {
-                    this.showTweakPromptDialog();
-                }
-                return;
-            }
-
-            // Ctrl+N - Start Over (New prompt)
-            if (e.ctrlKey && e.key.toLowerCase() === 'n') {
-                e.preventDefault();
-                const startOverBtn = document.getElementById('start-over-btn');
-                if (!startOverBtn.classList.contains('hidden')) {
-                    this.startNewPrompt();
-                }
-                return;
-            }
-
-            // Ctrl+Shift+X - Cancel operation
-            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'x') {
-                e.preventDefault();
-                const cancelBtn = document.getElementById('cancel-btn');
-                if (!cancelBtn.classList.contains('hidden')) {
-                    this.cancelCurrentRequest();
-                }
-                return;
-            }
-
-            // Ctrl+Shift+H - Clear History
-            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
-                e.preventDefault();
-                const clearHistoryBtn = document.getElementById('clear-history-btn');
-                if (clearHistoryBtn) {
-                    this.showConfirmDialog(
-                        'Clear All History',
-                        'Are you sure you want to clear all history? This action cannot be undone.',
-                        () => this.clearHistory()
-                    );
-                }
-                return;
-            }
-
-            // Ctrl+[ - Previous history page
-            if (e.ctrlKey && e.key === '[') {
-                e.preventDefault();
-                const prevBtn = document.getElementById('prev-page-btn');
-                if (!prevBtn.disabled) {
-                    this.previousHistoryPage();
-                }
-                return;
-            }
-
-            // Ctrl+] - Next history page
-            if (e.ctrlKey && e.key === ']') {
-                e.preventDefault();
-                const nextBtn = document.getElementById('next-page-btn');
-                if (!nextBtn.disabled) {
-                    this.nextHistoryPage();
-                }
-                return;
-            }
-
-            // ? - Show keyboard shortcuts help
-            if (e.key === '?' && !isTyping) {
-                e.preventDefault();
-                this.showKeyboardShortcuts();
-                return;
             }
         });
 
@@ -2410,152 +2250,6 @@ class PromptheusApp {
         setTimeout(() => overlay.remove(), 300);
     }
 
-    showKeyboardShortcuts() {
-        // Create overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'confirm-dialog-overlay';
-
-        // Create dialog
-        const dialog = document.createElement('div');
-        dialog.className = 'confirm-dialog keyboard-shortcuts-dialog';
-
-        dialog.innerHTML = `
-            <div class="confirm-dialog-header">
-                <h3 class="confirm-dialog-title">⌨️ Keyboard Shortcuts</h3>
-                <button class="help-tooltip-close" aria-label="Close">✕</button>
-            </div>
-            <div class="confirm-dialog-body shortcuts-body">
-                <div class="shortcuts-section">
-                    <h4 class="shortcuts-section-title">Primary Actions</h4>
-                    <div class="shortcuts-list">
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + ↵</div>
-                            <div class="shortcut-desc">Submit/Optimize Prompt</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + N</div>
-                            <div class="shortcut-desc">Start Over</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + Shift + X</div>
-                            <div class="shortcut-desc">Cancel</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + Shift + C</div>
-                            <div class="shortcut-desc">Copy output</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + T</div>
-                            <div class="shortcut-desc">Tweak prompt</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="shortcuts-section">
-                    <h4 class="shortcuts-section-title">Configuration</h4>
-                    <div class="shortcuts-list">
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + M</div>
-                            <div class="shortcut-desc">Mode help</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + Shift + S</div>
-                            <div class="shortcut-desc">Style help</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + P</div>
-                            <div class="shortcut-desc">Provider</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + L</div>
-                            <div class="shortcut-desc">Model</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + ,</div>
-                            <div class="shortcut-desc">Settings</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="shortcuts-section">
-                    <h4 class="shortcuts-section-title">Navigation</h4>
-                    <div class="shortcuts-list">
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + I</div>
-                            <div class="shortcut-desc">Focus input</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + Shift + H</div>
-                            <div class="shortcut-desc">Clear history</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + [</div>
-                            <div class="shortcut-desc">Prev page</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Ctrl + ]</div>
-                            <div class="shortcut-desc">Next page</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="shortcuts-section">
-                    <h4 class="shortcuts-section-title">General</h4>
-                    <div class="shortcuts-list">
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">Esc</div>
-                            <div class="shortcut-desc">Close all & cancel</div>
-                        </div>
-                        <div class="shortcut-row">
-                            <div class="shortcut-keys">?</div>
-                            <div class="shortcut-desc">Show this help</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="confirm-dialog-actions">
-                <button class="btn btn-primary confirm-dialog-confirm">Got it</button>
-            </div>
-        `;
-
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-
-        // Trigger animation
-        setTimeout(() => {
-            overlay.classList.add('active');
-            dialog.classList.add('active');
-        }, 10);
-
-        // Handle close button
-        const closeBtn = dialog.querySelector('.help-tooltip-close');
-        closeBtn.addEventListener('click', () => {
-            this.closeConfirmDialog(overlay, dialog);
-        });
-
-        // Handle confirm button
-        const confirmBtn = dialog.querySelector('.confirm-dialog-confirm');
-        confirmBtn.addEventListener('click', () => {
-            this.closeConfirmDialog(overlay, dialog);
-        });
-
-        // Handle overlay click
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                this.closeConfirmDialog(overlay, dialog);
-            }
-        });
-
-        // Handle escape key
-        const escapeHandler = (e) => {
-            if (e.key === 'Escape') {
-                this.closeConfirmDialog(overlay, dialog);
-                document.removeEventListener('keydown', escapeHandler);
-            }
-        };
-        document.addEventListener('keydown', escapeHandler);
-    }
-
     showMessage(type, message) {
         const outputDiv = document.getElementById('output');
         const iconMap = {
@@ -2673,6 +2367,293 @@ class PromptheusApp {
     }
 
     // Style Help functionality
+    initStyleHelp() {
+        const helpBtn = document.getElementById('style-help-btn');
+        let tooltip = null;
+        let timeoutId = null;
+
+        helpBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showStyleTooltip(helpBtn);
+        });
+
+        helpBtn.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.showStyleTooltip(helpBtn);
+            }, 300); // Brief delay for better UX
+        });
+
+        helpBtn.addEventListener('mouseleave', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.hideStyleTooltip();
+            }, 200);
+        });
+    }
+
+    showStyleTooltip(helpBtn) {
+        if (document.getElementById('style-tooltip')) {
+            return; // Already shown
+        }
+
+        const styles = {
+            'default': {
+                name: 'Default',
+                description: 'No specific formatting - AI decides the best structure based on your prompt content and context.'
+            },
+            'bullets': {
+                name: 'Bullets',
+                description: 'Format the final response as concise bullet points for easy scanning and quick comprehension.'
+            },
+            'steps': {
+                name: 'Steps',
+                description: 'Return a numbered, step-by-step plan with clear sequential instructions for following processes.'
+            },
+            'plain': {
+                name: 'Plain',
+                description: 'Use natural sentences without heavy formatting or special structural elements.'
+            },
+            'concise': {
+                name: 'Concise',
+                description: 'Be brief and to the point while preserving key details and essential information.'
+            }
+        };
+
+        const tooltip = document.createElement('div');
+        tooltip.id = 'style-tooltip';
+        tooltip.className = 'style-tooltip';
+
+        let content = '<div class="style-tooltip-content"><h4>Output Styles</h4>';
+        Object.entries(styles).forEach(([key, style]) => {
+            content += `
+                <div class="style-item">
+                    <div class="style-name">${style.name}</div>
+                    <div class="style-description">${style.description}</div>
+                </div>
+            `;
+        });
+        content += '</div>';
+
+        tooltip.innerHTML = content;
+
+        // Position tooltip to ensure it's fully visible
+        const rect = helpBtn.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const tooltipMaxWidth = 400;
+        const tooltipMargin = 20;
+
+        // Calculate horizontal position
+        let tooltipLeft = rect.left + rect.width / 2;
+        let adjustedLeft = tooltipLeft;
+
+        // Ensure tooltip doesn't go off screen horizontally
+        if (tooltipLeft - tooltipMaxWidth / 2 < tooltipMargin) {
+            // Too far left, align to left edge with margin
+            adjustedLeft = tooltipMargin + tooltipMaxWidth / 2;
+        } else if (tooltipLeft + tooltipMaxWidth / 2 > viewportWidth - tooltipMargin) {
+            // Too far right, align to right edge with margin
+            adjustedLeft = viewportWidth - tooltipMargin - tooltipMaxWidth / 2;
+        }
+
+        tooltip.style.left = `${adjustedLeft}px`;
+
+        // Calculate vertical position
+        const estimatedTooltipHeight = 300;
+        const spaceAbove = rect.top - tooltipMargin;
+        const spaceBelow = viewportHeight - rect.bottom - tooltipMargin;
+
+        // Prefer showing above, but show below if not enough space
+        if (spaceAbove >= estimatedTooltipHeight) {
+            // Position above
+            tooltip.style.top = `${rect.top - 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(-100%)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.remove('style-tooltip-below');
+        } else if (spaceBelow >= estimatedTooltipHeight) {
+            // Position below
+            tooltip.style.top = `${rect.bottom + 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(0)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.add('style-tooltip-below');
+        } else {
+            // Not enough space either way, show below but constrain height
+            tooltip.style.top = `${rect.bottom + 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(0)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.style.maxHeight = `${spaceBelow - 20}px`;
+            tooltip.style.overflowY = 'auto';
+            tooltip.classList.add('style-tooltip-below');
+        }
+
+        document.body.appendChild(tooltip);
+
+        // Trigger show animation
+        requestAnimationFrame(() => {
+            tooltip.classList.add('show');
+        });
+
+        // Click outside to close
+        const clickHandler = (e) => {
+            if (!tooltip.contains(e.target) && e.target !== helpBtn) {
+                this.hideStyleTooltip();
+                document.removeEventListener('click', clickHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', clickHandler);
+        }, 0);
+    }
+
+    hideStyleTooltip() {
+        const tooltip = document.getElementById('style-tooltip');
+        if (tooltip) {
+            tooltip.classList.remove('show');
+            setTimeout(() => {
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
+                }
+            }, 300);
+        }
+    }
+
+    // Mode Help functionality
+    initModeHelp() {
+        const helpBtn = document.getElementById('mode-help-btn');
+        let tooltip = null;
+        let timeoutId = null;
+
+        helpBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showModeTooltip(helpBtn);
+        });
+
+        helpBtn.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.showModeTooltip(helpBtn);
+            }, 300);
+        });
+
+        helpBtn.addEventListener('mouseleave', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.hideModeTooltip();
+            }, 200);
+        });
+    }
+
+    showModeTooltip(helpBtn) {
+        if (document.getElementById('mode-tooltip')) {
+            return;
+        }
+
+        const modes = {
+            'auto': {
+                name: 'Auto',
+                description: 'AI intelligently detects your task type and decides whether to ask clarifying questions. Best for most users.'
+            },
+            'force': {
+                name: 'Always Ask',
+                description: 'Always asks clarifying questions to ensure the best possible optimization, even for simple prompts.'
+            },
+            'skip': {
+                name: 'Skip Questions',
+                description: 'Optimizes immediately without any questions. Fastest option when you know what you want.'
+            }
+        };
+
+        const tooltip = document.createElement('div');
+        tooltip.id = 'mode-tooltip';
+        tooltip.className = 'style-tooltip';
+
+        let content = '<div class="style-tooltip-content"><h4>Question Modes</h4>';
+        Object.entries(modes).forEach(([key, mode]) => {
+            content += `
+                <div class="style-item">
+                    <div class="style-name">${mode.name}</div>
+                    <div class="style-description">${mode.description}</div>
+                </div>
+            `;
+        });
+        content += '</div>';
+
+        tooltip.innerHTML = content;
+
+        // Position tooltip above the help button
+        const rect = helpBtn.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const tooltipMaxWidth = 400;
+        const tooltipMargin = 20;
+
+        // Calculate horizontal position
+        let tooltipLeft = rect.left + rect.width / 2;
+        let adjustedLeft = tooltipLeft;
+
+        // Ensure tooltip doesn't go off screen horizontally
+        if (tooltipLeft - tooltipMaxWidth / 2 < tooltipMargin) {
+            adjustedLeft = tooltipMargin + tooltipMaxWidth / 2;
+        } else if (tooltipLeft + tooltipMaxWidth / 2 > viewportWidth - tooltipMargin) {
+            adjustedLeft = viewportWidth - tooltipMargin - tooltipMaxWidth / 2;
+        }
+
+        tooltip.style.left = `${adjustedLeft}px`;
+
+        // Calculate vertical position
+        const estimatedTooltipHeight = 250;
+        const spaceAbove = rect.top - tooltipMargin;
+        const spaceBelow = viewportHeight - rect.bottom - tooltipMargin;
+
+        if (spaceAbove >= estimatedTooltipHeight) {
+            // Position above
+            tooltip.style.top = `${rect.top - 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(-100%)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.remove('style-tooltip-below');
+        } else {
+            // Position below
+            tooltip.style.top = `${rect.bottom + 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(0)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.add('style-tooltip-below');
+        }
+
+        document.body.appendChild(tooltip);
+
+        // Trigger show animation
+        requestAnimationFrame(() => {
+            tooltip.classList.add('show');
+        });
+
+        // Click outside to close
+        const clickHandler = (e) => {
+            if (!tooltip.contains(e.target) && e.target !== helpBtn) {
+                this.hideModeTooltip();
+                document.removeEventListener('click', clickHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', clickHandler);
+        }, 0);
+    }
+
+    hideModeTooltip() {
+        const tooltip = document.getElementById('mode-tooltip');
+        if (tooltip) {
+            tooltip.classList.remove('show');
+            setTimeout(() => {
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
+                }
+            }, 300);
+        }
+    }
+
+    // updateInputStats removed - word/character count not useful for prompt optimization
 
     // ===================================================================
     // CUSTOM ALCHEMICAL DROPDOWN FUNCTIONALITY
@@ -2728,50 +2709,17 @@ class PromptheusApp {
 
         // Initialize help tooltip system
         const helpIcons = document.querySelectorAll('.toolbar-help-icon');
+        console.log('Found help icons:', helpIcons.length);
         helpIcons.forEach(icon => {
             const helpFor = icon.getAttribute('data-help-for');
             const tooltip = document.getElementById(`${helpFor}-help-tooltip`);
             const closeBtn = tooltip?.querySelector('.help-tooltip-close');
 
-            if (!tooltip) return;
-
-            // Move tooltip to body for proper stacking
-            document.body.appendChild(tooltip);
-
-            // Set initial position immediately to prevent jump on first open
-            const iconRect = icon.getBoundingClientRect();
-            const tooltipWidth = 400; // max-width from CSS
-            const tooltipHeight = 300; // estimated max height
-            const spacing = 8;
-
-            // Calculate horizontal position (clamp to viewport)
-            let left = iconRect.left;
-            if (left + tooltipWidth > window.innerWidth) {
-                // Would overflow right edge, align to right edge instead
-                left = window.innerWidth - tooltipWidth - spacing;
+            console.log('Help for:', helpFor, 'Tooltip:', tooltip);
+            if (!tooltip) {
+                console.warn('No tooltip found for:', helpFor);
+                return;
             }
-            if (left < spacing) {
-                // Would overflow left edge
-                left = spacing;
-            }
-
-            // Calculate vertical position (prefer below, but show above if no room)
-            let top = iconRect.bottom + spacing;
-            let showAbove = false;
-            if (top + tooltipHeight > window.innerHeight) {
-                // Not enough room below, try above
-                const topAbove = iconRect.top - tooltipHeight - spacing;
-                if (topAbove >= 0 || topAbove > top + tooltipHeight - window.innerHeight) {
-                    // Either fits above, or fits better above than below
-                    top = topAbove;
-                    showAbove = true;
-                }
-            }
-
-            tooltip.style.position = 'fixed';
-            tooltip.style.left = `${left}px`;
-            tooltip.style.top = `${top}px`;
-            tooltip.dataset.showAbove = showAbove;
 
             // Toggle tooltip on icon click
             icon.addEventListener('click', (e) => {
@@ -2789,45 +2737,6 @@ class PromptheusApp {
                         i.classList.remove('active');
                     }
                 });
-
-                const isVisible = tooltip.classList.contains('visible');
-
-                if (!isVisible) {
-                    // Position tooltip relative to icon BEFORE making visible
-                    const iconRect = icon.getBoundingClientRect();
-                    const tooltipWidth = 400; // max-width from CSS
-                    const tooltipHeight = 300; // estimated max height
-                    const spacing = 8;
-
-                    // Calculate horizontal position (clamp to viewport)
-                    let left = iconRect.left;
-                    if (left + tooltipWidth > window.innerWidth) {
-                        // Would overflow right edge, align to right edge instead
-                        left = window.innerWidth - tooltipWidth - spacing;
-                    }
-                    if (left < spacing) {
-                        // Would overflow left edge
-                        left = spacing;
-                    }
-
-                    // Calculate vertical position (prefer below, but show above if no room)
-                    let top = iconRect.bottom + spacing;
-                    let showAbove = false;
-                    if (top + tooltipHeight > window.innerHeight) {
-                        // Not enough room below, try above
-                        const topAbove = iconRect.top - tooltipHeight - spacing;
-                        if (topAbove >= 0 || topAbove > top + tooltipHeight - window.innerHeight) {
-                            // Either fits above, or fits better above than below
-                            top = topAbove;
-                            showAbove = true;
-                        }
-                    }
-
-                    tooltip.style.position = 'fixed';
-                    tooltip.style.left = `${left}px`;
-                    tooltip.style.top = `${top}px`;
-                    tooltip.dataset.showAbove = showAbove;
-                }
 
                 // Toggle current tooltip
                 tooltip.classList.toggle('visible');
@@ -2853,6 +2762,21 @@ class PromptheusApp {
             }
             // Close help tooltips when clicking outside
             if (!e.target.closest('.toolbar-help-icon') && !e.target.closest('.help-tooltip')) {
+                document.querySelectorAll('.help-tooltip.visible').forEach(tooltip => {
+                    tooltip.classList.remove('visible');
+                });
+                document.querySelectorAll('.toolbar-help-icon.active').forEach(icon => {
+                    icon.classList.remove('active');
+                });
+            }
+        });
+
+        // Close dropdowns and tooltips on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.alchemical-dropdown.active').forEach(dropdown => {
+                    this.closeDropdown(dropdown);
+                });
                 document.querySelectorAll('.help-tooltip.visible').forEach(tooltip => {
                     tooltip.classList.remove('visible');
                 });

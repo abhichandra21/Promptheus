@@ -7,7 +7,7 @@ This document provides a comprehensive overview of the `Promptheus` project, its
 Promptheus is a sophisticated, AI-powered command-line interface (CLI) tool written in Python. Its primary purpose is to **help users craft and refine prompts**. The tool takes a user's initial prompt and, through a series of AI-driven steps, outputs a better, more effective prompt for the user to then take and use with any Large Language Model (LLM).
 
 ### Core Features:
-- **Multi-Provider Support**: It uses LLM backends (Google Gemini, Anthropic Claude, OpenAI, Groq, Qwen, GLM) for its internal refinement process.
+- **Multi-Provider Support**: It uses LLM backends (Google, Anthropic Claude, OpenAI, Groq, Qwen, GLM) for its internal refinement process.
 - **Adaptive Interaction**: The tool intelligently detects the user's task type:
   - **Generation Tasks**: It offers to ask clarifying questions to add detail.
   - **Analysis Tasks**: It performs an automatic, non-interactive **"light refinement"** to improve the prompt's clarity.
@@ -16,6 +16,7 @@ Promptheus is a sophisticated, AI-powered command-line interface (CLI) tool writ
 - **Flexible Configuration**: Configuration is handled via a clear hierarchy: CLI arguments (`--provider`), environment variables (`PROMPTHEUS_PROVIDER`), and `.env` files.
 - **Prompt History**: All refined prompts are automatically saved to a history file for later reference and reuse.
 - **Subcommand Interface**: Provides dedicated subcommands for utility functions like `list-models`, `validate`, and `history` for a clean and modern CLI experience.
+- **Dynamic Model Discovery**: Model information is dynamically fetched from the models.dev API and cached locally for 24 hours.
 
 ### Architecture:
 The project follows a modular and modern Python architecture:
@@ -42,7 +43,7 @@ pip install -e .
 ### Configuration
 The application requires at least one API key for an LLM provider to power its internal refinement features.
 1.  Copy the example `.env` file: `cp .env.example .env`
-2.  Edit the `.env` file to add your API key (e.g., `GEMINI_API_KEY=...`, `ANTHROPIC_API_KEY=...`, etc.).
+2.  Edit the `.env` file to add your API key (e.g., `GOOGLE_API_KEY=...`, `ANTHROPIC_API_KEY=...`, etc.).
 
 ### Running the Application
 The tool is installed as a command-line script named `promptheus`. Its function is to output a refined prompt.

@@ -11,7 +11,7 @@ This document provides diagnostic procedures and resolution strategies for commo
 **Resolution:**
 ```bash
 # Explicitly specify provider
-promptheus --provider gemini "Prompt"
+promptheus --provider google "Prompt"
 promptheus --provider anthropic "Prompt"
 promptheus --provider openai "Prompt"
 promptheus --provider groq "Prompt"
@@ -29,10 +29,10 @@ promptheus --provider glm "Prompt"
 cat .env
 
 # Check environment variables
-env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI|PROMPTHEUS)'
+env | grep -E '(GOOGLE|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZHIPUAI|PROMPTHEUS)'
 
 # Override provider selection
-export PROMPTHEUS_PROVIDER=gemini
+export PROMPTHEUS_PROVIDER=google
 ```
 
 ### API Key Validation
@@ -40,7 +40,7 @@ export PROMPTHEUS_PROVIDER=gemini
 **Verification Commands:**
 ```bash
 # Validate specific provider configuration
-promptheus validate --providers gemini
+promptheus validate --providers google
 promptheus validate --providers anthropic
 promptheus validate --providers openai
 promptheus validate --providers groq
@@ -140,7 +140,7 @@ promptheus -f ./relative/path/prompt.txt
 /status
 
 # Modify provider
-/set provider gemini
+/set provider google
 
 # Modify model
 /set model gpt-4o
@@ -172,6 +172,25 @@ source ~/.zshrc    # Zsh
 alias promptheus='poetry run promptheus'
 ```
 
+## Model Discovery Issues
+
+### Model List Not Updating
+
+**Symptom:** Model lists appear outdated or do not include newly available models
+
+**Resolution:**
+```bash
+# Manually refresh model cache
+promptheus validate --test-connection  # This will also refresh cache
+
+# Or, in Web UI:
+# Go to Settings and click "Refresh Model Cache" button
+```
+
+**Cache Location:**
+- On Unix: `~/.promptheus/models_cache.json`
+- On Windows: `%APPDATA%/promptheus/models_cache.json`
+
 ## Reporting Issues
 
 When reporting issues, include the following information:
@@ -184,5 +203,6 @@ When reporting issues, include the following information:
    - Provider and model in use
    - Installation method (pip, source, Poetry)
 4. **Reproduction steps:** Minimal steps to reproduce the issue
+5. **Current model cache status:** If issue related to model discovery
 
 **Issue Tracker:** https://github.com/abhichandra21/Promptheus/issues

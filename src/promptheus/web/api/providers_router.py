@@ -1,14 +1,17 @@
 """Providers API router for Promptheus Web UI."""
 import json
 import os
+from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from promptheus.config import Config
-from promptheus.providers import get_available_providers, validate_provider
+from promptheus.providers import get_available_providers, validate_provider, get_provider
+from promptheus.models_dev_service import get_service
+from promptheus.utils import sanitize_error_message
 
 router = APIRouter()
 
@@ -17,7 +20,26 @@ class ProviderInfo(BaseModel):
     name: str
     available: bool
     default_model: str
-    example_models: List[str] = []
+    models: List[str] = []
+    capabilities: Optional[Dict[str, Any]] = None
+
+class ModelsResponseWithFilter(BaseModel):
+    provider_id: str
+    models: List[str]
+    current_model: str
+    text_generation_models: List[str]
+    all_models: List[str]
+    cache_last_updated: Optional[str] = None
+
+
+class PreflightResult(BaseModel):
+    provider_id: str
+    display_name: str
+    status: str  # ok | missing_key | error
+    message: Optional[str] = None
+    detail: Optional[str] = None
+    duration_ms: Optional[int] = None
+    model_used: Optional[str] = None
 
 
 class ProviderSelection(BaseModel):
@@ -33,6 +55,7 @@ class ProvidersResponse(BaseModel):
     current_provider: str
     current_model: str
     available_providers: List[ProviderInfo]
+    cache_last_updated: Optional[str] = None
 
 
 class ModelsResponse(BaseModel):
@@ -48,187 +71,17 @@ def load_providers_config() -> Dict[str, Any]:
         return json.load(f)
 
 
-async def fetch_all_models_from_provider(provider_id: str, app_config: Config, providers_config: Dict[str, Any]) -> List[str]:
-    """Fetch all available models from a provider's API.
+async def get_models_for_provider(provider_id: str) -> List[str]:
+    """Get models for a provider using models.dev service.
 
     Args:
-        provider_id: The provider ID (e.g., 'gemini', 'openai')
-        app_config: Configuration object
-        providers_config: Providers configuration from JSON
+        provider_id: The canonical provider ID (e.g., 'google', 'openai')
 
     Returns:
-        List of model names/IDs
+        List of model names/IDs from models.dev
     """
-    import os
-
-    provider_config = providers_config['providers'].get(provider_id, {})
-
-    try:
-        if provider_id == 'openai':
-            try:
-                from openai import OpenAI
-                api_key = os.getenv('OPENAI_API_KEY')
-                if not api_key:
-                    return provider_config.get('example_models', [])
-
-                client = OpenAI(api_key=api_key)
-                models_response = client.models.list()
-                # Filter for chat/completion models (GPT, o1, o3)
-                models = [model.id for model in models_response.data
-                         if any(prefix in model.id.lower() for prefix in ['gpt', 'o1', 'o3', 'chatgpt'])]
-                return sorted(models, reverse=True)  # Reverse to show newer models first
-            except Exception as e:
-                print(f"Error listing OpenAI models: {e}")
-                return provider_config.get('example_models', [])
-
-        elif provider_id == 'anthropic':
-            # Anthropic doesn't have a models API, return predefined list
-            return [
-                'claude-sonnet-4-5-20250929',
-                'claude-haiku-4-5-20251001',
-                'claude-3.7-sonnet-20250219',
-                'claude-opus-4-20250514',
-                'claude-3-5-sonnet-20241022',
-                'claude-3-5-haiku-20241022',
-                'claude-3-opus-20240229',
-                'claude-3-sonnet-20240229',
-                'claude-3-haiku-20240307'
-            ]
-
-        elif provider_id == 'gemini':
-            # Try using the new google-genai SDK first, then fall back to google-generativeai
-            api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
-            if not api_key:
-                return provider_config.get('example_models', [])
-
-            try:
-                # Try new google-genai SDK
-                from google import genai
-                client = genai.Client(api_key=api_key)
-                models_response = client.models.list()
-                models = []
-                for model in models_response:
-                    # Extract model name from full path (e.g., "models/gemini-2.0-flash" -> "gemini-2.0-flash")
-                    model_name = model.name.split('/')[-1] if '/' in model.name else model.name
-                    # Only include models that support generation
-                    if hasattr(model, 'supported_generation_methods'):
-                        if 'generateContent' in model.supported_generation_methods or 'generate_content' in model.supported_generation_methods:
-                            models.append(model_name)
-                    else:
-                        # If no supported_generation_methods attribute, include if name contains 'gemini'
-                        if 'gemini' in model_name.lower():
-                            models.append(model_name)
-                return sorted(set(models))
-            except ImportError:
-                # Fall back to old google-generativeai library
-                try:
-                    import google.generativeai as genai
-                    genai.configure(api_key=api_key)
-                    models_response = genai.list_models()
-                    models = [model.name.replace('models/', '') for model in models_response
-                             if hasattr(model, 'supported_generation_methods') and
-                             'generateContent' in model.supported_generation_methods]
-                    return sorted(models)
-                except Exception as e:
-                    print(f"Error listing Gemini models: {e}")
-                    # Fallback to comprehensive predefined list
-                    return [
-                        'gemini-2.5-flash',
-                        'gemini-2.5-pro',
-                        'gemini-2.0-flash-exp',
-                        'gemini-2.0-flash-thinking-exp-1219',
-                        'gemini-2.0-flash',
-                        'gemini-1.5-pro',
-                        'gemini-1.5-flash',
-                        'gemini-1.5-flash-8b',
-                        'gemini-1.0-pro'
-                    ]
-            except Exception as e:
-                print(f"Error listing Gemini models with new SDK: {e}")
-                # Fallback to comprehensive predefined list
-                return [
-                    'gemini-2.5-flash',
-                    'gemini-2.5-pro',
-                    'gemini-2.0-flash-exp',
-                    'gemini-2.0-flash-thinking-exp-1219',
-                    'gemini-2.0-flash',
-                    'gemini-1.5-pro',
-                    'gemini-1.5-flash',
-                    'gemini-1.5-flash-8b',
-                    'gemini-1.0-pro'
-                ]
-
-        elif provider_id == 'groq':
-            # Groq API often returns only active/popular models, so we combine API results with known models
-            api_key = os.getenv('GROQ_API_KEY')
-
-            # Comprehensive list of known Groq models (updated Dec 2024)
-            known_groq_models = [
-                'llama-3.3-70b-versatile',
-                'llama-3.3-70b-specdec',
-                'llama-3.2-1b-preview',
-                'llama-3.2-3b-preview',
-                'llama-3.2-11b-vision-preview',
-                'llama-3.2-90b-vision-preview',
-                'llama-3.1-70b-versatile',
-                'llama-3.1-8b-instant',
-                'llama3-70b-8192',
-                'llama3-8b-8192',
-                'llama3-groq-70b-8192-tool-use-preview',
-                'llama3-groq-8b-8192-tool-use-preview',
-                'mixtral-8x7b-32768',
-                'gemma2-9b-it',
-                'gemma-7b-it'
-            ]
-
-            if not api_key:
-                # Return known models if no API key
-                return known_groq_models
-
-            try:
-                from groq import Groq
-                client = Groq(api_key=api_key)
-                models_response = client.models.list()
-                api_models = [model.id for model in models_response.data]
-
-                # Combine API results with known models, remove duplicates
-                all_models = list(set(api_models + known_groq_models))
-                return sorted(all_models, reverse=True)
-            except Exception as e:
-                print(f"Error listing Groq models: {e}")
-                # Fallback to known models
-                return known_groq_models
-
-        elif provider_id == 'qwen':
-            # Qwen/DashScope doesn't expose a models API easily, return predefined list
-            return [
-                'qwen-turbo',
-                'qwen-plus',
-                'qwen-max',
-                'qwen-max-longcontext',
-                'qwen-vl-plus',
-                'qwen-vl-max'
-            ]
-
-        elif provider_id == 'glm':
-            # GLM/Zhipu doesn't expose a models API easily, return predefined list
-            return [
-                'glm-4.6',
-                'glm-4.5-air',
-                'glm-4',
-                'glm-4-plus',
-                'glm-4-air',
-                'glm-3-turbo'
-            ]
-
-        else:
-            # Default to example models
-            return provider_config.get('example_models', [])
-
-    except Exception as e:
-        # On any error, fallback to example models
-        print(f"Error fetching models for {provider_id}: {e}")
-        return provider_config.get('example_models', [])
+    service = get_service()
+    return await service.get_models_for_provider(provider_id)
 
 
 @router.get("/providers", response_model=ProvidersResponse)
@@ -237,28 +90,38 @@ async def get_providers():
     try:
         app_config = Config()
         providers_config = load_providers_config()
+        service = get_service()
 
         # Get available providers
         available_providers_data = get_available_providers(app_config)
 
         provider_infos = []
         for provider_id, provider_data in available_providers_data.items():
-            # Get example models from providers.json
+            # Get models from models.dev
             provider_config = providers_config.get('providers', {}).get(provider_id, {})
-            example_models = provider_config.get('example_models', [])
+            try:
+                models = await service.get_models_for_provider(provider_id)
+            except Exception:
+                # If models.dev fails, use empty list
+                models = []
 
             provider_infos.append(ProviderInfo(
                 id=provider_id,
                 name=provider_data.get('name', provider_id.title()),
                 available=provider_data.get('available', False),
                 default_model=provider_data.get('default_model', 'default'),
-                example_models=example_models
+                models=models,
+                capabilities=provider_config.get('capabilities')
             ))
 
+        cache_ts = service.get_cache_timestamp()
+        cache_last_updated = datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else None
+
         return ProvidersResponse(
-            current_provider=app_config.provider or "gemini",
+            current_provider=app_config.provider or "google",
             current_model=app_config.get_model(),
-            available_providers=provider_infos
+            available_providers=provider_infos,
+            cache_last_updated=cache_last_updated
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -288,12 +151,8 @@ async def select_provider(selection: ProviderSelection):
 
             # Auto-detect the provider again
             app_config.reset()
-            detected_provider = app_config.provider or "gemini"
+            detected_provider = app_config.provider or "google"
             return {"current_provider": detected_provider}
-
-        # Validate the provider
-        if not validate_provider(selection.provider_id, app_config):
-            raise HTTPException(status_code=400, detail=f"Provider {selection.provider_id} is not available")
 
         # Update the configuration
         app_config.set_provider(selection.provider_id)
@@ -307,19 +166,20 @@ async def select_provider(selection: ProviderSelection):
             set_key(env_path, "PROMPTHEUS_PROVIDER", selection.provider_id)
         os.environ["PROMPTHEUS_PROVIDER"] = selection.provider_id
 
-        return {"current_provider": selection.provider_id}
+        available = validate_provider(selection.provider_id, app_config)
+        return {"current_provider": selection.provider_id, "available": available}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/providers/{provider_id}/models", response_model=ModelsResponse)
-async def get_provider_models(provider_id: str, fetch_all: bool = False):
-    """Get available models for a specific provider.
+@router.get("/providers/{provider_id}/models", response_model=ModelsResponseWithFilter)
+async def get_provider_models(provider_id: str, include_nontext: bool = False, fetch_all: bool = False):
+    """Get available models for a specific provider using models.dev.
 
     Args:
-        provider_id: The provider ID (e.g., 'gemini', 'openai')
-        fetch_all: If True, fetch all available models from the provider API (slower)
-                   If False, return only example models from config (faster, default)
+        provider_id: The provider ID (e.g., 'google', 'openai')
+        include_nontext: If True, include non-text-generation models
+        fetch_all: Compatibility alias for include_nontext (used by Web UI)
     """
     try:
         app_config = Config()
@@ -330,12 +190,17 @@ async def get_provider_models(provider_id: str, fetch_all: bool = False):
             raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
 
         provider_config = providers_config['providers'][provider_id]
+        service = get_service()
 
-        # Fetch models based on fetch_all parameter
-        if fetch_all:
-            models = await fetch_all_models_from_provider(provider_id, app_config, providers_config)
-        else:
-            models = provider_config.get('example_models', [])
+        # Get models from models.dev with single fetch and local filtering
+        try:
+            all_models, text_models = await service.get_models_for_provider_split(provider_id)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch models from models.dev: {str(e)}")
+
+        # Use appropriate model list based on filter
+        include_all = include_nontext or fetch_all
+        models = all_models if include_all else text_models
 
         # Get current model for this provider
         current_model = provider_config.get('default_model', models[0] if models else 'default')
@@ -344,15 +209,95 @@ async def get_provider_models(provider_id: str, fetch_all: bool = False):
         if app_config.provider == provider_id:
             current_model = app_config.get_model()
 
-        return ModelsResponse(
+        cache_ts = service.get_cache_timestamp()
+        cache_last_updated = datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else None
+
+        return ModelsResponseWithFilter(
             provider_id=provider_id,
             models=models,
-            current_model=current_model
+            current_model=current_model,
+            text_generation_models=text_models,
+            all_models=all_models,
+            cache_last_updated=cache_last_updated
         )
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/providers/cache/refresh")
+async def refresh_models_cache():
+    """Force refresh the models.dev cache and return the new timestamp."""
+    service = get_service()
+    await service.refresh_cache()
+    cache_ts = service.get_cache_timestamp()
+    return {
+        "refreshed": True,
+        "cache_last_updated": datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else None,
+    }
+
+
+@router.get("/providers/preflight", response_model=List[PreflightResult])
+async def preflight_providers():
+    """Validate configured providers with a lightweight refinement call."""
+    config_data = load_providers_config()
+    results: List[PreflightResult] = []
+
+    for provider_id, provider_info in config_data.get("providers", {}).items():
+        display_name = provider_info.get("display_name", provider_id.title())
+        api_key_env = provider_info.get("api_key_env")
+        keys = api_key_env if isinstance(api_key_env, list) else [api_key_env]
+
+        if not any(k and os.getenv(k) for k in keys):
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="missing_key",
+                message=f"Missing API key: {', '.join([k for k in keys if k])}"
+            ))
+            continue
+
+        # Use a fresh Config per provider to avoid cross-contamination
+        app_config = Config()
+        try:
+            app_config.set_provider(provider_id)
+        except Exception as exc:
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="error",
+                message="Failed to initialize provider",
+                detail=sanitize_error_message(str(exc))
+            ))
+            continue
+
+        start = datetime.now()
+        try:
+            provider = get_provider(provider_id, app_config, app_config.get_model())
+            _ = provider.light_refine("Validation ping", "Respond with OK")
+            duration_ms = int((datetime.now() - start).total_seconds() * 1000)
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="ok",
+                message="Ready",
+                duration_ms=duration_ms,
+                model_used=app_config.get_model()
+            ))
+        except Exception as exc:
+            duration_ms = int((datetime.now() - start).total_seconds() * 1000)
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="error",
+                message="Provider call failed",
+                detail=sanitize_error_message(str(exc)),
+                duration_ms=duration_ms,
+                model_used=app_config.get_model()
+            ))
+
+    return results
 
 
 @router.post("/providers/select-model")
@@ -367,7 +312,15 @@ async def select_model(selection: ModelSelection):
             raise HTTPException(status_code=404, detail=f"Provider {selection.provider_id} not found")
 
         provider_config = providers_config['providers'][selection.provider_id]
-        available_models = provider_config.get('example_models', [])
+
+        # Validate model by checking if it exists in models.dev
+        try:
+            models = await get_models_for_provider(selection.provider_id)
+            if selection.model not in models:
+                raise HTTPException(status_code=400, detail=f"Model {selection.model} not found for provider {selection.provider_id}")
+        except Exception as e:
+            # If models.dev is unavailable, still allow the selection
+            pass
 
         # Update the configuration
         app_config.set_model(selection.model)
