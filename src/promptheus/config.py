@@ -121,7 +121,7 @@ class Config:
     def set_provider(self, provider: str, source: Optional[str] = None) -> None:
         """Manually set the provider (e.g., from CLI flag)."""
         config_data = self._ensure_provider_config()
-        lowered = provider.lower()
+        lowered = self._normalize_provider_id(provider)
         if lowered not in config_data.get("providers", {}):
             raise ValueError(f"Unknown provider: {provider}")
         if lowered not in SUPPORTED_PROVIDER_IDS:
@@ -144,7 +144,7 @@ class Config:
 
         explicit_provider = os.getenv("PROMPTHEUS_PROVIDER")
         if explicit_provider:
-            lowered = explicit_provider.lower()
+            lowered = self._normalize_provider_id(explicit_provider)
             if lowered not in config_data.get("providers", {}):
                 self._record_error(f"Unknown provider '{explicit_provider}' in PROMPTHEUS_PROVIDER")
             elif lowered in SUPPORTED_PROVIDER_IDS:
@@ -264,6 +264,17 @@ class Config:
             info = config_data.get("providers", {}).get(provider_id, {})
         return info.get("display_name", provider_id.title())
 
+    def _normalize_provider_id(self, provider: str) -> str:
+        """Normalize common aliases to canonical provider IDs."""
+        aliases = {
+            "gemini": "google",
+            "dashscope": "qwen",
+            "zai": "glm",
+            "zhipuai": "glm",
+        }
+        lowered = provider.lower()
+        return aliases.get(lowered, lowered)
+
     def get_configured_providers(self) -> List[str]:
         """Return a list of providers that have an API key configured."""
         configured_providers = []
@@ -356,7 +367,7 @@ class Config:
         if self.provider == "glm":
             return (
                 "To use GLM (Zhipu), add ZHIPUAI_API_KEY to your .env file.\n"
-                "Optionally set ZAI_BASE_URL for self-hosted gateways."
+                "Optionally set ZHIPUAI_BASE_URL for self-hosted gateways."
             )
         return "Set the appropriate API key for the selected provider."
 

@@ -247,3 +247,4 @@ Some provider libraries may not yet support Python 3.14. For providers experienc
 2. For other providers, consider using Python 3.13 or earlier until compatibility is ensured
 3. Use virtual environments to isolate different Python versions as needed
 4. Pytest warnings are configured in `pyproject.toml` to suppress known deprecation warnings
+- for 100% of the decisions/questions always ask frontend-developer skill

@@ -6,7 +6,13 @@
       "api_key_env": "GOOGLE_API_KEY",
       "model_env": "GOOGLE_MODEL",
       "api_key_prefixes": ["AIza", "AQ."],
-      "api_key_url": "https://makersuite.google.com/app/apikey"
+      "api_key_url": "https://makersuite.google.com/app/apikey",
+      "capabilities": {
+        "supports_json": true,
+        "supports_tools": true,
+        "supports_vision": true,
+        "max_output_tokens": 8192
+      }
     },
     "anthropic": {
       "display_name": "Anthropic",
@@ -15,7 +21,13 @@
       "model_env": "ANTHROPIC_MODEL",
       "base_url_env": "ANTHROPIC_BASE_URL",
       "api_key_prefixes": ["sk-ant-"],
-      "api_key_url": "https://console.anthropic.com"
+      "api_key_url": "https://console.anthropic.com",
+      "capabilities": {
+        "supports_json": true,
+        "supports_tools": true,
+        "supports_vision": false,
+        "max_output_tokens": 8192
+      }
     },
     "openai": {
       "display_name": "OpenAI",
@@ -26,7 +38,13 @@
       "organization_env": "OPENAI_ORG_ID",
       "project_env": "OPENAI_PROJECT",
       "api_key_prefixes": ["sk-"],
-      "api_key_url": "https://platform.openai.com/api-keys"
+      "api_key_url": "https://platform.openai.com/api-keys",
+      "capabilities": {
+        "supports_json": true,
+        "supports_tools": true,
+        "supports_vision": true,
+        "max_output_tokens": 8192
+      }
     },
     "groq": {
       "display_name": "Groq",
@@ -35,7 +53,13 @@
       "model_env": "GROQ_MODEL",
       "base_url_env": "GROQ_BASE_URL",
       "api_key_prefixes": ["gsk_"],
-      "api_key_url": "https://console.groq.com/keys"
+      "api_key_url": "https://console.groq.com/keys",
+      "capabilities": {
+        "supports_json": true,
+        "supports_tools": true,
+        "supports_vision": false,
+        "max_output_tokens": 8192
+      }
     },
     "qwen": {
       "display_name": "Qwen",
@@ -44,16 +68,28 @@
       "model_env": "QWEN_MODEL",
       "base_url_env": "DASHSCOPE_HTTP_BASE_URL",
       "api_key_prefixes": ["sk-"],
-      "api_key_url": "https://dashscope.aliyun.com/apiKey"
+      "api_key_url": "https://dashscope.aliyun.com/apiKey",
+      "capabilities": {
+        "supports_json": true,
+        "supports_tools": false,
+        "supports_vision": false,
+        "max_output_tokens": 8192
+      }
     },
     "glm": {
       "display_name": "GLM",
       "default_model": "glm-4.5-air",
       "api_key_env": "ZHIPUAI_API_KEY",
       "model_env": "GLM_MODEL",
-      "base_url_env": "ZAI_BASE_URL",
+      "base_url_env": "ZHIPUAI_BASE_URL",
       "api_key_prefixes": [],
-      "api_key_url": "https://www.zhipuai.cn"
+      "api_key_url": "https://www.zhipuai.cn",
+      "capabilities": {
+        "supports_json": true,
+        "supports_tools": false,
+        "supports_vision": false,
+        "max_output_tokens": 8192
+      }
     }
   }
 }

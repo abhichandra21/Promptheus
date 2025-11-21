@@ -15,6 +15,8 @@ def build_parser(include_subcommands: bool = True) -> argparse.ArgumentParser:
 Examples:
   promptheus "Write a blog post"                        # Single-shot mode (process and exit)
   promptheus                                             # Interactive mode (continuous loop)
+  promptheus web                                         # Start web UI (auto-opens browser)
+  promptheus web --no-browser                            # Start web UI without opening browser
   promptheus list-models --provider openai               # List available models from a specific provider
   promptheus validate --test-connection                  # Check environment and test API keys
   promptheus template openai,google                      # Generate env template for multiple providers

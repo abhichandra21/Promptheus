@@ -11,6 +11,7 @@ class PromptheusApp {
         this.streamingInterval = null;
         this.currentOptimizedPrompt = ''; // Store current prompt
         this.cachedModels = {}; // Store fetched models by provider ID
+        this.providerCapabilities = {}; // Store provider capability hints
         this.hasResults = false; // Track if we have results displayed
         this.init();
     }
@@ -29,13 +30,16 @@ class PromptheusApp {
         this.loadProviders();
         this.loadHistory();
         this.loadSettings();
+        this.initStyleHelp();
+        this.initModeHelp();
+        this.initCustomDropdowns();
     }
 
     bindEvents() {
         // Main prompt submission
         document.getElementById('submit-btn').addEventListener('click', () => this.submitPrompt());
 
-        // Keyboard shortcuts
+        // Keyboard shortcuts and input statistics
         document.getElementById('prompt-input').addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
@@ -43,6 +47,7 @@ class PromptheusApp {
             }
         });
 
+        
         // New prompt button (hidden initially, shown after results)
         document.getElementById('start-over-btn').addEventListener('click', () => {
             this.startNewPrompt();
@@ -72,6 +77,22 @@ class PromptheusApp {
         // Copy button
         document.getElementById('copy-btn').addEventListener('click', () => {
             this.copyOutputToClipboard();
+        });
+
+        // Refresh models cache (in Settings panel)
+        document.getElementById('refresh-models-cache-btn').addEventListener('click', () => {
+            const provider = document.getElementById('provider-select').value || this.provider;
+            this.refreshModelsCache(provider || 'google');
+        });
+
+        // Validate all providers (in Settings panel)
+        document.getElementById('validate-all-providers-btn').addEventListener('click', () => {
+            this.runProviderPreflight();
+        });
+
+        // Provider status indicator - clicking opens settings
+        document.getElementById('provider-status-btn').addEventListener('click', () => {
+            this.openSettings();
         });
 
         // Tweak button
@@ -123,7 +144,11 @@ class PromptheusApp {
 
         // Clear history button
         document.getElementById('clear-history-btn').addEventListener('click', () => {
-            this.clearHistory();
+            this.showConfirmDialog(
+                'Clear All History',
+                'Are you sure you want to clear all history? This action cannot be undone.',
+                () => this.clearHistory()
+            );
         });
     }
 
@@ -137,6 +162,9 @@ class PromptheusApp {
 
         overlay.classList.add('active');
         panel.classList.add('active');
+
+        // Load cached validation results if available
+        this.loadCachedValidationResults();
 
         // Focus first focusable element
         setTimeout(() => {
@@ -295,6 +323,7 @@ class PromptheusApp {
         const submitBtn = document.getElementById('submit-btn');
         const cancelBtn = document.getElementById('cancel-btn');
         const questionMode = document.getElementById('question-mode').value;
+        const style = document.getElementById('style-select')?.value || 'default';
 
         const prompt = promptInput.value.trim();
         if (!prompt) {
@@ -375,6 +404,7 @@ class PromptheusApp {
                             model: model || null,
                             skip_questions: false,
                             refine: forceQuestions,
+                            style,
                             answers: responses,
                             question_mapping: mapping
                         }),
@@ -386,10 +416,10 @@ class PromptheusApp {
                     const data = await response.json();
                     this.handlePromptResponse(data);
                 } else {
-                    await this.submitPromptDirect(prompt, provider, skipQuestions, forceQuestions);
+                    await this.submitPromptDirect(prompt, provider, skipQuestions, forceQuestions, style);
                 }
             } else {
-                await this.submitPromptDirect(prompt, provider, skipQuestions, forceQuestions);
+                await this.submitPromptDirect(prompt, provider, skipQuestions, forceQuestions, style);
             }
         } catch (error) {
             if (error.name === 'AbortError') return;
@@ -403,7 +433,7 @@ class PromptheusApp {
         }
     }
 
-    async submitPromptDirect(prompt, provider, skipQuestions, forceQuestions = false) {
+    async submitPromptDirect(prompt, provider, skipQuestions, forceQuestions = false, style = 'default') {
         const outputDiv = document.getElementById('output');
         const tweakBtn = document.getElementById('tweak-btn');
         const copyBtn = document.getElementById('copy-btn');
@@ -418,7 +448,8 @@ class PromptheusApp {
         const params = new URLSearchParams({
             prompt,
             skip_questions: skipQuestions,
-            refine: forceQuestions
+            refine: forceQuestions,
+            style
         });
 
         if (provider) params.append('provider', provider);
@@ -461,7 +492,18 @@ class PromptheusApp {
                 this.currentEventSource = null;
                 tweakBtn.classList.add('hidden');
                 copyBtn.classList.add('hidden');
-                this.showMessage('error', data.content);
+
+                // Check if this is an API key related error and add settings link
+                if (data.content && (
+                    data.content.toLowerCase().includes('api key') ||
+                    data.content.toLowerCase().includes('missing') ||
+                    data.content.toLowerCase().includes('unauthorized') ||
+                    data.content.toLowerCase().includes('authentication')
+                )) {
+                    this.showMessageWithSettings(data.content, 'error');
+                } else {
+                    this.showMessage('error', data.content);
+                }
             }
         };
 
@@ -775,20 +817,85 @@ class PromptheusApp {
        PROVIDERS MANAGEMENT
        =================================================================== */
 
+    updateModelCacheInfo(timestamp) {
+        const el = document.getElementById('model-cache-info');
+        if (!el) return;
+        if (!timestamp) {
+            el.textContent = 'Models last updated: --';
+        } else {
+            el.textContent = `Models last updated: ${new Date(timestamp).toLocaleString()}`;
+        }
+    }
+
+    updateCapabilitiesInfo(providerId) {
+        const el = document.getElementById('provider-capabilities');
+        if (!el) return;
+        const caps = this.providerCapabilities?.[providerId] || {};
+        if (!Object.keys(caps).length) {
+            el.textContent = 'Capabilities: --';
+            return;
+        }
+        const parts = [];
+        if (caps.supports_json) parts.push('JSON mode');
+        if (caps.supports_tools) parts.push('Tools');
+        if (caps.supports_vision) parts.push('Vision');
+        if (caps.max_output_tokens) parts.push(`Max output tokens: ${caps.max_output_tokens}`);
+        el.textContent = `Capabilities: ${parts.join(', ') || '--'}`;
+    }
+
     async loadProviders() {
         try {
             const response = await fetch(`${this.apiBaseUrl}/api/providers`);
             const data = await response.json();
 
-            // Update provider select dropdown
-            const providerSelect = document.getElementById('provider-select');
-            providerSelect.innerHTML = '<option value="">Auto</option>';
+            // Invalidate any stale preflight cache
+            this.clearProviderStatusCache();
 
-            data.available_providers.forEach(provider => {
+            // Cache capabilities and cache timestamp
+            this.providerCapabilities = {};
+            data.available_providers.forEach(p => {
+                this.providerCapabilities[p.id] = p.capabilities || {};
+                // Cache models for all providers from the initial load
+                if (p.models && p.models.length > 0) {
+                    this.cachedModels[p.id] = {
+                        models: p.models,
+                        current_model: p.id === data.current_provider ? data.current_model : p.default_model,
+                        fetchedAll: false
+                    };
+                }
+            });
+            this.updateCapabilitiesInfo(data.current_provider);
+            this.updateModelCacheInfo(data.cache_last_updated);
+
+            // Update cache timestamp in Settings panel
+            const cacheTimestampEl = document.getElementById('cache-timestamp-settings');
+            if (cacheTimestampEl && data.cache_last_updated) {
+                const cacheDate = new Date(data.cache_last_updated);
+                cacheTimestampEl.textContent = `Last updated: ${this.formatTimestamp(cacheDate)}`;
+            }
+
+        // Update provider select dropdown
+        const providerSelect = document.getElementById('provider-select');
+        providerSelect.innerHTML = '<option value="">Auto</option>';
+
+            // Sort providers alphabetically by name for consistent ordering
+            const sortedProviders = [...data.available_providers].sort((a, b) => a.name.localeCompare(b.name));
+
+            sortedProviders.forEach(provider => {
                 const option = document.createElement('option');
                 option.value = provider.id;
                 option.textContent = provider.name;
                 option.selected = provider.id === data.current_provider;
+
+                // Add status indicator based on availability (no implicit preflight)
+                if (provider.available) {
+                    option.setAttribute('data-status', 'configured');
+                    option.setAttribute('title', `${provider.name} - Ready`);
+                } else {
+                    option.setAttribute('data-status', 'unconfigured');
+                    option.setAttribute('title', `${provider.name} - Needs API key`);
+                }
+
                 providerSelect.appendChild(option);
             });
 
@@ -802,11 +909,260 @@ class PromptheusApp {
         }
     }
 
+    async refreshModelsCache(providerId) {
+        try {
+            this.showToast('info', 'Refreshing model cache...');
+            const resp = await fetch(`${this.apiBaseUrl}/api/providers/cache/refresh`, {
+                method: 'POST'
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                this.updateModelCacheInfo(data.cache_last_updated);
+
+                // Update cache timestamp in Settings panel
+                const cacheTimestampEl = document.getElementById('cache-timestamp-settings');
+                if (cacheTimestampEl && data.cache_last_updated) {
+                    const cacheDate = new Date(data.cache_last_updated);
+                    cacheTimestampEl.textContent = `Last updated: ${this.formatTimestamp(cacheDate)}`;
+                }
+
+                if (providerId) {
+                    await this.loadModelsForProvider(providerId, true);
+                }
+                this.showToast('success', 'Model cache refreshed');
+            } else {
+                this.showToast('error', data.detail || 'Failed to refresh cache');
+            }
+        } catch (error) {
+            console.error('Error refreshing model cache:', error);
+            this.showToast('error', 'Failed to refresh cache');
+        }
+    }
+
+    async runProviderPreflight() {
+        try {
+            // Clear cache to force fresh validation
+            this.clearProviderStatusCache();
+
+            // Show persistent loading state in the table
+            const tbody = document.getElementById('provider-status-tbody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: var(--space-6);">
+                            <div class="progress-indicator">
+                                <div class="progress-symbol">⚗</div>
+                                <div class="progress-text">Validating all providers...</div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            this.showToast('info', 'Validating providers...');
+            const resp = await fetch(`${this.apiBaseUrl}/api/providers/preflight`);
+            const data = await resp.json();
+            if (!resp.ok) {
+                this.showToast('error', data.detail || 'Validation failed');
+                // Clear loading state
+                if (tbody) tbody.innerHTML = '';
+                return;
+            }
+
+            // Cache the validation results with timestamp
+            const cacheData = {
+                results: data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('promptheus_validation_cache', JSON.stringify(cacheData));
+
+            // Also cache provider status for dropdown indicators
+            this.cacheProviderStatus(data);
+
+            // Update the provider status table in Settings panel
+            this.updateProviderStatusTable(data);
+
+            // Update the status dot based on results
+            this.updateSystemStatus(data);
+
+            // Only count actual errors, not missing keys (which is expected)
+            const errors = data.filter(r => r.status === 'error');
+            const configured = data.filter(r => r.status === 'ok').length;
+
+            if (errors.length) {
+                this.showToast('error', `${errors.length} configured provider(s) failed validation`);
+            } else if (configured > 0) {
+                this.showToast('success', `${configured} provider(s) validated successfully`);
+            } else {
+                this.showToast('info', 'No providers configured yet');
+            }
+        } catch (error) {
+            console.error('Preflight error:', error);
+            this.showToast('error', 'Validation failed');
+            // Clear loading state
+            const tbody = document.getElementById('provider-status-tbody');
+            if (tbody) tbody.innerHTML = '';
+        }
+    }
+
+    loadCachedValidationResults() {
+        try {
+            const cached = localStorage.getItem('promptheus_validation_cache');
+            if (!cached) return false;
+
+            const cacheData = JSON.parse(cached);
+            const age = Date.now() - cacheData.timestamp;
+            const oneHour = 60 * 60 * 1000;
+
+            // Expire after 1 hour
+            if (age > oneHour) {
+                localStorage.removeItem('promptheus_validation_cache');
+                return false;
+            }
+
+            // Update the table with cached results
+            this.updateProviderStatusTable(cacheData.results);
+            this.updateSystemStatus(cacheData.results);
+
+            // Show age of cached data
+            const ageMinutes = Math.floor(age / 60000);
+            const ageText = ageMinutes < 1 ? 'just now' :
+                           ageMinutes === 1 ? '1 minute ago' :
+                           `${ageMinutes} minutes ago`;
+
+            // Add cache indicator to the table
+            const tbody = document.getElementById('provider-status-tbody');
+            if (tbody && tbody.querySelector('tr')) {
+                const indicator = document.createElement('tr');
+                indicator.className = 'cache-indicator-row';
+                indicator.innerHTML = `
+                    <td colspan="4" style="text-align: center; padding: var(--space-2); font-size: var(--text-xs); color: var(--text-tertiary); font-style: italic;">
+                        Cached results from ${ageText}
+                    </td>
+                `;
+                tbody.insertBefore(indicator, tbody.firstChild);
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error loading cached validation:', error);
+            return false;
+        }
+    }
+
+    updateProviderStatusTable(results) {
+        const tbody = document.getElementById('provider-status-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        results.forEach(result => {
+            const row = document.createElement('tr');
+
+            // Provider name
+            const nameCell = document.createElement('td');
+            nameCell.textContent = result.display_name;
+            row.appendChild(nameCell);
+
+            // Status
+            const statusCell = document.createElement('td');
+            const statusIcon = result.status === 'ok' ? '✓' :
+                               result.status === 'missing_key' ? '⚠' : '✗';
+            const statusColor = result.status === 'ok' ? 'var(--color-success)' :
+                                result.status === 'missing_key' ? 'var(--color-warning)' :
+                                'var(--color-error)';
+            statusCell.innerHTML = `<span style="color: ${statusColor}; font-weight: var(--font-semibold);">${statusIcon} ${result.message || result.status}</span>`;
+            row.appendChild(statusCell);
+
+            // Models count (only for successful validations)
+            const modelsCell = document.createElement('td');
+            if (result.status === 'ok') {
+                // Fetch model count from cached data
+                const providerId = result.provider_id;
+                const cachedData = this.cachedModels[providerId];
+                if (cachedData && cachedData.models) {
+                    modelsCell.textContent = `${cachedData.models.length} models`;
+                } else {
+                    modelsCell.textContent = '--';
+                }
+            } else {
+                modelsCell.textContent = '--';
+            }
+            row.appendChild(modelsCell);
+
+            // Updated timestamp
+            const timeCell = document.createElement('td');
+            if (result.duration_ms) {
+                timeCell.textContent = `${result.duration_ms}ms`;
+                timeCell.style.fontFamily = 'var(--font-mono)';
+                timeCell.style.fontSize = 'var(--text-xs)';
+            } else {
+                timeCell.textContent = 'Just now';
+            }
+            row.appendChild(timeCell);
+
+            tbody.appendChild(row);
+        });
+
+        // Update cache timestamp in Settings panel
+        const cacheTimestampEl = document.getElementById('cache-timestamp-settings');
+        if (cacheTimestampEl) {
+            cacheTimestampEl.textContent = `Last validated: ${this.formatTimestamp(new Date())}`;
+        }
+    }
+
+    updateSystemStatus(results) {
+        const statusBtn = document.getElementById('provider-status-btn');
+        const statusDot = statusBtn?.querySelector('.status-dot');
+        if (!statusDot) return;
+
+        const hasErrors = results.some(r => r.status === 'error');
+        const hasConfigured = results.some(r => r.status === 'ok');
+
+        // Remove all status classes
+        statusDot.classList.remove('status-ok', 'status-warning', 'status-error');
+
+        // Add appropriate status class
+        // Only show error if configured providers have actual errors
+        if (hasErrors) {
+            statusDot.classList.add('status-error');
+            statusBtn.title = 'Configured providers have errors - click to view details';
+        } else if (hasConfigured) {
+            statusDot.classList.add('status-ok');
+            statusBtn.title = 'All configured providers working';
+        } else {
+            // No providers configured - show neutral/info state
+            statusDot.classList.add('status-ok');
+            statusBtn.title = 'All systems operational';
+        }
+    }
+
+    formatTimestamp(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffSec < 60) return 'Just now';
+        if (diffMin < 60) return `${diffMin}m ago`;
+        if (diffHour < 24) return `${diffHour}h ago`;
+        if (diffDay < 7) return `${diffDay}d ago`;
+
+        return date.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
     async selectProvider(providerId) {
         try {
             const payloadId = providerId || "";
 
-            if (!providerId) {
+            if (!payloadId) {
                 const modelSelect = document.getElementById('model-select');
                 if (modelSelect) {
                     modelSelect.innerHTML = '<option value="">Auto</option>';
@@ -826,8 +1182,16 @@ class PromptheusApp {
                 if (payloadId === "") {
                     this.showToast('success', 'Provider reset to auto-detect');
                 } else {
-                    this.showToast('success', `Provider changed to ${data.current_provider}`);
+                    this.showToast('success', `Provider changed to ${data.current_provider}${data.available === false ? ' (key not set yet)' : ''}`);
                 }
+                // Persist selection in UI/state and reload models
+                const providerSelect = document.getElementById('provider-select');
+                if (providerSelect) {
+                    providerSelect.value = payloadId;
+                }
+                this.provider = payloadId || '';
+                await this.loadModelsForProvider(payloadId || data.current_provider || '');
+                this.updateCapabilitiesInfo(payloadId || data.current_provider || this.provider);
             } else {
                 this.showToast('error', data.detail || 'Failed to change provider');
             }
@@ -854,8 +1218,16 @@ class PromptheusApp {
             // Check if we have cached models for this provider
             if (this.cachedModels[providerId] && !fetchAll) {
                 const cachedData = this.cachedModels[providerId];
-                this.populateModelSelect(modelSelect, cachedData.models, cachedData.current_model, false);
-                return;
+                const hasCachedModels = Array.isArray(cachedData.models) && cachedData.models.length > 0;
+
+                // Do not stick to an empty cache; allow a refetch after transient failures
+                if (!hasCachedModels) {
+                    delete this.cachedModels[providerId];
+                } else {
+                    modelSelect.disabled = false;
+                    this.populateModelSelect(modelSelect, cachedData.models, cachedData.current_model, cachedData.fetchedAll || false);
+                    return;
+                }
             }
 
             // Show loading state if fetching all models
@@ -870,6 +1242,9 @@ class PromptheusApp {
 
             const response = await fetch(url);
             const data = await response.json();
+
+            this.updateModelCacheInfo(data.cache_last_updated || data.cacheLastUpdated);
+            this.updateCapabilitiesInfo(providerId);
 
             // Cache the models for this provider
             if (fetchAll && data.models && data.models.length > 0) {
@@ -1119,11 +1494,6 @@ class PromptheusApp {
     }
 
     async clearHistory() {
-        // Confirm with user
-        if (!confirm('Are you sure you want to clear all history? This action cannot be undone.')) {
-            return;
-        }
-
         try {
             const response = await fetch(`${this.apiBaseUrl}/api/history`, {
                 method: 'DELETE'
@@ -1175,17 +1545,37 @@ class PromptheusApp {
                 // Skip provider category (handled in top bar)
                 if (category === 'provider') return;
 
-                // Only show API Keys section
-                if (category !== 'api_keys') return;
+                // Only show API Keys and General sections
+                if (category !== 'api_keys' && category !== 'general') return;
 
                 // Create category section
                 const categorySection = document.createElement('div');
                 categorySection.className = 'settings-category';
 
+                // Add special class and heading for categories
+                if (category === 'general') {
+                    categorySection.classList.add('general-settings');
+                    const categoryHeading = document.createElement('h2');
+                    categoryHeading.className = 'settings-category-heading';
+                    categoryHeading.textContent = 'General';
+                    categorySection.appendChild(categoryHeading);
+                } else if (category === 'api_keys') {
+                    categorySection.classList.add('api-keys-settings');
+                    const categoryHeading = document.createElement('h2');
+                    categoryHeading.className = 'settings-category-heading';
+                    categoryHeading.textContent = 'API Keys';
+                    categorySection.appendChild(categoryHeading);
+                }
+
                 // Render each setting in the category
                 settings.forEach(setting => {
                     const item = document.createElement('div');
                     item.className = 'settings-item';
+
+                    // Add special class for checkbox items
+                    if (setting.type === 'checkbox') {
+                        item.classList.add('checkbox-item');
+                    }
 
                     const labelContainer = document.createElement('div');
                     labelContainer.className = 'settings-label-container';
@@ -1219,10 +1609,63 @@ class PromptheusApp {
                             inputElement.appendChild(opt);
                         });
                     } else if (setting.type === 'checkbox') {
+                        // Create custom toggle switch
                         inputElement = document.createElement('input');
                         inputElement.type = 'checkbox';
                         inputElement.className = 'settings-checkbox';
                         inputElement.checked = setting.value === 'true';
+
+                        // Create toggle wrapper
+                        const toggleWrapper = document.createElement('label');
+                        toggleWrapper.className = 'settings-toggle-wrapper';
+                        toggleWrapper.htmlFor = `setting-${setting.key}`;
+
+                        // Create toggle switch
+                        const toggleSwitch = document.createElement('div');
+                        toggleSwitch.className = 'settings-toggle-switch';
+
+                        // Create toggle label
+                        const toggleLabel = document.createElement('span');
+                        toggleLabel.className = 'settings-toggle-label';
+                        toggleLabel.textContent = setting.value === 'true' ? 'Enabled' : 'Disabled';
+
+                        toggleWrapper.appendChild(toggleSwitch);
+                        toggleWrapper.appendChild(toggleLabel);
+
+                        // Auto-save checkbox changes immediately
+                        inputElement.addEventListener('change', async (e) => {
+                            const newValue = e.target.checked ? 'true' : 'false';
+                            toggleLabel.textContent = e.target.checked ? 'Enabled' : 'Disabled';
+
+                            try {
+                                await this.updateSetting(setting.key, newValue);
+                                this.showToast('success', `${setting.label} ${e.target.checked ? 'enabled' : 'disabled'}`);
+
+                                // If disabling history, offer to clear existing history
+                                if (setting.key === 'PROMPTHEUS_ENABLE_HISTORY' && !e.target.checked) {
+                                    // Ask user if they want to clear history with custom dialog
+                                    setTimeout(() => {
+                                        this.showConfirmDialog(
+                                            'Clear History?',
+                                            'History has been disabled. Would you like to clear existing history as well?',
+                                            () => this.clearHistory()
+                                        );
+                                    }, 500);
+                                }
+                            } catch (error) {
+                                console.error('Error saving checkbox setting:', error);
+                                this.showToast('error', 'Failed to save setting');
+                                // Revert the checkbox state
+                                e.target.checked = !e.target.checked;
+                                toggleLabel.textContent = e.target.checked ? 'Enabled' : 'Disabled';
+                            }
+                        });
+
+                        // Store the toggle wrapper to insert later
+                        inputElement.toggleWrapper = toggleWrapper;
+
+                        // Prevent the default change handler from triggering
+                        inputElement.dataset.autoSave = 'true';
                     } else if (setting.type === 'password') {
                         inputElement = document.createElement('input');
                         inputElement.type = 'password';
@@ -1266,19 +1709,35 @@ class PromptheusApp {
                     inputElement.id = `setting-${setting.key}`;
                     inputElement.name = setting.key;
 
-                    // Mark as modified on change
-                    inputElement.addEventListener('change', () => {
-                        inputElement.dataset.modified = 'true';
-                        this.showSaveButton();
-                    });
+                    // Auto-save on change for non-checkbox/non-password fields
+                    if (!inputElement.dataset.autoSave && setting.type !== 'password') {
+                        inputElement.addEventListener('change', async () => {
+                            try {
+                                await this.updateSetting(setting.key, inputElement.value);
+                                this.showToast('success', `${setting.label} updated`);
+                            } catch (error) {
+                                console.error('Error saving setting:', error);
+                                this.showToast('error', 'Failed to save setting');
+                            }
+                        });
+                    }
 
-                    inputContainer.insertBefore(inputElement, inputContainer.firstChild);
+                    // Insert checkbox and toggle wrapper if it's a checkbox
+                    if (setting.type === 'checkbox' && inputElement.toggleWrapper) {
+                        inputContainer.appendChild(inputElement);
+                        inputContainer.appendChild(inputElement.toggleWrapper);
+                    } else {
+                        inputContainer.insertBefore(inputElement, inputContainer.firstChild);
+                    }
 
                     // Add Save & Validate button for API keys
                     if (setting.type === 'password') {
                         // Determine provider from key name
                         const providerMatch = setting.key.match(/^(\w+)_API_KEY$/);
-                        const providerName = providerMatch ? providerMatch[1].toLowerCase() : null;
+                        let providerName = providerMatch ? providerMatch[1].toLowerCase() : null;
+                        if (providerName === 'dashscope') providerName = 'qwen';
+                        if (providerName === 'gemini') providerName = 'google';
+                        if (providerName === 'zai' || providerName === 'zhipuai') providerName = 'glm';
 
                         // Create button container
                         const buttonContainer = document.createElement('div');
@@ -1319,75 +1778,10 @@ class PromptheusApp {
                 settingsForm.appendChild(categorySection);
             });
 
-            // Add save button if not present
-            if (!document.getElementById('save-settings-btn')) {
-                const saveButtonContainer = document.createElement('div');
-                saveButtonContainer.className = 'settings-save-container';
-                saveButtonContainer.style.display = 'none';
-
-                const saveButton = document.createElement('button');
-                saveButton.id = 'save-settings-btn';
-                saveButton.className = 'btn btn-primary btn-save-settings';
-                saveButton.innerHTML = '<span>💾</span><span>Save All Settings</span>';
-                saveButton.addEventListener('click', () => this.saveAllSettings());
-
-                saveButtonContainer.appendChild(saveButton);
-                settingsForm.appendChild(saveButtonContainer);
-            }
-
         } catch (error) {
             console.error('Error loading settings:', error);
             this.showToast('error', 'Failed to load settings');
         }
-    }
-
-    showSaveButton() {
-        const container = document.querySelector('.settings-save-container');
-        if (container) {
-            container.style.display = 'block';
-        }
-    }
-
-    async saveAllSettings() {
-        const inputs = document.querySelectorAll('[data-modified="true"]');
-        let savedCount = 0;
-        let errorCount = 0;
-
-        for (const input of inputs) {
-            const key = input.name;
-            let value;
-
-            if (input.type === 'checkbox') {
-                value = input.checked ? 'true' : 'false';
-            } else {
-                value = input.value;
-            }
-
-            try {
-                await this.updateSetting(key, value);
-                input.removeAttribute('data-modified');
-                savedCount++;
-            } catch (error) {
-                console.error(`Error saving ${key}:`, error);
-                errorCount++;
-            }
-        }
-
-        if (savedCount > 0) {
-            this.showToast('success', `Saved ${savedCount} setting(s)`);
-        }
-        if (errorCount > 0) {
-            this.showToast('error', `Failed to save ${errorCount} setting(s)`);
-        }
-
-        // Hide save button
-        const container = document.querySelector('.settings-save-container');
-        if (container) {
-            container.style.display = 'none';
-        }
-
-        // Reload providers in case they changed
-        this.loadProviders();
     }
 
     async updateSetting(key, value) {
@@ -1444,19 +1838,30 @@ class PromptheusApp {
             return;
         }
 
-        // Now validate the connection if provider is known
-        if (!providerName) {
-            this.showToast('success', 'API key saved');
-            return;
-        }
+            // Now validate the connection if provider is known
+            if (!providerName) {
+                this.showToast('success', 'API key saved');
+                return;
+            }
 
         await this.validateApiKey(providerName, apiKey, key, inputElement, statusContainer);
+        // Refresh provider availability after successful save/validate
+        this.loadProviders();
     }
 
     async validateApiKey(provider, apiKey, settingKey, inputElement, statusContainer) {
         // Show validating status
         inputElement.classList.remove('valid', 'invalid');
         inputElement.classList.add('validating');
+
+        // Normalize provider aliases
+        const normalizedProvider = (() => {
+            const p = (provider || '').toLowerCase();
+            if (p === 'dashscope') return 'qwen';
+            if (p === 'gemini') return 'google';
+            if (p === 'zai' || p === 'zhipuai') return 'glm';
+            return p;
+        })();
 
         statusContainer.innerHTML = `
             <div class="validation-status validating">
@@ -1469,7 +1874,7 @@ class PromptheusApp {
             const response = await fetch(`${this.apiBaseUrl}/api/settings/validate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider, api_key: apiKey })
+                body: JSON.stringify({ provider: normalizedProvider, api_key: apiKey })
             });
 
             const data = await response.json();
@@ -1724,6 +2129,14 @@ class PromptheusApp {
     }
 
     showToast(type, message) {
+        // Ensure toast container exists
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container';
+            document.body.appendChild(toastContainer);
+        }
+
         // Create toast element
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
@@ -1731,24 +2144,112 @@ class PromptheusApp {
         const iconMap = {
             success: '✓',
             error: '⚠',
-            info: '💡'
+            info: '💡',
+            warning: '⚡'
         };
 
         toast.innerHTML = `
-            <span class="toast-icon">${iconMap[type]}</span>
+            <span class="toast-icon">${iconMap[type] || '💡'}</span>
             <span class="toast-message">${this.escapeHtml(message)}</span>
         `;
 
-        document.body.appendChild(toast);
+        // Add to container (prepend so new toasts appear at bottom)
+        toastContainer.appendChild(toast);
 
         // Trigger animation
         setTimeout(() => toast.classList.add('show'), 10);
 
+        // Limit to maximum 4 toasts
+        const allToasts = toastContainer.querySelectorAll('.toast');
+        if (allToasts.length > 4) {
+            // Remove oldest toast (first in the stack)
+            const oldestToast = allToasts[0];
+            oldestToast.classList.remove('show');
+            setTimeout(() => oldestToast.remove(), 300);
+        }
+
         // Remove after 3 seconds
         setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 300);
+            if (toast.parentElement) {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentElement) {
+                        toast.remove();
+                        // Clean up container if empty
+                        if (toastContainer.children.length === 0) {
+                            toastContainer.remove();
+                        }
+                    }
+                }, 300);
+            }
         }, 3000);
+    }
+
+    showConfirmDialog(title, message, onConfirm) {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-dialog-overlay';
+
+        // Create dialog
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+
+        dialog.innerHTML = `
+            <div class="confirm-dialog-header">
+                <h3 class="confirm-dialog-title">${this.escapeHtml(title)}</h3>
+            </div>
+            <div class="confirm-dialog-body">
+                <p class="confirm-dialog-message">${this.escapeHtml(message)}</p>
+            </div>
+            <div class="confirm-dialog-actions">
+                <button class="btn btn-secondary confirm-dialog-cancel">Cancel</button>
+                <button class="btn btn-primary confirm-dialog-confirm">Confirm</button>
+            </div>
+        `;
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        // Trigger animation
+        setTimeout(() => {
+            overlay.classList.add('active');
+            dialog.classList.add('active');
+        }, 10);
+
+        // Handle confirm
+        const confirmBtn = dialog.querySelector('.confirm-dialog-confirm');
+        confirmBtn.addEventListener('click', () => {
+            this.closeConfirmDialog(overlay, dialog);
+            if (onConfirm) onConfirm();
+        });
+
+        // Handle cancel
+        const cancelBtn = dialog.querySelector('.confirm-dialog-cancel');
+        cancelBtn.addEventListener('click', () => {
+            this.closeConfirmDialog(overlay, dialog);
+        });
+
+        // Handle overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.closeConfirmDialog(overlay, dialog);
+            }
+        });
+
+        // Handle escape key
+        const escapeHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeConfirmDialog(overlay, dialog);
+                document.removeEventListener('keydown', escapeHandler);
+            }
+        };
+        document.addEventListener('keydown', escapeHandler);
+    }
+
+    closeConfirmDialog(overlay, dialog) {
+        dialog.classList.remove('active');
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
     }
 
     showMessage(type, message) {
@@ -1763,6 +2264,25 @@ class PromptheusApp {
             <p class="message message-${type}">
                 <span>${iconMap[type]}</span>
                 <span>${this.escapeHtml(message)}</span>
+            </p>
+        `;
+    }
+
+    showMessageWithSettings(message, type = 'error') {
+        const outputDiv = document.getElementById('output');
+        const iconMap = {
+            success: '✓',
+            error: '⚠',
+            info: '💡'
+        };
+
+        outputDiv.innerHTML = `
+            <p class="message message-${type}">
+                <span>${iconMap[type]}</span>
+                <span>${this.escapeHtml(message)}</span>
+                <button class="message-settings-btn" onclick="window.promptheusApp.openSettings()">
+                    ⚙️ Settings
+                </button>
             </p>
         `;
     }
@@ -1803,6 +2323,484 @@ class PromptheusApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Provider status caching methods
+    getCachedProviderStatus() {
+        try {
+            const cached = localStorage.getItem('promptheus_provider_status_cache');
+            if (!cached) return null;
+
+            const cacheData = JSON.parse(cached);
+            const age = Date.now() - cacheData.timestamp;
+            const twentyFourHours = 24 * 60 * 60 * 1000;
+
+            // Expire after 24 hours
+            if (age > twentyFourHours) {
+                localStorage.removeItem('promptheus_provider_status_cache');
+                return null;
+            }
+
+            return cacheData.status;
+        } catch (error) {
+            console.error('Error loading provider status cache:', error);
+            return null;
+        }
+    }
+
+    cacheProviderStatus(status) {
+        try {
+            const cacheData = {
+                status: status,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('promptheus_provider_status_cache', JSON.stringify(cacheData));
+        } catch (error) {
+            console.error('Error caching provider status:', error);
+        }
+    }
+
+    clearProviderStatusCache() {
+        localStorage.removeItem('promptheus_provider_status_cache');
+    }
+
+    clearProviderStatusCache() {
+        localStorage.removeItem('promptheus_provider_status_cache');
+    }
+
+    // Style Help functionality
+    initStyleHelp() {
+        const helpBtn = document.getElementById('style-help-btn');
+        let tooltip = null;
+        let timeoutId = null;
+
+        helpBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showStyleTooltip(helpBtn);
+        });
+
+        helpBtn.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.showStyleTooltip(helpBtn);
+            }, 300); // Brief delay for better UX
+        });
+
+        helpBtn.addEventListener('mouseleave', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.hideStyleTooltip();
+            }, 200);
+        });
+    }
+
+    showStyleTooltip(helpBtn) {
+        if (document.getElementById('style-tooltip')) {
+            return; // Already shown
+        }
+
+        const styles = {
+            'default': {
+                name: 'Default',
+                description: 'No specific formatting - AI decides the best structure based on your prompt content and context.'
+            },
+            'bullets': {
+                name: 'Bullets',
+                description: 'Format the final response as concise bullet points for easy scanning and quick comprehension.'
+            },
+            'steps': {
+                name: 'Steps',
+                description: 'Return a numbered, step-by-step plan with clear sequential instructions for following processes.'
+            },
+            'plain': {
+                name: 'Plain',
+                description: 'Use natural sentences without heavy formatting or special structural elements.'
+            },
+            'concise': {
+                name: 'Concise',
+                description: 'Be brief and to the point while preserving key details and essential information.'
+            }
+        };
+
+        const tooltip = document.createElement('div');
+        tooltip.id = 'style-tooltip';
+        tooltip.className = 'style-tooltip';
+
+        let content = '<div class="style-tooltip-content"><h4>Output Styles</h4>';
+        Object.entries(styles).forEach(([key, style]) => {
+            content += `
+                <div class="style-item">
+                    <div class="style-name">${style.name}</div>
+                    <div class="style-description">${style.description}</div>
+                </div>
+            `;
+        });
+        content += '</div>';
+
+        tooltip.innerHTML = content;
+
+        // Position tooltip to ensure it's fully visible
+        const rect = helpBtn.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const tooltipMaxWidth = 400;
+        const tooltipMargin = 20;
+
+        // Calculate horizontal position
+        let tooltipLeft = rect.left + rect.width / 2;
+        let adjustedLeft = tooltipLeft;
+
+        // Ensure tooltip doesn't go off screen horizontally
+        if (tooltipLeft - tooltipMaxWidth / 2 < tooltipMargin) {
+            // Too far left, align to left edge with margin
+            adjustedLeft = tooltipMargin + tooltipMaxWidth / 2;
+        } else if (tooltipLeft + tooltipMaxWidth / 2 > viewportWidth - tooltipMargin) {
+            // Too far right, align to right edge with margin
+            adjustedLeft = viewportWidth - tooltipMargin - tooltipMaxWidth / 2;
+        }
+
+        tooltip.style.left = `${adjustedLeft}px`;
+
+        // Calculate vertical position
+        const estimatedTooltipHeight = 300;
+        const spaceAbove = rect.top - tooltipMargin;
+        const spaceBelow = viewportHeight - rect.bottom - tooltipMargin;
+
+        // Prefer showing above, but show below if not enough space
+        if (spaceAbove >= estimatedTooltipHeight) {
+            // Position above
+            tooltip.style.top = `${rect.top - 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(-100%)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.remove('style-tooltip-below');
+        } else if (spaceBelow >= estimatedTooltipHeight) {
+            // Position below
+            tooltip.style.top = `${rect.bottom + 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(0)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.add('style-tooltip-below');
+        } else {
+            // Not enough space either way, show below but constrain height
+            tooltip.style.top = `${rect.bottom + 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(0)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.style.maxHeight = `${spaceBelow - 20}px`;
+            tooltip.style.overflowY = 'auto';
+            tooltip.classList.add('style-tooltip-below');
+        }
+
+        document.body.appendChild(tooltip);
+
+        // Trigger show animation
+        requestAnimationFrame(() => {
+            tooltip.classList.add('show');
+        });
+
+        // Click outside to close
+        const clickHandler = (e) => {
+            if (!tooltip.contains(e.target) && e.target !== helpBtn) {
+                this.hideStyleTooltip();
+                document.removeEventListener('click', clickHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', clickHandler);
+        }, 0);
+    }
+
+    hideStyleTooltip() {
+        const tooltip = document.getElementById('style-tooltip');
+        if (tooltip) {
+            tooltip.classList.remove('show');
+            setTimeout(() => {
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
+                }
+            }, 300);
+        }
+    }
+
+    // Mode Help functionality
+    initModeHelp() {
+        const helpBtn = document.getElementById('mode-help-btn');
+        let tooltip = null;
+        let timeoutId = null;
+
+        helpBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showModeTooltip(helpBtn);
+        });
+
+        helpBtn.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.showModeTooltip(helpBtn);
+            }, 300);
+        });
+
+        helpBtn.addEventListener('mouseleave', () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                this.hideModeTooltip();
+            }, 200);
+        });
+    }
+
+    showModeTooltip(helpBtn) {
+        if (document.getElementById('mode-tooltip')) {
+            return;
+        }
+
+        const modes = {
+            'auto': {
+                name: 'Auto',
+                description: 'AI intelligently detects your task type and decides whether to ask clarifying questions. Best for most users.'
+            },
+            'force': {
+                name: 'Always Ask',
+                description: 'Always asks clarifying questions to ensure the best possible optimization, even for simple prompts.'
+            },
+            'skip': {
+                name: 'Skip Questions',
+                description: 'Optimizes immediately without any questions. Fastest option when you know what you want.'
+            }
+        };
+
+        const tooltip = document.createElement('div');
+        tooltip.id = 'mode-tooltip';
+        tooltip.className = 'style-tooltip';
+
+        let content = '<div class="style-tooltip-content"><h4>Question Modes</h4>';
+        Object.entries(modes).forEach(([key, mode]) => {
+            content += `
+                <div class="style-item">
+                    <div class="style-name">${mode.name}</div>
+                    <div class="style-description">${mode.description}</div>
+                </div>
+            `;
+        });
+        content += '</div>';
+
+        tooltip.innerHTML = content;
+
+        // Position tooltip above the help button
+        const rect = helpBtn.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const tooltipMaxWidth = 400;
+        const tooltipMargin = 20;
+
+        // Calculate horizontal position
+        let tooltipLeft = rect.left + rect.width / 2;
+        let adjustedLeft = tooltipLeft;
+
+        // Ensure tooltip doesn't go off screen horizontally
+        if (tooltipLeft - tooltipMaxWidth / 2 < tooltipMargin) {
+            adjustedLeft = tooltipMargin + tooltipMaxWidth / 2;
+        } else if (tooltipLeft + tooltipMaxWidth / 2 > viewportWidth - tooltipMargin) {
+            adjustedLeft = viewportWidth - tooltipMargin - tooltipMaxWidth / 2;
+        }
+
+        tooltip.style.left = `${adjustedLeft}px`;
+
+        // Calculate vertical position
+        const estimatedTooltipHeight = 250;
+        const spaceAbove = rect.top - tooltipMargin;
+        const spaceBelow = viewportHeight - rect.bottom - tooltipMargin;
+
+        if (spaceAbove >= estimatedTooltipHeight) {
+            // Position above
+            tooltip.style.top = `${rect.top - 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(-100%)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.remove('style-tooltip-below');
+        } else {
+            // Position below
+            tooltip.style.top = `${rect.bottom + 10}px`;
+            tooltip.style.transform = 'translateX(-50%) translateY(0)';
+            tooltip.style.maxWidth = `${Math.min(tooltipMaxWidth, viewportWidth - 2 * tooltipMargin)}px`;
+            tooltip.classList.add('style-tooltip-below');
+        }
+
+        document.body.appendChild(tooltip);
+
+        // Trigger show animation
+        requestAnimationFrame(() => {
+            tooltip.classList.add('show');
+        });
+
+        // Click outside to close
+        const clickHandler = (e) => {
+            if (!tooltip.contains(e.target) && e.target !== helpBtn) {
+                this.hideModeTooltip();
+                document.removeEventListener('click', clickHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', clickHandler);
+        }, 0);
+    }
+
+    hideModeTooltip() {
+        const tooltip = document.getElementById('mode-tooltip');
+        if (tooltip) {
+            tooltip.classList.remove('show');
+            setTimeout(() => {
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
+                }
+            }, 300);
+        }
+    }
+
+    // updateInputStats removed - word/character count not useful for prompt optimization
+
+    // ===================================================================
+    // CUSTOM ALCHEMICAL DROPDOWN FUNCTIONALITY
+    // ===================================================================
+
+    initCustomDropdowns() {
+        const dropdowns = document.querySelectorAll('.alchemical-dropdown');
+
+        dropdowns.forEach(dropdown => {
+            const select = dropdown.querySelector('select');
+            const panel = dropdown.querySelector('.alchemical-dropdown-panel');
+            const options = dropdown.querySelectorAll('.alchemical-option');
+
+            // Initialize selected state
+            this.updateDropdownSelectedState(dropdown, select.value);
+
+            // Toggle dropdown on select click
+            select.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleDropdown(dropdown);
+            });
+
+            // Handle option selection
+            options.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const value = option.dataset.value;
+                    select.value = value;
+                    this.updateDropdownSelectedState(dropdown, value);
+                    this.closeDropdown(dropdown);
+
+                    // Trigger change event on the original select
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+
+                option.addEventListener('mouseenter', () => {
+                    // Add mystical glow effect on hover
+                    option.style.boxShadow = 'inset 0 0 20px rgba(212, 165, 116, 0.1)';
+                });
+
+                option.addEventListener('mouseleave', () => {
+                    option.style.boxShadow = '';
+                });
+            });
+
+            // Sync with original select change events
+            select.addEventListener('change', () => {
+                this.updateDropdownSelectedState(dropdown, select.value);
+            });
+        });
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.alchemical-dropdown')) {
+                document.querySelectorAll('.alchemical-dropdown.active').forEach(dropdown => {
+                    this.closeDropdown(dropdown);
+                });
+            }
+        });
+
+        // Close dropdowns on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.alchemical-dropdown.active').forEach(dropdown => {
+                    this.closeDropdown(dropdown);
+                });
+            }
+        });
+    }
+
+    toggleDropdown(dropdown) {
+        if (dropdown.classList.contains('active')) {
+            this.closeDropdown(dropdown);
+        } else {
+            // Close all other dropdowns first
+            document.querySelectorAll('.alchemical-dropdown.active').forEach(other => {
+                if (other !== dropdown) {
+                    this.closeDropdown(other);
+                }
+            });
+            this.openDropdown(dropdown);
+        }
+    }
+
+    openDropdown(dropdown) {
+        dropdown.classList.add('active');
+        const select = dropdown.querySelector('select');
+
+        // Add mystical entrance animation
+        const panel = dropdown.querySelector('.alchemical-dropdown-panel');
+        panel.style.animation = 'dropdownMysticalEntrance 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+
+        // Add accessibility
+        select.setAttribute('aria-expanded', 'true');
+    }
+
+    closeDropdown(dropdown) {
+        dropdown.classList.remove('active');
+        const select = dropdown.querySelector('select');
+
+        // Add mystical exit animation
+        const panel = dropdown.querySelector('.alchemical-dropdown-panel');
+        panel.style.animation = 'dropdownMysticalExit 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+
+        // Add accessibility
+        select.setAttribute('aria-expanded', 'false');
+    }
+
+    updateDropdownSelectedState(dropdown, value) {
+        const options = dropdown.querySelectorAll('.alchemical-option');
+        const select = dropdown.querySelector('select');
+
+        options.forEach(option => {
+            if (option.dataset.value === value) {
+                option.classList.add('selected');
+
+                // Add mystical selection animation
+                option.style.animation = 'optionMysticalSelect 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+                setTimeout(() => {
+                    option.style.animation = '';
+                }, 400);
+            } else {
+                option.classList.remove('selected');
+            }
+        });
+
+        // Update the original select display
+        this.updateSelectDisplay(select);
+    }
+
+    updateSelectDisplay(select) {
+        const selectedOption = select.options[select.selectedIndex];
+        const dropdown = select.closest('.alchemical-dropdown');
+
+        // Update visual feedback without changing the actual value
+        const panel = dropdown.querySelector('.alchemical-dropdown-panel');
+        if (panel) {
+            // Add a brief glow effect to indicate change
+            panel.style.boxShadow = '0 0 40px rgba(212, 165, 116, 0.3)';
+            setTimeout(() => {
+                panel.style.boxShadow = '';
+            }, 300);
+        }
     }
 }
 

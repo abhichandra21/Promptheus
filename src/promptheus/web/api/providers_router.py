@@ -1,15 +1,17 @@
 """Providers API router for Promptheus Web UI."""
 import json
 import os
+from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from promptheus.config import Config
-from promptheus.providers import get_available_providers, validate_provider
+from promptheus.providers import get_available_providers, validate_provider, get_provider
 from promptheus.models_dev_service import get_service
+from promptheus.utils import sanitize_error_message
 
 router = APIRouter()
 
@@ -19,6 +21,7 @@ class ProviderInfo(BaseModel):
     available: bool
     default_model: str
     models: List[str] = []
+    capabilities: Optional[Dict[str, Any]] = None
 
 class ModelsResponseWithFilter(BaseModel):
     provider_id: str
@@ -26,6 +29,17 @@ class ModelsResponseWithFilter(BaseModel):
     current_model: str
     text_generation_models: List[str]
     all_models: List[str]
+    cache_last_updated: Optional[str] = None
+
+
+class PreflightResult(BaseModel):
+    provider_id: str
+    display_name: str
+    status: str  # ok | missing_key | error
+    message: Optional[str] = None
+    detail: Optional[str] = None
+    duration_ms: Optional[int] = None
+    model_used: Optional[str] = None
 
 
 class ProviderSelection(BaseModel):
@@ -41,6 +55,7 @@ class ProvidersResponse(BaseModel):
     current_provider: str
     current_model: str
     available_providers: List[ProviderInfo]
+    cache_last_updated: Optional[str] = None
 
 
 class ModelsResponse(BaseModel):
@@ -95,13 +110,18 @@ async def get_providers():
                 name=provider_data.get('name', provider_id.title()),
                 available=provider_data.get('available', False),
                 default_model=provider_data.get('default_model', 'default'),
-                models=models
+                models=models,
+                capabilities=provider_config.get('capabilities')
             ))
+
+        cache_ts = service.get_cache_timestamp()
+        cache_last_updated = datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else None
 
         return ProvidersResponse(
             current_provider=app_config.provider or "google",
             current_model=app_config.get_model(),
-            available_providers=provider_infos
+            available_providers=provider_infos,
+            cache_last_updated=cache_last_updated
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -134,10 +154,6 @@ async def select_provider(selection: ProviderSelection):
             detected_provider = app_config.provider or "google"
             return {"current_provider": detected_provider}
 
-        # Validate the provider
-        if not validate_provider(selection.provider_id, app_config):
-            raise HTTPException(status_code=400, detail=f"Provider {selection.provider_id} is not available")
-
         # Update the configuration
         app_config.set_provider(selection.provider_id)
 
@@ -150,7 +166,8 @@ async def select_provider(selection: ProviderSelection):
             set_key(env_path, "PROMPTHEUS_PROVIDER", selection.provider_id)
         os.environ["PROMPTHEUS_PROVIDER"] = selection.provider_id
 
-        return {"current_provider": selection.provider_id}
+        available = validate_provider(selection.provider_id, app_config)
+        return {"current_provider": selection.provider_id, "available": available}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -192,17 +209,95 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
         if app_config.provider == provider_id:
             current_model = app_config.get_model()
 
+        cache_ts = service.get_cache_timestamp()
+        cache_last_updated = datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else None
+
         return ModelsResponseWithFilter(
             provider_id=provider_id,
             models=models,
             current_model=current_model,
             text_generation_models=text_models,
-            all_models=all_models
+            all_models=all_models,
+            cache_last_updated=cache_last_updated
         )
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/providers/cache/refresh")
+async def refresh_models_cache():
+    """Force refresh the models.dev cache and return the new timestamp."""
+    service = get_service()
+    await service.refresh_cache()
+    cache_ts = service.get_cache_timestamp()
+    return {
+        "refreshed": True,
+        "cache_last_updated": datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else None,
+    }
+
+
+@router.get("/providers/preflight", response_model=List[PreflightResult])
+async def preflight_providers():
+    """Validate configured providers with a lightweight refinement call."""
+    config_data = load_providers_config()
+    results: List[PreflightResult] = []
+
+    for provider_id, provider_info in config_data.get("providers", {}).items():
+        display_name = provider_info.get("display_name", provider_id.title())
+        api_key_env = provider_info.get("api_key_env")
+        keys = api_key_env if isinstance(api_key_env, list) else [api_key_env]
+
+        if not any(k and os.getenv(k) for k in keys):
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="missing_key",
+                message=f"Missing API key: {', '.join([k for k in keys if k])}"
+            ))
+            continue
+
+        # Use a fresh Config per provider to avoid cross-contamination
+        app_config = Config()
+        try:
+            app_config.set_provider(provider_id)
+        except Exception as exc:
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="error",
+                message="Failed to initialize provider",
+                detail=sanitize_error_message(str(exc))
+            ))
+            continue
+
+        start = datetime.now()
+        try:
+            provider = get_provider(provider_id, app_config, app_config.get_model())
+            _ = provider.light_refine("Validation ping", "Respond with OK")
+            duration_ms = int((datetime.now() - start).total_seconds() * 1000)
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="ok",
+                message="Ready",
+                duration_ms=duration_ms,
+                model_used=app_config.get_model()
+            ))
+        except Exception as exc:
+            duration_ms = int((datetime.now() - start).total_seconds() * 1000)
+            results.append(PreflightResult(
+                provider_id=provider_id,
+                display_name=display_name,
+                status="error",
+                message="Provider call failed",
+                detail=sanitize_error_message(str(exc)),
+                duration_ms=duration_ms,
+                model_used=app_config.get_model()
+            ))
+
+    return results
 
 
 @router.post("/providers/select-model")

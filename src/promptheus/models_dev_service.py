@@ -21,7 +21,7 @@ PROVIDER_ID_MAPPING = {
     "openai": "openai",
     "groq": "groq",
     "qwen": "alibaba",
-    "glm": "zai-coding-plan"
+    "glm": "zhipuai"
 }
 
 # Canonical provider IDs that we support
@@ -47,9 +47,14 @@ class ModelsDevService:
     def __init__(self):
         self._cache: Optional[Dict] = None
         self._cache_timestamp: Optional[float] = None
+        # Try loading disk cache eagerly to avoid unnecessary network fetches
+        asyncio.get_event_loop().create_task(self._load_cache_from_disk()) if asyncio.get_event_loop().is_running() else None
 
     async def _ensure_cache_loaded(self) -> None:
         """Ensure cache is loaded and fresh."""
+        if self._cache is None and self._cache_timestamp is None:
+            await self._load_cache_from_disk()
+
         if self._cache is None or self._is_cache_expired():
             await self._refresh_cache()
 
@@ -58,6 +63,10 @@ class ModelsDevService:
         if self._cache_timestamp is None:
             return True
         return time.time() - self._cache_timestamp > CACHE_DURATION
+
+    async def refresh_cache(self) -> None:
+        """Public method to refresh cache from models.dev API."""
+        await self._refresh_cache()
 
     async def _refresh_cache(self) -> None:
         """Refresh cache from models.dev API."""
@@ -132,6 +141,10 @@ class ModelsDevService:
         all_models = list(models_data.keys())
         text_models = [model_id for model_id, model_info in models_data.items() if self._is_text_generation_model(model_info)]
         return all_models, text_models
+
+    def get_cache_timestamp(self) -> Optional[float]:
+        """Return the epoch timestamp of the last successful cache refresh (if any)."""
+        return self._cache_timestamp
 
     def _is_text_generation_model(self, model_info: Dict[str, Any]) -> bool:
         """

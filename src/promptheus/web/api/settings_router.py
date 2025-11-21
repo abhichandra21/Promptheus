@@ -162,6 +162,13 @@ async def validate_api_key(request: ValidationRequest):
         from promptheus.utils import sanitize_error_message
 
         provider_id = request.provider.lower()
+        # Normalize legacy aliases
+        if provider_id == "dashscope":
+            provider_id = "qwen"
+        if provider_id == "gemini":
+            provider_id = "google"
+        if provider_id in {"zai", "zhipuai"}:
+            provider_id = "glm"
         api_key = request.api_key
 
         # Temporarily set the API key in environment for validation

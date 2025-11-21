@@ -357,6 +357,9 @@ All input methods support flag combinations.
 |---------|-------------|
 | `promptheus --help` | Display usage information |
 | `promptheus --version` | Display version information |
+| `promptheus web` | Start web UI server (auto-opens browser) |
+| `promptheus web --no-browser` | Start web UI server without opening browser |
+| `promptheus web --port 8080` | Start web UI server on custom port |
 | `promptheus list-models` | Display available providers and models |
 | `promptheus validate` | Validate API configuration and connectivity |
 | `promptheus template` | Generate environment file template |
@@ -398,6 +401,9 @@ export PROMPTHEUS_ENABLE_HISTORY=1      # Enable
 export PROMPTHEUS_ENABLE_HISTORY=0      # Disable
 # Supported values: 1/0, true/false, yes/no, on/off
 # Default: Context-aware (interactive=enabled, non-interactive=disabled)
+
+# This setting can also be toggled in the Web UI Settings panel
+# Note: When disabled via Web UI, you'll be prompted to clear existing history
 ```
 
 **Logging Configuration:**

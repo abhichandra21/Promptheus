@@ -91,7 +91,7 @@ PROVIDER_ENV_VARS = [
     "OPENAI_API_KEY",
     "GROQ_API_KEY",
     "DASHSCOPE_API_KEY",
-    "ZAI_API_KEY",
+    "ZHIPUAI_API_KEY",
 ]
 
 
@@ -239,7 +239,7 @@ def test_validate_no_api_key():
     # Define a custom getenv that returns None for API keys
     def mock_getenv(key, default=None):
         api_keys = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-                    "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZAI_API_KEY"]
+                    "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZHIPUAI_API_KEY"]
         if key in api_keys:
             return None
         return original_getenv(key, default)
