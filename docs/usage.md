@@ -305,6 +305,19 @@ promptheus --model llama-3.1-70b-versatile "Idea"
 ```bash
 promptheus list-models
 promptheus list-models --providers openai,google
+
+# Include non-text-generation models (embeddings, TTS, etc.)
+promptheus list-models --include-nontext
+```
+
+**Model Cache Management:**
+Model information is dynamically fetched from the models.dev API and cached locally for 24 hours:
+```bash
+# Cache location: ~/.promptheus/models_cache.json
+# Cache refreshes automatically when expired
+
+# In Web UI:
+# Use the "Refresh Model Cache" button in Settings to manually refresh cache
 ```
 
 ### Provider Validation and Configuration

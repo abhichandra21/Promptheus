@@ -172,6 +172,25 @@ source ~/.zshrc    # Zsh
 alias promptheus='poetry run promptheus'
 ```
 
+## Model Discovery Issues
+
+### Model List Not Updating
+
+**Symptom:** Model lists appear outdated or do not include newly available models
+
+**Resolution:**
+```bash
+# Manually refresh model cache
+promptheus validate --test-connection  # This will also refresh cache
+
+# Or, in Web UI:
+# Go to Settings and click "Refresh Model Cache" button
+```
+
+**Cache Location:**
+- On Unix: `~/.promptheus/models_cache.json`
+- On Windows: `%APPDATA%/promptheus/models_cache.json`
+
 ## Reporting Issues
 
 When reporting issues, include the following information:
@@ -184,5 +203,6 @@ When reporting issues, include the following information:
    - Provider and model in use
    - Installation method (pip, source, Poetry)
 4. **Reproduction steps:** Minimal steps to reproduce the issue
+5. **Current model cache status:** If issue related to model discovery
 
 **Issue Tracker:** https://github.com/abhichandra21/Promptheus/issues

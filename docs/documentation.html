@@ -435,11 +435,12 @@
                 <h3>Core Capabilities</h3>
                 <ul>
                     <li><strong>Adaptive Intelligence:</strong> Automatically detects task types and applies appropriate refinement strategies</li>
-                    <li><strong>Multi-Provider Support:</strong> Works with 6 major AI providers - Gemini, Claude, OpenAI, Groq, Qwen, and GLM</li>
+                    <li><strong>Multi-Provider Support:</strong> Works with 6 major AI providers - Google, Claude, OpenAI, Groq, Qwen, and GLM</li>
                     <li><strong>Interactive Refinement:</strong> Asks clarifying questions to understand your intent</li>
                     <li><strong>Powerful CLI:</strong> Command-line interface with keyboard shortcuts and pipeline integration</li>
                     <li><strong>Beautiful Web UI:</strong> Modern alchemical-themed interface for prompt enhancement</li>
                     <li><strong>History Management:</strong> Track and reload your prompt evolution</li>
+                    <li><strong>Dynamic Model Discovery:</strong> Fetches current model information from models.dev API</li>
                 </ul>
             </section>
 
@@ -483,8 +484,8 @@ pytest -q</code></pre>
                 <h3>API Key Setup</h3>
                 <p>Promptheus requires at least one AI provider API key. Create a <code>.env</code> file in your project directory:</p>
 
-                <pre><code># Google Gemini
-GEMINI_API_KEY=your_gemini_key_here
+                <pre><code># Google AI Studio
+GOOGLE_API_KEY=your_google_key_here
 
 # Anthropic Claude
 ANTHROPIC_API_KEY=your_anthropic_key_here
@@ -495,11 +496,11 @@ OPENAI_API_KEY=your_openai_key_here
 # Groq
 GROQ_API_KEY=your_groq_key_here
 
-# Alibaba Cloud Qwen
+# Alibaba Cloud Qwen (DashScope)
 DASHSCOPE_API_KEY=your_qwen_key_here
 
 # Zhipu AI GLM
-ZAI_API_KEY=your_glm_key_here</code></pre>
+ZHIPUAI_API_KEY=your_glm_key_here</code></pre>
 
                 <h3>Interactive Authentication</h3>
                 <p>Use the interactive auth command for guided setup:</p>
@@ -508,7 +509,7 @@ ZAI_API_KEY=your_glm_key_here</code></pre>
 promptheus auth
 
 # Specific provider
-promptheus auth gemini
+promptheus auth google
 promptheus auth anthropic
 
 # Skip validation (for testing)
@@ -545,7 +546,7 @@ promptheus auth openai --skip-validation</code></pre>
                 <h3>Specify Provider</h3>
                 <p>Choose a specific AI provider:</p>
 
-                <pre><code>promptheus --provider gemini "Create a marketing plan"</code></pre>
+                <pre><code>promptheus --provider google "Create a marketing plan"</code></pre>
             </section>
 
             <!-- CLI Basics Section -->
@@ -704,7 +705,7 @@ promptheus --refine "Your prompt here"</code></pre>
 
                 <div class="command">
                     <div class="command-title">/set provider &lt;name&gt;</div>
-                    <p>Change the active AI provider (gemini, anthropic, openai, groq, qwen, glm)</p>
+                    <p>Change the active AI provider (google, anthropic, openai, groq, qwen, glm)</p>
                 </div>
 
                 <div class="command">
@@ -847,7 +848,7 @@ promptheus "Draft outline" | \
 promptheus -s -c -o json "Pitch deck outline"
 
 # Custom provider + skip questions + file input
-promptheus --provider gemini -s -f brief.md</code></pre>
+promptheus --provider google -s -f brief.md</code></pre>
             </section>
 
             <!-- Web Overview Section -->
@@ -855,11 +856,24 @@ promptheus --provider gemini -s -f brief.md</code></pre>
                 <h2>Web Interface Overview</h2>
 
                 <div class="info-box">
-                    <h4>🌐 Coming Soon</h4>
-                    <p>The Promptheus Web UI is currently under development. The web interface will provide a beautiful, alchemical-themed interface for prompt enhancement with all the power of the CLI in a modern web application.</p>
+                    <h4>🌐 Available Now</h4>
+                    <p>The Promptheus Web UI is now available! The web interface provides a beautiful, alchemical-themed interface for prompt enhancement with all the power of the CLI in a modern web application.</p>
                 </div>
 
-                <h3>Planned Features</h3>
+                <h3>Web UI Commands</h3>
+                <pre><code># Start the web server and open browser automatically
+promptheus web
+
+# Start with custom port
+promptheus web --port 3000
+
+# Start without opening browser
+promptheus web --no-browser
+
+# Start with custom host
+promptheus web --host 0.0.0.0</code></pre>
+
+                <h3>Key Features</h3>
                 <ul>
                     <li>Visual prompt refinement workflow</li>
                     <li>Real-time collaborative editing</li>
@@ -868,6 +882,7 @@ promptheus --provider gemini -s -f brief.md</code></pre>
                     <li>Export options (PDF, Markdown, Plain Text)</li>
                     <li>Dark/light theme support</li>
                     <li>Keyboard shortcuts matching CLI</li>
+                    <li>Model caching from models.dev API</li>
                 </ul>
             </section>
 
@@ -890,6 +905,15 @@ promptheus --provider gemini -s -f brief.md</code></pre>
                     <li>Real-time preview of refined prompts</li>
                     <li>One-click iteration and tweaking</li>
                     <li>Side-by-side comparison view</li>
+                </ul>
+
+                <h3>Provider and Model Management</h3>
+                <p>The Web UI includes comprehensive provider and model management:</p>
+                <ul>
+                    <li>Dynamic model listing from models.dev API</li>
+                    <li>Cache refresh controls</li>
+                    <li>Validation of provider configurations</li>
+                    <li>Real-time provider status indicators</li>
                 </ul>
             </section>
 
@@ -914,45 +938,39 @@ promptheus --provider gemini -s -f brief.md</code></pre>
 
                 <p>Promptheus supports six major AI providers through a unified interface. No vendor lock-in - use any provider you prefer.</p>
 
-                <h3>Google Gemini</h3>
+                <h3>Google</h3>
                 <ul>
-                    <li><strong>Models:</strong> gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash</li>
-                    <li><strong>API Key:</strong> <code>GEMINI_API_KEY</code></li>
+                    <li><strong>API Key:</strong> <code>GOOGLE_API_KEY</code></li>
                     <li><strong>Get Key:</strong> <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
                 </ul>
 
                 <h3>Anthropic Claude</h3>
                 <ul>
-                    <li><strong>Models:</strong> claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus</li>
                     <li><strong>API Key:</strong> <code>ANTHROPIC_API_KEY</code></li>
                     <li><strong>Get Key:</strong> <a href="https://console.anthropic.com/" target="_blank">Anthropic Console</a></li>
                 </ul>
 
                 <h3>OpenAI</h3>
                 <ul>
-                    <li><strong>Models:</strong> gpt-4o, gpt-4-turbo, gpt-3.5-turbo</li>
                     <li><strong>API Key:</strong> <code>OPENAI_API_KEY</code></li>
                     <li><strong>Get Key:</strong> <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a></li>
                 </ul>
 
                 <h3>Groq</h3>
                 <ul>
-                    <li><strong>Models:</strong> llama-3.3-70b-versatile, llama-3.1-70b-versatile, mixtral-8x7b</li>
                     <li><strong>API Key:</strong> <code>GROQ_API_KEY</code></li>
                     <li><strong>Get Key:</strong> <a href="https://console.groq.com/" target="_blank">Groq Console</a></li>
                 </ul>
 
                 <h3>Alibaba Cloud Qwen</h3>
                 <ul>
-                    <li><strong>Models:</strong> qwen-max, qwen-plus, qwen-turbo</li>
                     <li><strong>API Key:</strong> <code>DASHSCOPE_API_KEY</code></li>
                     <li><strong>Get Key:</strong> <a href="https://dashscope.console.aliyun.com/" target="_blank">DashScope Console</a></li>
                 </ul>
 
                 <h3>Zhipu AI GLM</h3>
                 <ul>
-                    <li><strong>Models:</strong> glm-4-plus, glm-4-0520, glm-4-air</li>
-                    <li><strong>API Key:</strong> <code>ZAI_API_KEY</code></li>
+                    <li><strong>API Key:</strong> <code>ZHIPUAI_API_KEY</code></li>
                     <li><strong>Get Key:</strong> <a href="https://open.bigmodel.cn/" target="_blank">Zhipu AI Console</a></li>
                 </ul>
 
@@ -962,7 +980,7 @@ promptheus --provider gemini -s -f brief.md</code></pre>
 promptheus "Your prompt"
 
 # Explicit provider selection
-promptheus --provider gemini "Your prompt"
+promptheus --provider google "Your prompt"
 promptheus --provider anthropic "Your prompt"
 
 # Specific model selection
@@ -975,7 +993,16 @@ promptheus --model claude-3-5-sonnet-20241022 "Your prompt"</code></pre>
 promptheus list-models
 
 # Filter by provider
-promptheus list-models --providers openai,gemini</code></pre>
+promptheus list-models --providers openai,google</code></pre>
+
+                <h3>Dynamic Model Discovery</h3>
+                <p>Model information is now dynamically fetched from the <a href="https://models.dev/" target="_blank">models.dev</a> API:</p>
+                <ul>
+                    <li>Models are cached with a 24-hour expiration</li>
+                    <li>Cache is refreshed automatically when expired</li>
+                    <li>Cache is persisted to <code>~/.promptheus/models_cache.json</code></li>
+                    <li>Cache can be manually refreshed in the Web UI Settings panel</li>
+                </ul>
             </section>
 
             <!-- History Section -->
@@ -1036,7 +1063,7 @@ PROMPTHEUS_ENABLE_HISTORY=0 promptheus "secret project"</code></pre>
 promptheus auth
 
 # Direct provider specification
-promptheus auth gemini
+promptheus auth google
 promptheus auth anthropic
 promptheus auth openai</code></pre>
 
@@ -1058,7 +1085,7 @@ promptheus auth openai</code></pre>
                 <p>Alternatively, manually edit your <code>.env</code> file:</p>
 
                 <pre><code># .env file
-GEMINI_API_KEY=your_key_here
+GOOGLE_API_KEY=your_key_here
 ANTHROPIC_API_KEY=your_key_here
 OPENAI_API_KEY=your_key_here</code></pre>
             </section>
@@ -1106,8 +1133,8 @@ promptheus -o json "prompt" | jq '.' > output.json</code></pre>
                 <h3>Provider Configuration</h3>
 
                 <pre><code># Override auto-detection
-export PROMPTHEUS_PROVIDER=gemini
-# Options: gemini, anthropic, openai, groq, qwen, glm
+export PROMPTHEUS_PROVIDER=google
+# Options: google, anthropic, openai, groq, qwen, glm
 
 # Override default model
 export PROMPTHEUS_MODEL=gemini-2.0-flash-exp</code></pre>
@@ -1158,7 +1185,7 @@ promptheus validate
 promptheus validate --test-connection
 
 # Validate specific providers
-promptheus validate --providers gemini,anthropic</code></pre>
+promptheus validate --providers google,anthropic</code></pre>
 
                 <h3>Model Discovery</h3>
 
@@ -1167,6 +1194,9 @@ promptheus list-models
 
 # Filter by providers
 promptheus list-models --providers openai
+
+# Include non-text-generation models
+promptheus list-models --include-nontext
 
 # Limit output
 promptheus list-models --limit 10</code></pre>
@@ -1178,7 +1208,7 @@ promptheus list-models --limit 10</code></pre>
 promptheus template openai > .env
 
 # Multiple providers
-promptheus template openai,gemini,anthropic > .env</code></pre>
+promptheus template openai,google,anthropic > .env</code></pre>
             </section>
 
             <!-- Troubleshooting Section -->
@@ -1202,7 +1232,7 @@ python -m promptheus.main "Test"</code></pre>
 cat .env
 
 # Check environment variables
-env | grep -E '(GEMINI|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZAI)'
+env | grep -E '(GOOGLE|ANTHROPIC|OPENAI|GROQ|DASHSCOPE|ZHIPUAI)'
 
 # Validate configuration
 promptheus validate --test-connection</code></pre>
@@ -1224,7 +1254,7 @@ promptheus validate --test-connection</code></pre>
                     <h4>Problem: Provider not compatible with Python 3.14</h4>
                     <p>Some provider SDKs may not yet support Python 3.14:</p>
                     <ul>
-                        <li><strong>Gemini:</strong> Full support via google-genai SDK</li>
+                        <li><strong>Google:</strong> Full support via google-genai SDK</li>
                         <li><strong>Others:</strong> Use Python 3.10-3.13 until compatibility updates</li>
                     </ul>
                     <p>Use virtual environments to manage multiple Python versions</p>
@@ -1285,6 +1315,10 @@ PROMPTHEUS_LOG_FILE=debug.log promptheus "test"</code></pre>
                             <td><code>promptheus completion</code></td>
                             <td>Generate shell completion script</td>
                         </tr>
+                        <tr>
+                            <td><code>promptheus web</code></td>
+                            <td>Launch Web UI server</td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -1294,7 +1328,7 @@ PROMPTHEUS_LOG_FILE=debug.log promptheus "test"</code></pre>
 promptheus -s -c "Generate docs"
 
 # JSON output + specific provider
-promptheus -o json --provider gemini "Create schema"
+promptheus -o json --provider google "Create schema"
 
 # File input + skip questions
 promptheus -s -f prompt.txt
@@ -1327,7 +1361,7 @@ promptheus "Analyze the main.py file"
 promptheus "Review this pull request for security issues"
 
 # Generate test cases
-promptheus --provider claude "Create unit tests for authentication"</code></pre>
+promptheus --provider google "Create unit tests for authentication"</code></pre>
 
                 <h3>Pipeline Workflows</h3>
 
@@ -1336,7 +1370,7 @@ promptheus "Write tutorial" > tutorial.md
 
 # Batch processing
 cat topics.txt | while read topic; do
-  promptheus "Explain $topic" >> explanations.md
+  promptheus "$topic" >> explanations.md
 done
 
 # JSON processing
@@ -1353,7 +1387,7 @@ promptheus "Draft outline" | \
 promptheus
 
 # Switch provider
-> /set provider gemini
+> /set provider google
 
 # Check status
 > /status
@@ -1421,11 +1455,12 @@ black .</code></pre>
                     <li>Provider being used</li>
                     <li>Steps to reproduce</li>
                     <li>Error messages or unexpected behavior</li>
+                    <li>Current model cache status (if related to model discovery)</li>
                 </ul>
             </section>
 
             <!-- Footer Navigation -->
-            <section style="margin-top: 4rem; padding-top: 2rem; border-top: 2px solid rgba(212, 165, 116, 0.2);">
+            <section style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid rgba(212, 165, 116, 0.2);">
                 <h3>More Resources</h3>
                 <ul>
                     <li><a href="index.html" style="color: var(--accent-gold);">← Back to Home</a></li>

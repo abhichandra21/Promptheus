@@ -49,6 +49,8 @@ Promptheus supports 6 major LLM providers:
 - **Qwen** (Alibaba/DashScope) - using `DASHSCOPE_API_KEY`
 - **GLM** (Zhipu) - using `ZHIPUAI_API_KEY`
 
+Model information is dynamically fetched from the models.dev API and cached locally for 24 hours. Cache location: `~/.promptheus/models_cache.json`
+
 Each provider has its own configuration in `models.json` and respective adapter in `providers.py`.
 
 ## History Management

@@ -96,6 +96,7 @@ black .
 - `prompt-toolkit`: Advanced terminal input handling
 - `python-dotenv`: Environment configuration management
 - `filelock`: File locking utilities
+- `aiohttp`: Async HTTP client for models.dev API
 
 **Provider SDKs:**
 - Google Gemini SDK (`google-genai` or `google-generativeai`)
@@ -104,6 +105,11 @@ black .
 - Groq SDK (`groq`)
 - Alibaba Cloud DashScope SDK (`dashscope`)
 - Zhipu AI SDK (`zhipu`)
+
+**Model Discovery:**
+- `models_dev_service.py`: Service for fetching and caching model information from models.dev API
+- Cache location: `~/.promptheus/models_cache.json`
+- Cache duration: 24 hours (86400 seconds)
 
 ### Python Version Compatibility
 
