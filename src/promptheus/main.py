@@ -641,13 +641,15 @@ def main() -> None:
             io.notify(f"[red]✗[/red] Failed to read file: {sanitized}")
             sys.exit(1)
 
+    elif args.prompt:
+        # Use the prompt from the command line argument
+        initial_prompt = args.prompt
+
     elif not io.stdin_is_tty:
+        # Read from stdin if available and stdin is not a TTY (piped input)
         initial_prompt = sys.stdin.read().strip()
         if initial_prompt:
             io.notify("[green]✓[/green] Got prompt from stdin")
-
-    else:
-        initial_prompt = args.prompt
 
     provider_name = app_config.provider or "gemini"
     try:
