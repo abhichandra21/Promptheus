@@ -311,7 +311,7 @@ class Config:
         api_key = provider_config.get("api_key")
 
         provider_info = config_data.get("providers", {}).get(self.provider or "", {})
-        friendly_name = self.get_display_name(provider_id, provider_info)
+        friendly_name = self.get_display_name(self.provider or "", provider_info)
 
         if not api_key:
             self._record_error(f"Oops! No API key found for {friendly_name}")
