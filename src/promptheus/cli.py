@@ -17,9 +17,9 @@ Examples:
   promptheus                                             # Interactive mode (continuous loop)
   promptheus web                                         # Start web UI (auto-opens browser)
   promptheus web --no-browser                            # Start web UI without opening browser
-  promptheus list-models --provider openai               # List available models from a specific provider
+  promptheus list-models --providers openai              # List available models from a specific provider
   promptheus validate --test-connection                  # Check environment and test API keys
-  promptheus template openai,google                      # Generate env template for multiple providers
+  promptheus template --providers openai,google          # Generate env template for multiple providers
   promptheus --skip-questions "Explain Docker"          # Skip questions, improve prompt directly
   promptheus -o json "Create API schema"                # Output in JSON format
   promptheus history                                     # View prompt history
