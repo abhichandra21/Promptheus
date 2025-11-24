@@ -3729,6 +3729,13 @@ a.btn {
    =================================================================== */
 
 @media (max-width: 768px) {
+    .main-content {
+        max-width: 100%;
+        margin: 0 auto;
+        padding: var(--space-6) var(--space-4) var(--space-8) var(--space-4);
+        gap: var(--space-6);
+    }
+
     .top-bar {
         padding: var(--space-4);
     }
@@ -3774,54 +3781,86 @@ a.btn {
         min-height: 400px;
     }
 
-    /* Responsive Toolbar - Stack vertically on mobile */
-    .prompt-toolbar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: var(--space-3);
-        padding: var(--space-3);
+    .workspace-container {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+        width: 100%;
     }
 
-    .toolbar-left,
-    .toolbar-right {
+    .provider-selector {
+        flex-direction: column;
+        gap: var(--space-1);
+        text-align: left;
+        min-width: auto;
         width: 100%;
-        justify-content: space-between;
+    }
+
+    .provider-selector select {
+        width: 100%;
+        flex: 1;
+    }
+
+    .prompt-toolbar {
+        flex-direction: column;
+        gap: var(--space-3);
+        align-items: stretch;
+    }
+
+    .toolbar-left {
+        flex-direction: column;
+        gap: var(--space-3);
     }
 
     .toolbar-item {
-        flex: 1;
+        width: 100%;
     }
 
-    .toolbar-select {
-        flex: 1;
-        min-width: auto;
+    /* Ensure no overflow on mobile */
+    .output-section,
+    .history-section {
+        width: 100%;
+        box-sizing: border-box;
     }
 
-    .input-stats {
-        justify-content: center;
-        order: -1;
-        margin-bottom: var(--space-2);
+    /* Fix mobile prompt input */
+    #prompt-input {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 120px;
     }
 
+    /* Fix buttons on mobile */
     .prompt-controls {
         flex-direction: column;
+        gap: var(--space-2);
         align-items: stretch;
-        gap: var(--space-3);
     }
 
-    .prompt-controls-left,
     .prompt-controls-right {
-        width: 100%;
-        justify-content: center;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+}
+
+/* Additional mobile fixes for very small screens */
+@media (max-width: 480px) {
+    .main-content {
+        padding: var(--space-4) var(--space-3);
     }
 
-    .history-grid {
-        grid-template-columns: 1fr;
-        gap: var(--space-5);
+    .prompt-canvas,
+    .output-section,
+    .history-section {
+        padding: var(--space-4);
     }
 
-    .settings-panel {
-        max-width: 100%;
+    .top-bar-controls .btn {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--text-xs);
+    }
+
+    .provider-selector {
+        padding: var(--space-2);
     }
 
     .btn {
@@ -3831,19 +3870,13 @@ a.btn {
         font-size: var(--text-base);
     }
 
-    #prompt-input {
-        min-height: 200px;
-        font-size: var(--text-base);
-        padding: var(--space-4);
+    .history-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-5);
     }
 
-    .top-bar-controls .btn {
-        padding: var(--space-3);
-        font-size: var(--text-sm);
-    }
-
-    .logo-text {
-        font-size: var(--text-lg);
+    .settings-panel {
+        max-width: 100%;
     }
 }
 
