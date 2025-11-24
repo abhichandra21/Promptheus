@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from promptheus.config import Config
 from promptheus.providers import get_provider
 from promptheus.history import get_history
+from promptheus.constants import VERSION, GITHUB_REPO
 
 # Import API routers
 from promptheus.web.api.prompt_router import router as prompt_router
@@ -40,6 +41,65 @@ app.include_router(history_router, prefix="/api")
 app.include_router(providers_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(questions_router, prefix="/api")
+
+
+@app.get("/api/version")
+async def get_version():
+    """Get version information including development build details."""
+    import os
+    import subprocess
+    from datetime import datetime
+
+    # Get git commit info if available
+    commit_hash = None
+    commit_date = None
+    is_dirty = False
+
+    try:
+        # Get current commit hash
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).parent.parent.parent.parent,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            commit_hash = result.stdout.strip()[:8]  # Short hash
+
+            # Check if working directory is dirty
+            diff_result = subprocess.run(
+                ["git", "diff", "--quiet"],
+                cwd=Path(__file__).parent.parent.parent.parent,
+                capture_output=True,
+                timeout=5
+            )
+            is_dirty = diff_result.returncode != 0
+
+            # Get commit date
+            date_result = subprocess.run(
+                ["git", "log", "-1", "--format=%ci", "HEAD"],
+                cwd=Path(__file__).parent.parent.parent.parent,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if date_result.returncode == 0:
+                commit_date = date_result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError):
+        pass
+
+    return {
+        "version": VERSION,
+        "full_version": f"v{VERSION}",
+        "commit_hash": commit_hash,
+        "commit_date": commit_date,
+        "is_dirty": is_dirty,
+        "build_type": "dev" if is_dirty else "clean",
+        "github_repo": GITHUB_REPO,
+        "timestamp": datetime.now().isoformat()
+    }
+
 
 # Static files for SPA - must be after API routes
 spa_dir = Path(__file__).parent / "static"

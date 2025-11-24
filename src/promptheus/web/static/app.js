@@ -30,6 +30,7 @@ class PromptheusApp {
         this.loadProviders();
         this.loadHistory();
         this.loadSettings();
+        this.loadVersion();
         this.initCustomDropdowns();
     }
 
@@ -2978,6 +2979,44 @@ class PromptheusApp {
             setTimeout(() => {
                 panel.style.boxShadow = '';
             }, 300);
+        }
+    }
+
+    async loadVersion() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/version`);
+            const data = await response.json();
+
+            const versionText = document.getElementById('version-text');
+            const buildInfo = document.getElementById('build-info');
+
+            if (versionText) {
+                let versionStr = data.full_version;
+                if (data.commit_hash) {
+                    versionStr += ` (${data.commit_hash}`;
+                    if (data.is_dirty) {
+                        versionStr += '-dirty';
+                    }
+                    versionStr += ')';
+                }
+                versionText.textContent = versionStr;
+            }
+
+            if (buildInfo && data.commit_date) {
+                const buildType = data.build_type === 'dev' ? 'Development' : 'Clean';
+                buildInfo.innerHTML = `
+                    <div style="display: flex; gap: 12px;">
+                        <span>Build: ${buildType}</span>
+                        <span>Updated: ${new Date(data.commit_date).toLocaleDateString()}</span>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.warn('Failed to load version info:', error);
+            const versionText = document.getElementById('version-text');
+            if (versionText) {
+                versionText.textContent = 'Unknown';
+            }
         }
     }
 }
