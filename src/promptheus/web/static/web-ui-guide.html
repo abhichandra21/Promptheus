@@ -248,17 +248,17 @@
             border-color: var(--accent-gold);
         }
 
-        /* Screenshot caption - reduced size and padding */
+        /* Screenshot caption - dark theme matching */
         .screenshot-caption {
             margin-top: 10px;
             padding: 12px 16px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.98) 100%);
+            background: rgba(26, 35, 50, 0.95);
             border-left: 3px solid var(--accent-gold);
             border-radius: 0 0 8px 8px;
             font-size: 0.85em;
             line-height: 1.5;
             color: var(--text-secondary);
-            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(5px);
             transition: all 0.2s ease;
             font-style: normal;
@@ -270,7 +270,7 @@
         }
 
         .screenshot:hover .screenshot-caption {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.99) 0%, rgba(249, 250, 251, 0.99) 100%);
+            background: rgba(26, 35, 50, 1);
             border-left-color: var(--accent-gold-light);
         }
 
@@ -465,21 +465,38 @@
             border-radius: 8px;
             margin: 1.5rem 0;
             border-left: 4px solid;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .callout::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.02));
+            pointer-events: none;
         }
 
         .callout-info {
             background: rgba(6, 182, 212, 0.1);
             border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.1);
         }
 
         .callout-success {
             background: rgba(74, 222, 128, 0.1);
             border-color: var(--accent-emerald);
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.1);
         }
 
         .callout-warning {
             background: rgba(212, 165, 116, 0.1);
             border-color: var(--accent-gold);
+            box-shadow: 0 0 20px rgba(212, 165, 116, 0.1);
         }
 
         .callout-title {
@@ -489,6 +506,11 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            font-size: 1.05rem;
+        }
+
+        .callout p:last-child {
+            margin-bottom: 0;
         }
 
         /* Steps */
@@ -532,22 +554,53 @@
         }
 
         .feature-card {
-            background: var(--bg-secondary);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
             padding: 1.5rem;
             border-radius: 8px;
             border: 1px solid rgba(212, 165, 116, 0.2);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-gold);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s ease;
         }
 
         .feature-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-gold);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(212, 165, 116, 0.2);
+            border-color: var(--accent-gold);
+        }
+
+        .feature-card:hover::before {
+            transform: scaleX(1);
         }
 
         .feature-card h4 {
             color: var(--accent-gold);
             margin-top: 0;
             margin-bottom: 0.75rem;
+            font-size: 1.125rem;
+            transition: color 0.2s ease;
+        }
+
+        .feature-card:hover h4 {
+            color: var(--accent-gold-light);
+        }
+
+        .feature-card p {
+            margin-bottom: 0;
+            font-size: 0.9rem;
         }
 
         /* FAQ */
@@ -557,6 +610,13 @@
             border-radius: 8px;
             margin-bottom: 1rem;
             border-left: 4px solid var(--accent-gold);
+            transition: all 0.2s ease;
+        }
+
+        .faq-item:hover {
+            background: var(--bg-tertiary);
+            border-left-color: var(--accent-gold-light);
+            transform: translateX(4px);
         }
 
         .faq-question {
@@ -564,6 +624,16 @@
             color: var(--text-primary);
             margin-bottom: 0.75rem;
             font-size: 1.125rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .faq-question::before {
+            content: '⚗️';
+            font-size: 1rem;
+            opacity: 0.6;
+            flex-shrink: 0;
         }
 
         .faq-answer {
@@ -571,46 +641,126 @@
             line-height: 1.6;
         }
 
+        .faq-answer strong {
+            color: var(--accent-gold);
+        }
+
         /* Code */
         code {
             font-family: 'Fira Code', monospace;
-            background: var(--bg-tertiary);
+            background: rgba(45, 212, 191, 0.15);
             padding: 0.2rem 0.5rem;
             border-radius: 4px;
             font-size: 0.875em;
             color: var(--accent-emerald);
+            border: 1px solid rgba(45, 212, 191, 0.2);
         }
 
         pre {
-            background: var(--bg-tertiary);
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
             padding: 1.5rem;
             border-radius: 8px;
             overflow-x: auto;
             margin: 1.5rem 0;
             border: 1px solid rgba(212, 165, 116, 0.2);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        pre::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--gradient-gold);
+            border-radius: 8px 0 0 8px;
         }
 
         pre code {
             background: none;
             padding: 0;
             color: var(--text-secondary);
+            border: none;
         }
 
         /* Links */
         a {
             color: var(--accent-cyan);
             text-decoration: none;
-            transition: color 0.2s ease;
+            transition: all 0.2s ease;
+            position: relative;
         }
 
         a:hover {
             color: var(--accent-emerald);
         }
 
+        .main-content a:not(.nav-links a) {
+            border-bottom: 1px solid rgba(6, 182, 212, 0.3);
+        }
+
+        .main-content a:not(.nav-links a):hover {
+            border-bottom-color: var(--accent-emerald);
+            text-shadow: 0 0 8px rgba(45, 212, 191, 0.3);
+        }
+
+        /* Mobile Menu Toggle */
+        .mobile-menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 200;
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent-gold);
+            border-radius: 8px;
+            padding: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-toggle:hover {
+            background: var(--bg-tertiary);
+            box-shadow: 0 0 15px rgba(212, 165, 116, 0.3);
+        }
+
+        .mobile-menu-toggle span {
+            display: block;
+            width: 24px;
+            height: 2px;
+            background: var(--accent-gold);
+            margin: 5px 0;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(1) {
+            transform: rotate(45deg) translate(7px, 7px);
+        }
+
+        .mobile-menu-toggle.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(7px, -7px);
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
+            .mobile-menu-toggle {
+                display: block;
+            }
+
             .sidebar {
                 transform: translateX(-100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
             }
 
             .main-content {
@@ -632,12 +782,64 @@
         section {
             scroll-margin-top: 2rem;
         }
+
+        /* Page load animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .main-content > section {
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+
+        .main-content > section:nth-child(1) { animation-delay: 0.1s; }
+        .main-content > section:nth-child(2) { animation-delay: 0.15s; }
+        .main-content > section:nth-child(3) { animation-delay: 0.2s; }
+
+        /* Sidebar fade in */
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .sidebar {
+            animation: slideInLeft 0.5s ease-out;
+        }
+
+        .nav-section {
+            animation: fadeInUp 0.5s ease-out backwards;
+        }
+
+        .nav-section:nth-child(1) { animation-delay: 0.1s; }
+        .nav-section:nth-child(2) { animation-delay: 0.2s; }
+        .nav-section:nth-child(3) { animation-delay: 0.3s; }
+        .nav-section:nth-child(4) { animation-delay: 0.4s; }
     </style>
 </head>
 <body>
+    <!-- Mobile Menu Toggle -->
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
     <div class="docs-container">
         <!-- Sidebar Navigation -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h1>⚗️ Promptheus</h1>
                 <p>Web UI Guide</p>
@@ -1257,7 +1459,7 @@
                     <div class="callout-title">📞 Support Resources</div>
                     <ul style="margin-bottom: 0;">
                         <li><strong>GitHub Issues:</strong> <a href="https://github.com/abhichandra21/Promptheus/issues" target="_blank">Report bugs or request features</a></li>
-                        <li><strong>Documentation:</strong> <a href="documentation.html">Full CLI and technical docs</a></li>
+                        <li><strong>Documentation:</strong> <a href="https://abhichandra21.github.io/Promptheus/documentation.html" target="_blank">Full CLI and technical docs</a></li>
                         <li><strong>CLI Help:</strong> Run <code>promptheus --help</code> for command reference</li>
                     </ul>
                 </div>
@@ -1268,7 +1470,7 @@
                 <p style="text-align: center; color: var(--text-muted);">
                     Made with ⚗️ by the Promptheus team |
                     <a href="https://github.com/abhichandra21/Promptheus" target="_blank">GitHub</a> |
-                    <a href="documentation.html">Full Documentation</a>
+                    <a href="https://abhichandra21.github.io/Promptheus/documentation.html" target="_blank">Full Documentation</a>
                 </p>
             </section>
         </main>
@@ -1326,6 +1528,25 @@
         }
 
         window.addEventListener('scroll', highlightNavigation);
+
+        // Mobile menu toggle
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebar = document.getElementById('sidebar');
+
+        mobileMenuToggle.addEventListener('click', function() {
+            this.classList.toggle('active');
+            sidebar.classList.toggle('active');
+        });
+
+        // Close sidebar when clicking on a nav link (mobile)
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', function() {
+                if (window.innerWidth <= 768) {
+                    mobileMenuToggle.classList.remove('active');
+                    sidebar.classList.remove('active');
+                }
+            });
+        });
 
         // Lightbox functionality
         function openLightbox(img) {
