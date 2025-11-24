@@ -712,13 +712,32 @@
             position: fixed;
             top: 1rem;
             left: 1rem;
-            z-index: 200;
+            z-index: 1001;
             background: var(--bg-secondary);
             border: 1px solid var(--accent-gold);
             border-radius: 8px;
             padding: 0.75rem;
             cursor: pointer;
             transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Mobile Backdrop */
+        .mobile-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 99;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .mobile-backdrop.active {
+            opacity: 1;
         }
 
         .mobile-menu-toggle:hover {
@@ -753,23 +772,53 @@
                 display: block;
             }
 
+            .mobile-backdrop {
+                display: block;
+            }
+
             .sidebar {
+                position: fixed;
                 transform: translateX(-100%);
                 transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                width: 280px;
+                height: 100vh;
+                top: 0;
+                left: 0;
+                z-index: 1000;
             }
 
             .sidebar.active {
                 transform: translateX(0);
-                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.8);
             }
 
             .main-content {
                 margin-left: 0;
-                padding: 2rem 1.5rem;
+                padding: 4rem 1.5rem 2rem;
+                width: 100%;
             }
 
             .feature-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .screenshot.ui-screenshot img,
+            .screenshot.process-screenshot img,
+            .screenshot.small-ui img {
+                width: 100%;
+                max-width: none;
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            h3 {
+                font-size: 1.25rem;
             }
         }
 
@@ -836,6 +885,9 @@
         <span></span>
         <span></span>
     </button>
+
+    <!-- Mobile Backdrop -->
+    <div class="mobile-backdrop" id="mobileBackdrop"></div>
 
     <div class="docs-container">
         <!-- Sidebar Navigation -->
@@ -1532,18 +1584,36 @@
         // Mobile menu toggle
         const mobileMenuToggle = document.getElementById('mobileMenuToggle');
         const sidebar = document.getElementById('sidebar');
+        const mobileBackdrop = document.getElementById('mobileBackdrop');
 
-        mobileMenuToggle.addEventListener('click', function() {
-            this.classList.toggle('active');
+        function toggleMobileMenu() {
+            mobileMenuToggle.classList.toggle('active');
             sidebar.classList.toggle('active');
-        });
+            mobileBackdrop.classList.toggle('active');
+
+            // Prevent body scroll when menu is open
+            if (sidebar.classList.contains('active')) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = '';
+            }
+        }
+
+        function closeMobileMenu() {
+            mobileMenuToggle.classList.remove('active');
+            sidebar.classList.remove('active');
+            mobileBackdrop.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        mobileMenuToggle.addEventListener('click', toggleMobileMenu);
+        mobileBackdrop.addEventListener('click', closeMobileMenu);
 
         // Close sidebar when clicking on a nav link (mobile)
         document.querySelectorAll('.nav-links a').forEach(link => {
             link.addEventListener('click', function() {
                 if (window.innerWidth <= 768) {
-                    mobileMenuToggle.classList.remove('active');
-                    sidebar.classList.remove('active');
+                    closeMobileMenu();
                 }
             });
         });

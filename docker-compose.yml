@@ -4,7 +4,7 @@ services:
   promptheus-web:
     image: promptheus-web:fresh
     container_name: promptheus-test
-    platform: linux/arm64
+    platform: linux/amd64
     ports:
       - "8000:8000"
     env_file:

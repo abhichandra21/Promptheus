@@ -245,8 +245,8 @@ class AnthropicProvider(LLMProvider):
             client_args["base_url"] = base_url
 
         self.client = anthropic.Anthropic(**client_args)
-        self.model_name = model_name
 
+        self.model_name = model_name
     def _generate_text(
         self,
         prompt: str,

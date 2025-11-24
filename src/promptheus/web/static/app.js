@@ -539,12 +539,7 @@ class PromptheusApp {
 
         setTimeout(() => {
             // Clear output and show ready state
-            outputDiv.innerHTML = `
-                <p class="message message-info">
-                    <span>💡</span>
-                    <span>Your optimized prompt will appear here</span>
-                </p>
-            `;
+            outputDiv.innerHTML = '';
 
             // Hide tweak and copy buttons
             tweakBtn.classList.add('hidden');
@@ -607,16 +602,17 @@ class PromptheusApp {
                 // Show analyzing indicator while generating questions
                 this.showProgressIndicator('analyzing');
 
-                const questionsResponse = await fetch(`${this.apiBaseUrl}/api/questions/generate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt,
-                        provider: provider || null,
-                        force_questions: forceQuestions
-                    }),
-                    signal: this.currentAbortController.signal
-                });
+                    const questionsResponse = await fetch(`${this.apiBaseUrl}/api/questions/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt,
+                            provider: provider || null,
+                            model: model || null,
+                            force_questions: forceQuestions
+                        }),
+                        signal: this.currentAbortController.signal
+                    });
 
                 if (this.currentAbortController.signal.aborted) return;
 
@@ -955,7 +951,7 @@ class PromptheusApp {
                 } else {
                     // All questions answered
                     submitBtn.innerHTML = '<span class="spinner"></span><span>Generating optimized prompt...</span>';
-                    outputDiv.innerHTML = '<p class="message message-info"><span>✨</span><span>Creating your optimized prompt...</span></p>';
+                    this.showProgressIndicator('optimizing');
                     resolve({ responses: answers, mapping: questionMapping });
                 }
             };
@@ -978,7 +974,7 @@ class PromptheusApp {
                     attachEventListeners();
                 } else {
                     submitBtn.innerHTML = '<span class="spinner"></span><span>Generating optimized prompt...</span>';
-                    outputDiv.innerHTML = '<p class="message message-info"><span>✨</span><span>Creating your optimized prompt...</span></p>';
+                    this.showProgressIndicator('optimizing');
                     resolve({ responses: answers, mapping: questionMapping });
                 }
             };
@@ -2734,30 +2730,101 @@ class PromptheusApp {
             info: '💡'
         };
 
+        // Generate contextual help for errors
+        let helpHTML = '';
+        if (type === 'error') {
+            helpHTML = this.generateErrorHelp(message);
+        }
+
         outputDiv.innerHTML = `
-            <p class="message message-${type}">
-                <span>${iconMap[type]}</span>
-                <span>${this.escapeHtml(message)}</span>
-            </p>
+            <div class="message message-${type}">
+                <span class="message-icon">${iconMap[type]}</span>
+                <div class="message-content">
+                    <div class="message-text">${this.escapeHtml(message)}</div>
+                    ${helpHTML}
+                </div>
+            </div>
         `;
+    }
+
+    generateErrorHelp(message) {
+        const messageLower = message.toLowerCase();
+
+        // Model not found error
+        if (messageLower.includes('404') || (messageLower.includes('model') && messageLower.includes('not found'))) {
+            return `
+                <div class="error-help">
+                    <strong>Model Not Available</strong>
+                    <ul>
+                        <li>Try selecting a different model from the dropdown</li>
+                        <li>Use "↻ Load All Models" to see all available options</li>
+                        <li>Some models may have been deprecated or renamed</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // API key / authentication error
+        if (messageLower.includes('api key') || messageLower.includes('authentication') ||
+            messageLower.includes('401') || messageLower.includes('403')) {
+            return `
+                <div class="error-help">
+                    <strong>Authentication Issue</strong>
+                    <ul>
+                        <li>Check your API key in Settings ⚙️</li>
+                        <li>Ensure the key has proper permissions</li>
+                        <li>Verify the key hasn't expired</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Rate limit error
+        if (messageLower.includes('rate limit') || messageLower.includes('429') ||
+            messageLower.includes('too many requests')) {
+            return `
+                <div class="error-help">
+                    <strong>Rate Limit Reached</strong>
+                    <ul>
+                        <li>Wait a few moments before trying again</li>
+                        <li>Consider upgrading your API plan for higher limits</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Network/connection error
+        if (messageLower.includes('network') || messageLower.includes('connection') ||
+            messageLower.includes('timeout') || messageLower.includes('econnrefused')) {
+            return `
+                <div class="error-help">
+                    <strong>Connection Error</strong>
+                    <ul>
+                        <li>Check your internet connection</li>
+                        <li>Verify the API endpoint is accessible</li>
+                        <li>Try again in a few moments</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        return '';
     }
 
     showMessageWithSettings(message, type = 'error') {
         const outputDiv = document.getElementById('output');
-        const iconMap = {
-            success: '✓',
-            error: '⚠',
-            info: '💡'
-        };
 
         outputDiv.innerHTML = `
-            <p class="message message-${type}">
-                <span>${iconMap[type]}</span>
-                <span>${this.escapeHtml(message)}</span>
-                <button class="message-settings-btn" onclick="window.promptheusApp.openSettings()">
-                    ⚙️ Settings
-                </button>
-            </p>
+            <div class="message message-${type}">
+                <div class="message-content">
+                    <div class="message-text">
+                        ${this.escapeHtml(message)}
+                        <button class="message-settings-btn" onclick="window.promptheusApp.openSettings()">
+                            ⚙️ Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
         `;
     }
 

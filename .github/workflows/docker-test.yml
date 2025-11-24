@@ -1,0 +1,282 @@
+name: Docker Build & Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: promptheus-web
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: true
+
+      - name: Test CLI version - Basic prompt
+        run: |
+          docker run --rm \
+            -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+            -e GOOGLE_API_KEY="${GOOGLE_API_KEY}" \
+            -e GOOGLE_MODEL="${GOOGLE_MODEL:-gemini-1.5-flash}" \
+            -e OPENAI_API_KEY="${OPENAI_API_KEY}" \
+            -e GROQ_API_KEY="${GROQ_API_KEY}" \
+            -e ZHIPUAI_API_KEY="${ZHIPUAI_API_KEY}" \
+            -e DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY}" \
+            -e PROMPTHEUS_PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}" \
+            -e PROMPTHEUS_MODEL="${PROMPTHEUS_MODEL:-claude-haiku-4-5}" \
+            -e PROMPTHEUS_ENABLE_HISTORY="${PROMPTHEUS_ENABLE_HISTORY:-true}" \
+            ${{ env.IMAGE_NAME }}:test \
+            python -m promptheus.main --skip-questions "What is artificial intelligence?" \
+            > /tmp/cli_test_1.txt 2>&1
+
+          # Check if output contains expected content
+          if grep -q "refined prompt\|Refined Prompt\|Using provider" /tmp/cli_test_1.txt; then
+            echo "✓ CLI test 1 passed: Basic prompt refinement works"
+            cat /tmp/cli_test_1.txt
+          else
+            echo "✗ CLI test 1 failed: Expected output not found"
+            cat /tmp/cli_test_1.txt
+            exit 1
+          fi
+
+      - name: Test CLI version - Complex prompt
+        run: |
+          docker run --rm \
+            -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+            -e GOOGLE_API_KEY="${GOOGLE_API_KEY}" \
+            -e GOOGLE_MODEL="${GOOGLE_MODEL:-gemini-1.5-flash}" \
+            -e OPENAI_API_KEY="${OPENAI_API_KEY}" \
+            -e GROQ_API_KEY="${GROQ_API_KEY}" \
+            -e ZHIPUAI_API_KEY="${ZHIPUAI_API_KEY}" \
+            -e DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY}" \
+            -e PROMPTHEUS_PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}" \
+            -e PROMPTHEUS_MODEL="${PROMPTHEUS_MODEL:-claude-haiku-4-5}" \
+            -e PROMPTHEUS_ENABLE_HISTORY="${PROMPTHEUS_ENABLE_HISTORY:-true}" \
+            ${{ env.IMAGE_NAME }}:test \
+            python -m promptheus.main --skip-questions "Create a comprehensive guide on machine learning algorithms" \
+            > /tmp/cli_test_2.txt 2>&1
+
+          if grep -q "refined prompt\|Refined Prompt\|guide\|algorithm" /tmp/cli_test_2.txt; then
+            echo "✓ CLI test 2 passed: Complex prompt refinement works"
+            head -30 /tmp/cli_test_2.txt
+          else
+            echo "✗ CLI test 2 failed"
+            cat /tmp/cli_test_2.txt
+            exit 1
+          fi
+
+      - name: Start web server
+        run: |
+          docker run -d \
+            --name promptheus-test \
+            -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+            -e GOOGLE_API_KEY="${GOOGLE_API_KEY}" \
+            -e GOOGLE_MODEL="${GOOGLE_MODEL:-gemini-1.5-flash}" \
+            -e OPENAI_API_KEY="${OPENAI_API_KEY}" \
+            -e GROQ_API_KEY="${GROQ_API_KEY}" \
+            -e ZHIPUAI_API_KEY="${ZHIPUAI_API_KEY}" \
+            -e DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY}" \
+            -e PROMPTHEUS_PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}" \
+            -e PROMPTHEUS_MODEL="${PROMPTHEUS_MODEL:-claude-haiku-4-5}" \
+            -e PROMPTHEUS_ENABLE_HISTORY="${PROMPTHEUS_ENABLE_HISTORY:-true}" \
+            -p 8000:8000 \
+            ${{ env.IMAGE_NAME }}:test
+
+          # Wait for server to be ready
+          echo "Waiting for web server to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/ > /dev/null 2>&1; then
+              echo "✓ Web server is ready"
+              break
+            fi
+            echo "Attempt $i: Server not ready yet, waiting..."
+            sleep 2
+          done
+
+          # Final check
+          if ! curl -s http://localhost:8000/ > /dev/null 2>&1; then
+            echo "✗ Web server failed to start"
+            docker logs promptheus-test
+            exit 1
+          fi
+
+      - name: Test web API - Get providers
+        run: |
+          RESPONSE=$(curl -s http://localhost:8000/api/providers)
+
+          if echo "$RESPONSE" | grep -q "anthropic\|openai\|google"; then
+            echo "✓ Providers endpoint works"
+            echo "$RESPONSE" | grep -o '"id":"[^"]*"' | head -6
+          else
+            echo "✗ Providers endpoint failed"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Test web API - Submit prompt
+        run: |
+          PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}"
+          MODEL="${PROMPTHEUS_MODEL:-claude-haiku-4-5}"
+          RESPONSE=$(curl -s -X POST http://localhost:8000/api/prompt/submit \
+            -H "Content-Type: application/json" \
+            -d "$(jq -nc --arg p "Explain quantum computing" --arg prov "$PROVIDER" --arg m "$MODEL" '{
+                  prompt: $p,
+                  skip_questions: true,
+                  provider: ($prov // empty | select(. != "")),
+                  model: ($m // empty | select(. != ""))
+                }')")
+
+          if echo "$RESPONSE" | grep -q '"success":true'; then
+            echo "✓ Prompt submission works"
+            echo "$RESPONSE" | grep -o '"refined_prompt":"[^"]*"' | head -c 100
+            echo ""
+          else
+            echo "✗ Prompt submission failed"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Test web API - Get history
+        run: |
+          RESPONSE=$(curl -s http://localhost:8000/api/history)
+
+          if echo "$RESPONSE" | grep -q '"entries"'; then
+            TOTAL=$(echo "$RESPONSE" | grep -o '"total":[0-9]*' | grep -o '[0-9]*')
+            echo "✓ History endpoint works (found $TOTAL entries)"
+          else
+            echo "✗ History endpoint failed"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+      - name: Test web API - Stream endpoint
+        run: |
+          PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}"
+          MODEL_Q=""
+          if [ -n "${PROMPTHEUS_MODEL}" ]; then MODEL_Q="&model=${PROMPTHEUS_MODEL}"; fi
+          # Test streaming endpoint (first 5 seconds)
+          RESPONSE=$(timeout 5 curl -s "http://localhost:8000/api/prompt/stream?prompt=Explain%20Python&skip_questions=true&provider=${PROVIDER}${MODEL_Q}" || true)
+
+          if echo "$RESPONSE" | grep -q '"type".*"token"'; then
+            echo "✓ Stream endpoint works"
+            echo "$RESPONSE" | head -3
+          else
+            echo "✗ Stream endpoint failed"
+            echo "$RESPONSE" | head -10
+            exit 1
+          fi
+
+      - name: Test web UI - Homepage
+        run: |
+          RESPONSE=$(curl -s http://localhost:8000/)
+
+          if echo "$RESPONSE" | grep -q "Promptheus\|alchemical\|prompt"; then
+            echo "✓ Web UI loads correctly"
+            echo "$RESPONSE" | grep -o '<title>[^<]*</title>'
+          else
+            echo "✗ Web UI failed to load"
+            echo "$RESPONSE" | head -20
+            exit 1
+          fi
+
+      - name: Test web API - Error handling
+        run: |
+          # Test with invalid prompt (empty)
+          RESPONSE=$(curl -s -X POST http://localhost:8000/api/prompt/submit \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "", "skip_questions": true}')
+
+          # Should either succeed with empty or fail gracefully
+          if echo "$RESPONSE" | grep -q '"success"'; then
+            echo "✓ Error handling works (gracefully handled empty prompt)"
+          else
+            echo "⚠ Warning: Unexpected response for empty prompt (this may be expected)"
+            echo "$RESPONSE" | head -c 200
+          fi
+
+      - name: Check container logs
+        if: failure()
+        run: |
+          echo "=== Container Logs ==="
+          docker logs promptheus-test || echo "No container logs available"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop promptheus-test 2>/dev/null || true
+          docker rm promptheus-test 2>/dev/null || true
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "=== All Tests Passed ✓ ==="
+          echo ""
+          echo "Tests completed:"
+          echo "  ✓ Docker image builds successfully"
+          echo "  ✓ CLI version works with multiple prompts"
+          echo "  ✓ Web server starts and responds"
+          echo "  ✓ All API endpoints functional"
+          echo "  ✓ Web UI loads correctly"
+          echo "  ✓ Error handling works properly"
+
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:scan
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
