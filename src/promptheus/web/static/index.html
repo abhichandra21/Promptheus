@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Promptheus - Transform raw prompts into optimized gold through digital alchemy">
     <title>Promptheus - Alchemical Prompt Optimization</title>
-    <link rel="stylesheet" href="styles.css?v=4859102738">
+    <link rel="stylesheet" href="styles.css?v=9283746150">
     <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
 </head>
 <body>
@@ -34,10 +34,6 @@
                         <span class="status-dot status-ok"></span>
                     </button>
                 </div>
-                <a href="/web-ui-guide.html" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" aria-label="Open help documentation in new tab" title="Web UI Guide">
-                    <span>?</span>
-                    <span>Help</span>
-                </a>
                 <button id="settings-btn" class="btn btn-secondary" aria-label="Open settings">
                     <span>⚙</span>
                     <span>Settings</span>
@@ -94,19 +90,16 @@
                 <div class="prompt-toolbar" role="toolbar" aria-label="Prompt controls">
                     <div class="toolbar-left">
                         <div class="toolbar-item">
-                            <label class="toolbar-label" for="question-mode" id="mode-label">
-                                <span class="toolbar-text">Mode</span>
-                                <button class="toolbar-help-icon" data-help-for="mode" aria-label="Mode help">
-                                    <span>ℹ</span>
-                                </button>
-                            </label>
                             <div class="provider-selector" id="mode-selector">
                                 <span>Mode:</span>
-                                <select id="question-mode" aria-labelledby="mode-label">
+                                <select id="question-mode">
                                     <option value="auto">Auto</option>
                                     <option value="force">Always Ask</option>
                                     <option value="skip">Skip Questions</option>
                                 </select>
+                                <button class="toolbar-help-icon" data-help-for="mode" aria-label="Mode help">
+                                    <span>ℹ</span>
+                                </button>
                             </div>
                             <!-- Help tooltip for Mode -->
                             <div class="help-tooltip" id="mode-help-tooltip">
@@ -131,21 +124,18 @@
                             </div>
                         </div>
                         <div class="toolbar-item">
-                            <label class="toolbar-label" for="style-select" id="style-label">
-                                <span class="toolbar-text">Style</span>
-                                <button class="toolbar-help-icon" data-help-for="style" aria-label="Style help">
-                                    <span>ℹ</span>
-                                </button>
-                            </label>
                             <div class="provider-selector" id="style-selector">
                                 <span>Style:</span>
-                                <select id="style-select" aria-labelledby="style-label">
+                                <select id="style-select">
                                     <option value="default">Default</option>
                                     <option value="bullets">Bullets</option>
                                     <option value="steps">Steps</option>
                                     <option value="plain">Plain</option>
                                     <option value="concise">Concise</option>
                                 </select>
+                                <button class="toolbar-help-icon" data-help-for="style" aria-label="Style help">
+                                    <span>ℹ</span>
+                                </button>
                             </div>
                             <!-- Help tooltip for Style -->
                             <div class="help-tooltip" id="style-help-tooltip">
@@ -418,7 +408,6 @@
                     <ul class="footer-link-list">
                         <li><a href="/web-ui-guide.html" target="_blank" rel="noopener noreferrer" class="footer-link">Documentation</a></li>
                         <li><a href="#" onclick="window.promptheusApp.showKeyboardShortcuts()" class="footer-link">Keyboard Shortcuts</a></li>
-                        <li><a href="#" onclick="window.promptheusApp.openSettings()" class="footer-link">Settings</a></li>
                     </ul>
                 </div>
 
@@ -440,6 +429,6 @@
         </div>
     </footer>
 
-    <script src="app.js?v=4859102738"></script>
+    <script src="app.js?v=9283746150"></script>
 </body>
 </html>
