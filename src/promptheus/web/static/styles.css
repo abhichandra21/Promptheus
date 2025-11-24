@@ -3932,10 +3932,14 @@ textarea:focus-visible {
     font-weight: 700;
     color: var(--text-primary);
     margin: 0 0 var(--space-1) 0;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .about-tagline {
+    font-family: var(--font-body);
     font-size: var(--text-sm);
     color: var(--text-secondary);
     margin: 0;
@@ -3951,6 +3955,7 @@ textarea:focus-visible {
 }
 
 .about-description p {
+    font-family: var(--font-body);
     color: var(--text-secondary);
     line-height: 1.6;
     margin: 0;
@@ -3978,8 +3983,9 @@ textarea:focus-visible {
 }
 
 .version-label {
+    font-family: var(--font-display);
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--color-primary);
     font-size: var(--text-sm);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -4001,6 +4007,7 @@ textarea:focus-visible {
 
 .version-field,
 .build-field {
+    font-family: var(--font-display);
     font-size: var(--text-xs);
     color: var(--text-tertiary);
     font-weight: 500;
@@ -4010,9 +4017,10 @@ textarea:focus-visible {
 
 .version-value,
 .build-value {
+    font-family: var(--font-body);
     font-size: var(--text-xs);
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .version-value {
@@ -4053,18 +4061,38 @@ textarea:focus-visible {
     gap: var(--space-2);
     color: var(--color-secondary);
     text-decoration: none;
+    font-family: var(--font-display);
     font-size: var(--text-sm);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-sm);
-    transition: all 0.2s ease;
-    background: rgba(45, 212, 191, 0.1);
-    border: 1px solid rgba(45, 212, 191, 0.2);
+    font-weight: 500;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-fast);
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.1), rgba(45, 212, 191, 0.05));
+    border: 1px solid rgba(45, 212, 191, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.about-link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 150%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.5s ease;
 }
 
 .about-link:hover {
-    background: rgba(45, 212, 191, 0.2);
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(45, 212, 191, 0.1));
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(45, 212, 191, 0.3);
+    box-shadow: 0 4px 12px rgba(45, 212, 191, 0.4);
+    border-color: var(--color-secondary);
+}
+
+.about-link:hover::before {
+    left: 100%;
 }
 
 .about-link-icon {
