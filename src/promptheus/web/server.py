@@ -46,11 +46,18 @@ spa_dir = Path(__file__).parent / "static"
 assets_dir = Path(__file__).parent.parent.parent.parent / "assets"
 
 # Serve index.html for root
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+
 @app.get("/")
 async def read_root():
     index_path = spa_dir / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(index_path, headers=NO_CACHE_HEADERS)
     return {"message": "Promptheus Web API is running"}
 
 # Serve assets (images, etc.)
@@ -105,7 +112,7 @@ if spa_dir.exists():
         # Fallback to index.html for client-side routing
         index_path = spa_dir / "index.html"
         if index_path.exists():
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers=NO_CACHE_HEADERS)
 
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
@@ -123,7 +130,7 @@ if spa_dir.exists():
         # For non-API requests, serve index.html
         index_path = spa_dir / "index.html"
         if index_path.exists():
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers=NO_CACHE_HEADERS)
 
         return JSONResponse(status_code=405, content={"detail": "Method Not Allowed"})
 
