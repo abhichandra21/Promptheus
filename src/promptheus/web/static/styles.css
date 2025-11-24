@@ -1112,7 +1112,8 @@ body::after {
     box-shadow: 0 0 10px rgba(212, 165, 116, 0.2);
 }
 
-.provider-selector > span {
+.provider-selector > span,
+.provider-selector > label {
     font-family: var(--font-display);
     font-size: var(--text-xs);
     font-weight: 500;
@@ -2339,6 +2340,26 @@ a.btn {
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    flex: 1;
+    min-width: 0; /* Allow text to shrink if needed */
+}
+
+/* Mobile fixes for Settings header */
+@media (max-width: 768px) {
+    .settings-header {
+        padding: var(--space-4);
+    }
+
+    .settings-title {
+        font-size: var(--text-xl);
+        gap: var(--space-2);
+    }
+
+    .btn-icon {
+        min-width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+    }
 }
 
 .settings-content {
@@ -4320,6 +4341,83 @@ textarea:focus-visible {
     padding: 2px 6px;
     border-radius: 3px;
     border: 1px solid rgba(212, 165, 116, 0.3);
+}
+
+/* Accessibility: Screen reader only text */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Sync indicator animation */
+.sync-indicator {
+    position: absolute;
+    top: 50%;
+    right: var(--space-2);
+    transform: translateY(-50%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+    color: var(--color-primary);
+    font-size: 12px;
+    animation: syncPulse 0.6s ease-in-out;
+}
+
+.sync-indicator.active {
+    opacity: 1;
+}
+
+@keyframes syncPulse {
+    0%, 100% { opacity: 0; transform: translateY(-50%) scale(0.8); }
+    50% { opacity: 1; transform: translateY(-50%) scale(1.1); }
+}
+
+/* Mobile Provider Selector Styles */
+.provider-selector-mobile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+    margin-bottom: var(--space-2);
+    position: relative;
+}
+
+.provider-selector-mobile > label {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    min-width: 60px;
+    flex-shrink: 0;
+}
+
+.provider-selector-mobile select {
+    border: none;
+    background: transparent;
+    color: var(--text-gold);
+    font-family: var(--font-display);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    padding: var(--space-1);
+    font-size: var(--text-sm);
+    flex: 1;
+}
+
+.provider-selector-mobile select:focus {
+    outline: none;
 }
 
 /* Mobile Footer Styles */

@@ -100,12 +100,55 @@ class PromptheusApp {
         document.getElementById('provider-select').addEventListener('change', (e) => {
             this.selectProvider(e.target.value);
             this.loadModelsForProvider(e.target.value);
+
+            // Sync mobile provider dropdown and show indicator
+            const providerSelectMobile = document.getElementById('provider-select-mobile');
+            if (providerSelectMobile) {
+                providerSelectMobile.value = e.target.value;
+                this.showSyncIndicator('provider-sync-indicator');
+            }
         });
 
         // Model selection
         document.getElementById('model-select').addEventListener('change', (e) => {
             this.selectModel(e.target.value);
+
+            // Sync mobile model dropdown and show indicator
+            const modelSelectMobile = document.getElementById('model-select-mobile');
+            if (modelSelectMobile) {
+                modelSelectMobile.value = e.target.value;
+                this.showSyncIndicator('model-sync-indicator');
+            }
         });
+
+        // Mobile Provider selection
+        const providerSelectMobile = document.getElementById('provider-select-mobile');
+        if (providerSelectMobile) {
+            providerSelectMobile.addEventListener('change', (e) => {
+                // Update main provider dropdown
+                const providerSelect = document.getElementById('provider-select');
+                if (providerSelect) {
+                    providerSelect.value = e.target.value;
+                }
+                this.selectProvider(e.target.value);
+                this.loadModelsForProvider(e.target.value);
+                this.showSyncIndicator('provider-sync-indicator');
+            });
+        }
+
+        // Mobile Model selection
+        const modelSelectMobile = document.getElementById('model-select-mobile');
+        if (modelSelectMobile) {
+            modelSelectMobile.addEventListener('change', (e) => {
+                // Update main model dropdown
+                const modelSelect = document.getElementById('model-select');
+                if (modelSelect) {
+                    modelSelect.value = e.target.value;
+                }
+                this.selectModel(e.target.value);
+                this.showSyncIndicator('model-sync-indicator');
+            });
+        }
 
         // Copy button
         document.getElementById('copy-btn').addEventListener('click', () => {
@@ -1101,6 +1144,29 @@ class PromptheusApp {
                 providerSelect.appendChild(option);
             });
 
+            // Update mobile provider dropdown
+            const providerSelectMobile = document.getElementById('provider-select-mobile');
+            if (providerSelectMobile) {
+                providerSelectMobile.innerHTML = '<option value="">Auto</option>';
+                sortedProviders.forEach(provider => {
+                    const option = document.createElement('option');
+                    option.value = provider.id;
+                    option.textContent = provider.name;
+                    option.selected = provider.id === data.current_provider;
+
+                    // Add status indicator based on availability
+                    if (provider.available) {
+                        option.setAttribute('data-status', 'configured');
+                        option.setAttribute('title', `${provider.name} - Ready`);
+                    } else {
+                        option.setAttribute('data-status', 'unconfigured');
+                        option.setAttribute('title', `${provider.name} - Needs API key`);
+                    }
+
+                    providerSelectMobile.appendChild(option);
+                });
+            }
+
             // Load models for current provider
             if (data.current_provider) {
                 await this.loadModelsForProvider(data.current_provider);
@@ -1339,6 +1405,20 @@ class PromptheusApp {
         }
     }
 
+    /**
+     * Show sync indicator briefly to indicate mobile/main dropdown sync
+     * @param {string} indicatorId - ID of the sync indicator element
+     */
+    showSyncIndicator(indicatorId) {
+        const indicator = document.getElementById(indicatorId);
+        if (!indicator) return;
+
+        indicator.classList.add('active');
+        setTimeout(() => {
+            indicator.classList.remove('active');
+        }, 600); // Match animation duration
+    }
+
     formatTimestamp(date) {
         const now = new Date();
         const diffMs = now - date;
@@ -1410,6 +1490,9 @@ class PromptheusApp {
                 modelSelect.innerHTML = '<option value="">Auto</option>';
                 modelSelect.disabled = true;
             }
+
+            // Sync mobile model dropdown using helper
+            this.syncMobileModelDropdown(null, null, true);
             return;
         }
 
@@ -1474,6 +1557,43 @@ class PromptheusApp {
         }
     }
 
+    /**
+     * Helper method to sync mobile model dropdown with main dropdown
+     * @param {Array} models - Array of model names
+     * @param {string} currentModel - Currently selected model
+     * @param {boolean} disabled - Whether dropdown should be disabled
+     */
+    syncMobileModelDropdown(models, currentModel, disabled = false) {
+        const modelSelectMobile = document.getElementById('model-select-mobile');
+        if (!modelSelectMobile) return;
+
+        modelSelectMobile.innerHTML = '';
+
+        if (models && models.length > 0) {
+            models.forEach((model, index) => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+
+                // Select current model if set, otherwise select first model
+                if (currentModel) {
+                    option.selected = model === currentModel;
+                } else if (index === 0) {
+                    option.selected = true;
+                }
+
+                modelSelectMobile.appendChild(option);
+            });
+            modelSelectMobile.disabled = disabled;
+        } else {
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = models === null ? 'Auto' : 'No models available';
+            modelSelectMobile.appendChild(emptyOption);
+            modelSelectMobile.disabled = true;
+        }
+    }
+
     populateModelSelect(modelSelect, models, currentModel, fetchedAll) {
         modelSelect.innerHTML = '';
 
@@ -1493,12 +1613,18 @@ class PromptheusApp {
 
                 modelSelect.appendChild(option);
             });
+
+            // Sync mobile model dropdown using helper
+            this.syncMobileModelDropdown(models, currentModel, false);
         } else {
             // No models found
             const emptyOption = document.createElement('option');
             emptyOption.value = '';
             emptyOption.textContent = 'No models available';
             modelSelect.appendChild(emptyOption);
+
+            // Sync mobile model dropdown using helper
+            this.syncMobileModelDropdown([], currentModel, true);
         }
 
         // Append the "Load All Models" option last so real models stay primary
