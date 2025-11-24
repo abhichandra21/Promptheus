@@ -34,13 +34,53 @@
                         <span class="status-dot status-ok"></span>
                     </button>
                 </div>
+                <a href="/web-ui-guide.html" class="btn btn-secondary" aria-label="Open help documentation" title="Web UI Guide">
+                    <span>?</span>
+                    <span>Help</span>
+                </a>
                 <button id="settings-btn" class="btn btn-secondary" aria-label="Open settings">
                     <span>⚙</span>
                     <span>Settings</span>
                 </button>
             </div>
+            <button id="hamburger-btn" class="hamburger-btn" aria-label="Open mobile menu" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </header>
+
+    <!-- Mobile Menu -->
+    <nav id="mobile-menu" class="mobile-menu" aria-hidden="true">
+        <div class="mobile-menu-header">
+            <div class="mobile-menu-title">Controls</div>
+            <button id="mobile-menu-close" class="mobile-menu-close" aria-label="Close menu">✕</button>
+        </div>
+        <div class="mobile-menu-section">
+            <div class="mobile-menu-section-title">Provider & Model</div>
+            <div class="provider-selector" style="width: 100%; flex-direction: column; padding: var(--space-3);">
+                <label style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Provider</label>
+                <select id="provider-select-mobile" style="width: 100%; margin-top: var(--space-2);">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+            <div class="provider-selector" style="width: 100%; flex-direction: column; padding: var(--space-3);">
+                <label style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Model</label>
+                <select id="model-select-mobile" style="width: 100%; margin-top: var(--space-2);" disabled>
+                    <option value="">Auto</option>
+                </select>
+            </div>
+        </div>
+        <a href="/web-ui-guide.html" class="btn btn-secondary" style="width: 100%;">
+            <span>?</span>
+            <span>Help</span>
+        </a>
+        <button id="settings-btn-mobile" class="btn btn-secondary" style="width: 100%;">
+            <span>⚙</span>
+            <span>Settings</span>
+        </button>
+    </nav>
 
     <!-- Main Content Area -->
     <main class="main-content">
@@ -338,6 +378,6 @@
         </aside>
     </div>
 
-    <script src="app.js?v=1763735543"></script>
+    <script src="app.js?v=1763953257"></script>
 </body>
 </html>

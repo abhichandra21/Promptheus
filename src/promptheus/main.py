@@ -651,7 +651,7 @@ def main() -> None:
         if initial_prompt:
             io.notify("[green]✓[/green] Got prompt from stdin")
 
-    provider_name = app_config.provider or "gemini"
+    provider_name = app_config.provider or "google"
     try:
         provider = get_provider(provider_name, app_config, app_config.get_model())
     except Exception as exc:

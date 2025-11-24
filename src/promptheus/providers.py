@@ -19,14 +19,11 @@ from promptheus.constants import (
     DEFAULT_REFINEMENT_MAX_TOKENS,
     DEFAULT_TWEAK_MAX_TOKENS,
 )
+from promptheus.config import SUPPORTED_PROVIDER_IDS
 from promptheus.utils import sanitize_error_message
 from promptheus.exceptions import ProviderAPIError
 
 logger = logging.getLogger(__name__)
-
-# Providers with full runtime support (keep in sync with promptheus.config.SUPPORTED_PROVIDER_IDS)
-SUPPORTED_PROVIDER_IDS = {"google", "anthropic", "openai", "groq", "qwen", "glm"}
-
 
 def _print_user_error(message: str) -> None:
     """Print error message directly to stderr for user visibility."""
@@ -610,7 +607,7 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
     provider_config = config.get_provider_config()
     model_to_use = model_name or config.get_model()
 
-    if provider_name == "google":
+    if provider_name in ("google", "gemini"):
         return GeminiProvider(
             api_key=provider_config["api_key"],
             model_name=model_to_use,

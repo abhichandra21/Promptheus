@@ -133,27 +133,27 @@ def test_coerce_message_content_with_attr():
     assert result == "hello from object"
 
 
-def test_provider_factory_gemini(monkeypatch):
-    """Test provider factory function for Gemini."""
+def test_provider_factory_google(monkeypatch):
+    """Test provider factory function for Google (Gemini models)."""
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
 
     sample_models = {
         "providers": {
-            "gemini": {
+            "google": {
                 "default_model": "gemini-pro",
                 "models": ["gemini-pro", "gemini-1.5-pro"],
-                "api_key_env": "GEMINI_API_KEY",
-                "api_key_prefixes": ["AIza"],
+                "api_key_env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+                "api_key_prefixes": ["AIza", "AQ."],
             }
         },
-        "provider_aliases": {"gemini": "Gemini"},
+        "provider_aliases": {"gemini": "google"},
     }
     monkeypatch.setattr("promptheus.config.Config.load_provider_config", lambda self: sample_models)
     
     config = Config()
-    config.set_provider("gemini")
+    config.set_provider("google")
     
-    provider = get_provider("gemini", config, "gemini-pro")
+    provider = get_provider("google", config, "gemini-pro")
     
     assert isinstance(provider, GeminiProvider)
     assert provider.model_name == "gemini-pro"
@@ -299,4 +299,3 @@ def test_coerce_message_content_various_types():
     # Test numeric input
     result = _coerce_message_content(123)
     assert result == "123"
-

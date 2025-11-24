@@ -3,7 +3,7 @@
     "google": {
       "display_name": "Google",
       "default_model": "gemini-2.5-flash",
-      "api_key_env": "GOOGLE_API_KEY",
+      "api_key_env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
       "model_env": "GOOGLE_MODEL",
       "api_key_prefixes": ["AIza", "AQ."],
       "api_key_url": "https://makersuite.google.com/app/apikey",

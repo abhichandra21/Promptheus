@@ -154,7 +154,7 @@ async def submit_prompt(request: PromptRequest):
             app_config.set_model(request.model)
         
         # Create provider instance
-        provider_name = app_config.provider or "gemini"
+        provider_name = app_config.provider or "google"
         provider = get_provider(provider_name, app_config, app_config.get_model())
         
         # Create an argument-like object to pass to the processing function
@@ -221,7 +221,7 @@ async def submit_prompt(request: PromptRequest):
             original_prompt=request.prompt,
             refined_prompt="",
             task_type="",
-            provider=request.provider or "gemini",
+            provider=request.provider or "google",
             model="",
             questions=[],
             follow_up_questions=[],
@@ -239,7 +239,7 @@ async def tweak_prompt(request: TweakRequest):
             app_config.set_provider(request.provider)
 
         # Create provider instance
-        provider_name = app_config.provider or "gemini"
+        provider_name = app_config.provider or "google"
         provider = get_provider(provider_name, app_config, app_config.get_model())
 
         # Tweak the prompt
@@ -282,7 +282,7 @@ async def stream_prompt(
                 app_config.set_model(model)
 
             # Create provider instance
-            provider_name = app_config.provider or "gemini"
+            provider_name = app_config.provider or "google"
             provider_instance = get_provider(provider_name, app_config, app_config.get_model())
 
             # Process the prompt (skip questions in streaming mode)

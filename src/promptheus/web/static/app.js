@@ -34,6 +34,49 @@ class PromptheusApp {
     }
 
     bindEvents() {
+        // Mobile menu toggle
+        const hamburgerBtn = document.getElementById('hamburger-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileMenuClose = document.getElementById('mobile-menu-close');
+        const settingsBtnMobile = document.getElementById('settings-btn-mobile');
+
+        hamburgerBtn?.addEventListener('click', () => {
+            const isOpen = mobileMenu.classList.contains('active');
+            mobileMenu.classList.toggle('active');
+            hamburgerBtn.classList.toggle('active');
+            hamburgerBtn.setAttribute('aria-expanded', !isOpen);
+            mobileMenu.setAttribute('aria-hidden', isOpen);
+        });
+
+        mobileMenuClose?.addEventListener('click', () => {
+            mobileMenu.classList.remove('active');
+            hamburgerBtn.classList.remove('active');
+            hamburgerBtn.setAttribute('aria-expanded', 'false');
+            mobileMenu.setAttribute('aria-hidden', 'true');
+        });
+
+        // Close mobile menu when clicking on settings
+        settingsBtnMobile?.addEventListener('click', () => {
+            mobileMenu.classList.remove('active');
+            hamburgerBtn.classList.remove('active');
+            hamburgerBtn.setAttribute('aria-expanded', 'false');
+            mobileMenu.setAttribute('aria-hidden', 'true');
+            // Trigger desktop settings button
+            document.getElementById('settings-btn')?.click();
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (mobileMenu?.classList.contains('active') &&
+                !mobileMenu.contains(e.target) &&
+                !hamburgerBtn.contains(e.target)) {
+                mobileMenu.classList.remove('active');
+                hamburgerBtn.classList.remove('active');
+                hamburgerBtn.setAttribute('aria-expanded', 'false');
+                mobileMenu.setAttribute('aria-hidden', 'true');
+            }
+        });
+
         // Main prompt submission
         document.getElementById('submit-btn').addEventListener('click', () => this.submitPrompt());
 

@@ -404,7 +404,7 @@ def test_interactive_mode_keyboard_interrupt_reset(mock_input, mock_get_history,
 def test_handle_repl_command_status(mock_config, mock_console, mock_notify):
     """Test /status command."""
     args = Namespace(quick=False, refine=True, static=False)
-    mock_config.get_configured_providers.return_value = ["gemini", "anthropic"]
+    mock_config.get_configured_providers.return_value = ["google", "anthropic"]
 
     result = handle_repl_command("/status", mock_config, args, mock_console, mock_notify)
 
@@ -466,7 +466,7 @@ def test_handle_repl_command_toggle_mutual_exclusion(mock_config, mock_console, 
 def test_handle_repl_command_set_provider_valid(mock_config, mock_console, mock_notify):
     """Test /set provider with valid provider."""
     args = Namespace(quick=False, refine=False, static=False)
-    mock_config.get_configured_providers.return_value = ["gemini", "anthropic", "openai"]
+    mock_config.get_configured_providers.return_value = ["google", "anthropic", "openai"]
 
     result = handle_repl_command("/set provider anthropic", mock_config, args, mock_console, mock_notify)
 
@@ -478,7 +478,7 @@ def test_handle_repl_command_set_provider_valid(mock_config, mock_console, mock_
 def test_handle_repl_command_set_provider_invalid(mock_config, mock_console, mock_notify):
     """Test /set provider with invalid provider."""
     args = Namespace(quick=False, refine=False, static=False)
-    mock_config.get_configured_providers.return_value = ["gemini", "anthropic"]
+    mock_config.get_configured_providers.return_value = ["google", "anthropic"]
 
     result = handle_repl_command("/set provider invalid", mock_config, args, mock_console, mock_notify)
 
@@ -538,7 +538,7 @@ def test_interactive_mode_set_provider_command(mock_input, mock_get_history,
     mock_history = Mock()
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_get_history.return_value = mock_history
-    mock_config.get_configured_providers.return_value = ["test", "gemini"]
+    mock_config.get_configured_providers.return_value = ["test", "google"]
 
     args = Namespace(quick=False, refine=False, static=False)
 
@@ -582,7 +582,7 @@ def test_interactive_mode_status_command(mock_input, mock_get_history,
     mock_history = Mock()
     mock_history.get_prompt_history_file.return_value = "test_history"
     mock_get_history.return_value = mock_history
-    mock_config.get_configured_providers.return_value = ["gemini", "anthropic"]
+    mock_config.get_configured_providers.return_value = ["google", "anthropic"]
 
     args = Namespace(quick=False, refine=True, static=False)
 
@@ -608,7 +608,7 @@ def test_interactive_mode_ctrl_c_then_invalid_command(mock_input, mock_get_histo
     ]
     mock_history = Mock()
     mock_get_history.return_value = mock_history
-    mock_config.get_configured_providers.return_value = ["gemini", "anthropic"]
+    mock_config.get_configured_providers.return_value = ["google", "anthropic"]
 
     args = Namespace(quick=False, refine=False, static=False)
 

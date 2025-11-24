@@ -63,8 +63,8 @@ def test_parse_args_file_flag():
 def test_parse_args_with_provider():
     """Test parsing with provider flag."""
     parser = build_parser(include_subcommands=False)
-    args = parser.parse_args(["--provider", "gemini"])
-    assert args.provider == "gemini"
+    args = parser.parse_args(["--provider", "google"])
+    assert args.provider == "google"
 
 
 def test_parse_args_with_model():

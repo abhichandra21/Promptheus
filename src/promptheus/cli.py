@@ -4,7 +4,9 @@ import argparse
 import sys
 from typing import List, Optional, Sequence
 
-PROVIDER_CHOICES = ["google", "anthropic", "openai", "groq", "qwen", "glm"]
+from promptheus.config import SUPPORTED_PROVIDER_IDS
+
+PROVIDER_CHOICES = list(SUPPORTED_PROVIDER_IDS)
 
 
 def build_parser(include_subcommands: bool = True) -> argparse.ArgumentParser:

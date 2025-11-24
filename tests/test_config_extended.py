@@ -109,7 +109,7 @@ def test_provider_property_auto_detection(monkeypatch, config):
     config.reset()
     provider = config.provider
     
-    assert provider == "gemini"
+    assert provider == "google"
 
 
 def test_provider_property_multiple_env_vars(monkeypatch, config):
@@ -123,14 +123,14 @@ def test_provider_property_multiple_env_vars(monkeypatch, config):
     provider = config.provider
     
     # Anthropic should be detected first based on priority order
-    assert provider in ["anthropic", "gemini"]
+    assert provider in ["anthropic", "google"]
 
 
 def test_set_provider_valid(config):
     """Test setting a valid provider."""
-    config.set_provider("gemini")
+    config.set_provider("google")
     
-    assert config._provider == "gemini"
+    assert config._provider == "google"
 
 
 def test_set_provider_invalid(config):
@@ -172,15 +172,15 @@ def test_get_model_default(config, monkeypatch):
     
     model = config.get_model()
     
-    # Should return default model for default provider (likely gemini)
+    # Should return default model for default provider (Google)
     assert isinstance(model, str)
     assert len(model) > 0
 
 
 def test_get_model_from_env(monkeypatch, config):
     """Test getting model from environment variable."""
-    monkeypatch.setenv("PROMPTHEUS_PROVIDER", "gemini")
-    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.setenv("PROMPTHEUS_PROVIDER", "google")
+    monkeypatch.delenv("GOOGLE_MODEL", raising=False)
     monkeypatch.setenv("PROMPTHEUS_MODEL", "env-model")
 
     model = config.get_model()
@@ -198,10 +198,10 @@ def test_manual_provider_ignores_global_model(monkeypatch, config):
     assert config.get_model() == provider_default
 
 
-def test_get_provider_config_gemini(monkeypatch, config):
-    """Test getting provider configuration for Gemini."""
+def test_get_provider_config_google(monkeypatch, config):
+    """Test getting provider configuration for Google."""
     monkeypatch.setenv("GEMINI_API_KEY", "AIza-test-key")
-    config.set_provider("gemini")
+    config.set_provider("google")
 
     provider_config = config.get_provider_config()
 
@@ -227,7 +227,7 @@ def test_get_configured_providers(monkeypatch, config):
     
     configured = config.get_configured_providers()
     
-    assert "gemini" in configured
+    assert "google" in configured
     assert "anthropic" in configured
 
 
@@ -248,7 +248,7 @@ def test_validate_no_api_key():
     with patch('promptheus.config.os.getenv', side_effect=mock_getenv):
         # Create a fresh config instance with mocked getenv
         config = Config()
-        config.set_provider("gemini")  # Set a provider to validate
+        config.set_provider("google")  # Set a provider to validate
         is_valid = config.validate()
 
         assert not is_valid
@@ -259,7 +259,7 @@ def test_validate_no_api_key():
 def test_validate_with_api_key(monkeypatch, config):
     """Test validation with valid API key."""
     monkeypatch.setenv("GEMINI_API_KEY", "AIza-valid-key")
-    config.set_provider("gemini")
+    config.set_provider("google")
     
     is_valid = config.validate()
     
@@ -269,7 +269,7 @@ def test_validate_with_api_key(monkeypatch, config):
 def test_validate_invalid_api_key_format(monkeypatch, config):
     """Test validation with invalid API key format."""
     monkeypatch.setenv("GEMINI_API_KEY", "invalid-key-format")
-    config.set_provider("gemini")
+    config.set_provider("google")
     
     is_valid = config.validate()
     

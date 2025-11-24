@@ -31,7 +31,7 @@ async def generate_questions(request: QuestionsRequest):
             app_config.set_provider(request.provider)
         
         # Create provider instance
-        provider = get_provider(app_config.provider or "gemini", app_config, app_config.get_model())
+        provider = get_provider(app_config.provider or "google", app_config, app_config.get_model())
         
         # Import the system instruction from main module
         from promptheus.prompts import CLARIFICATION_SYSTEM_INSTRUCTION

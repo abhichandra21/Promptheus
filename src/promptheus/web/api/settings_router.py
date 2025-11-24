@@ -187,7 +187,7 @@ async def validate_api_key(request: ValidationRequest):
                 provider=provider_id,
                 error=f"Unknown provider: {provider_id}",
                 error_type="invalid_provider",
-                suggestion="Choose a valid provider: gemini, openai, anthropic, groq, qwen, or glm"
+                suggestion="Choose a valid provider: google, openai, anthropic, groq, qwen, or glm"
             )
 
         env_key = env_key_map[provider_id]
