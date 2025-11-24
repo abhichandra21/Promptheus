@@ -1,0 +1,22 @@
+#!/bin/bash
+# Promptheus server wrapper script for systemd service
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Configuration
+HOST="0.0.0.0"
+PORT=8000
+
+# Check if virtual environment exists
+if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
+    source "$SCRIPT_DIR/venv/bin/activate"
+elif [ -f "/opt/promptheus/venv/bin/activate" ]; then
+    source "/opt/promptheus/venv/bin/activate"
+fi
+
+# Change to script directory
+cd "$SCRIPT_DIR"
+
+# Start the web server with the specified host and port
+exec python3 -m promptheus.main web --host "$HOST" --port "$PORT" --no-browser "$@"

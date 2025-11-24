@@ -161,7 +161,9 @@ if spa_dir.exists():
             # Try static directory first
             file_path = spa_dir / path
             if file_path.exists() and file_path.is_file():
-                return FileResponse(file_path)
+                # Add no-cache headers for JS and CSS files during development
+                headers = NO_CACHE_HEADERS if path.endswith(('.js', '.css')) else {}
+                return FileResponse(file_path, headers=headers)
 
             # Try assets directory
             if path.startswith("assets/"):

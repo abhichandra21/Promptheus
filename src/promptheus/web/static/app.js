@@ -2984,14 +2984,25 @@ class PromptheusApp {
 
     async loadVersion() {
         try {
+            console.log('Loading version from:', `${this.apiBaseUrl}/api/version`);
             const response = await fetch(`${this.apiBaseUrl}/api/version`);
+            console.log('Version response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
             const data = await response.json();
+            console.log('Version data:', data);
 
             const versionText = document.getElementById('version-text');
             const buildInfo = document.getElementById('build-info');
 
+            console.log('Found versionText element:', !!versionText);
+            console.log('Found buildInfo element:', !!buildInfo);
+
             if (versionText) {
-                let versionStr = data.full_version;
+                let versionStr = data.full_version || data.version || 'Unknown';
                 if (data.commit_hash) {
                     versionStr += ` (${data.commit_hash}`;
                     if (data.is_dirty) {
@@ -3000,22 +3011,34 @@ class PromptheusApp {
                     versionStr += ')';
                 }
                 versionText.textContent = versionStr;
+                console.log('Set version text to:', versionStr);
             }
 
             if (buildInfo && data.commit_date) {
                 const buildType = data.build_type === 'dev' ? 'Development' : 'Clean';
                 buildInfo.innerHTML = `
-                    <div style="display: flex; gap: 12px;">
-                        <span>Build: ${buildType}</span>
-                        <span>Updated: ${new Date(data.commit_date).toLocaleDateString()}</span>
+                    <div class="build-row">
+                        <span class="build-field">Type:</span>
+                        <span class="build-value ${data.build_type === 'dev' ? 'build-dev' : 'build-clean'}">${buildType}</span>
                     </div>
+                    <div class="build-row">
+                        <span class="build-field">Updated:</span>
+                        <span class="build-value">${new Date(data.commit_date).toLocaleDateString()}</span>
+                    </div>
+                    ${data.commit_hash ? `
+                    <div class="build-row">
+                        <span class="build-field">Commit:</span>
+                        <span class="build-value code">${data.commit_hash}</span>
+                    </div>
+                    ` : ''}
                 `;
+                console.log('Set build info');
             }
         } catch (error) {
-            console.warn('Failed to load version info:', error);
+            console.error('Failed to load version info:', error);
             const versionText = document.getElementById('version-text');
             if (versionText) {
-                versionText.textContent = 'Unknown';
+                versionText.textContent = 'Error';
             }
         }
     }
