@@ -2997,9 +2997,11 @@ class PromptheusApp {
 
             const versionText = document.getElementById('version-text');
             const buildInfo = document.getElementById('build-info');
+            const footerVersion = document.getElementById('footer-version');
 
             console.log('Found versionText element:', !!versionText);
             console.log('Found buildInfo element:', !!buildInfo);
+            console.log('Found footerVersion element:', !!footerVersion);
 
             if (versionText) {
                 let versionStr = data.full_version || data.version || 'Unknown';
@@ -3012,6 +3014,19 @@ class PromptheusApp {
                 }
                 versionText.textContent = versionStr;
                 console.log('Set version text to:', versionStr);
+            }
+
+            if (footerVersion) {
+                let footerVersionStr = data.full_version || data.version || 'Unknown';
+                if (data.commit_hash) {
+                    footerVersionStr += ` (${data.commit_hash}`;
+                    if (data.is_dirty) {
+                        footerVersionStr += '-dirty';
+                    }
+                    footerVersionStr += ')';
+                }
+                footerVersion.textContent = footerVersionStr;
+                console.log('Set footer version to:', footerVersionStr);
             }
 
             if (buildInfo && data.commit_date) {
@@ -3037,8 +3052,12 @@ class PromptheusApp {
         } catch (error) {
             console.error('Failed to load version info:', error);
             const versionText = document.getElementById('version-text');
+            const footerVersion = document.getElementById('footer-version');
             if (versionText) {
                 versionText.textContent = 'Error';
+            }
+            if (footerVersion) {
+                footerVersion.textContent = 'Error';
             }
         }
     }

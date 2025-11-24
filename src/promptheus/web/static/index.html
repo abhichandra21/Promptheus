@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Promptheus - Transform raw prompts into optimized gold through digital alchemy">
     <title>Promptheus - Alchemical Prompt Optimization</title>
-    <link rel="stylesheet" href="styles.css?v=3024815772">
+    <link rel="stylesheet" href="styles.css?v=4859102738">
     <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
 </head>
 <body>
@@ -100,17 +100,13 @@
                                     <span>ℹ</span>
                                 </button>
                             </label>
-                            <div class="alchemical-dropdown" id="mode-dropdown">
-                                <select id="question-mode" class="toolbar-select" aria-labelledby="mode-label">
+                            <div class="provider-selector" id="mode-selector">
+                                <span>Mode:</span>
+                                <select id="question-mode" aria-labelledby="mode-label">
                                     <option value="auto">Auto</option>
                                     <option value="force">Always Ask</option>
                                     <option value="skip">Skip Questions</option>
                                 </select>
-                                <div class="alchemical-dropdown-panel">
-                                    <div class="alchemical-option" data-value="auto">Auto</div>
-                                    <div class="alchemical-option" data-value="force">Always Ask</div>
-                                    <div class="alchemical-option" data-value="skip">Skip Questions</div>
-                                </div>
                             </div>
                             <!-- Help tooltip for Mode -->
                             <div class="help-tooltip" id="mode-help-tooltip">
@@ -141,21 +137,15 @@
                                     <span>ℹ</span>
                                 </button>
                             </label>
-                            <div class="alchemical-dropdown" id="style-dropdown">
-                                <select id="style-select" class="toolbar-select" aria-labelledby="style-label">
+                            <div class="provider-selector" id="style-selector">
+                                <span>Style:</span>
+                                <select id="style-select" aria-labelledby="style-label">
                                     <option value="default">Default</option>
                                     <option value="bullets">Bullets</option>
                                     <option value="steps">Steps</option>
                                     <option value="plain">Plain</option>
                                     <option value="concise">Concise</option>
                                 </select>
-                                <div class="alchemical-dropdown-panel">
-                                    <div class="alchemical-option" data-value="default">Default</div>
-                                    <div class="alchemical-option" data-value="bullets">Bullets</div>
-                                    <div class="alchemical-option" data-value="steps">Steps</div>
-                                    <div class="alchemical-option" data-value="plain">Plain</div>
-                                    <div class="alchemical-option" data-value="concise">Concise</div>
-                                </div>
                             </div>
                             <!-- Help tooltip for Style -->
                             <div class="help-tooltip" id="style-help-tooltip">
@@ -411,6 +401,45 @@
         </aside>
     </div>
 
-    <script src="app.js?v=3024815772"></script>
+      <!-- Footer -->
+    <footer class="app-footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <div class="footer-logo">
+                    <span class="logo-symbol">⚗</span>
+                    <span class="footer-title">Promptheus</span>
+                </div>
+                <p class="footer-description">AI-powered prompt optimization through digital alchemy</p>
+            </div>
+
+            <div class="footer-links">
+                <div class="footer-section">
+                    <h4 class="footer-section-title">Product</h4>
+                    <ul class="footer-link-list">
+                        <li><a href="/web-ui-guide.html" target="_blank" rel="noopener noreferrer" class="footer-link">Documentation</a></li>
+                        <li><a href="#" onclick="window.promptheusApp.showKeyboardShortcuts()" class="footer-link">Keyboard Shortcuts</a></li>
+                        <li><a href="#" onclick="window.promptheusApp.openSettings()" class="footer-link">Settings</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4 class="footer-section-title">Resources</h4>
+                    <ul class="footer-link-list">
+                        <li><a href="https://github.com/abhichandra21/Promptheus" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a></li>
+                        <li><a href="#" onclick="window.promptheusApp.openSettings()" class="footer-link">About</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <div class="footer-bottom-content">
+                <span class="footer-copyright">© 2024 Promptheus</span>
+                <span id="footer-version" class="footer-version">Loading...</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js?v=4859102738"></script>
 </body>
 </html>

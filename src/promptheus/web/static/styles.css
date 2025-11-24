@@ -146,6 +146,8 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Atmospheric Background Effect */
@@ -4097,4 +4099,214 @@ textarea:focus-visible {
 
 .about-link-icon {
     font-size: 14px;
+}
+
+/* ===================================================================
+   APP FOOTER - Traditional Footer Design
+   =================================================================== */
+
+.app-footer {
+    margin-top: auto;
+    background: var(--surface-elevated);
+    border-top: 1px solid var(--border-subtle);
+    backdrop-filter: blur(20px);
+    position: relative;
+}
+
+.app-footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        var(--color-primary) 50%,
+        transparent 100%);
+    opacity: 0.5;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-6);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.footer-left {
+    flex-shrink: 0;
+    max-width: 320px;
+}
+
+.footer-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.footer-logo .logo-symbol {
+    font-size: 28px;
+    filter: drop-shadow(0 0 8px rgba(212, 165, 116, 0.6));
+}
+
+.footer-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.footer-description {
+    font-family: var(--font-body);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.footer-links {
+    display: flex;
+    gap: var(--space-8);
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.footer-section {
+    min-width: 160px;
+}
+
+.footer-section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-gold);
+    margin-bottom: var(--space-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.footer-link-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.footer-link {
+    font-family: var(--font-body);
+    color: var(--text-tertiary);
+    text-decoration: none;
+    font-size: var(--text-sm);
+    transition: all var(--transition-fast);
+    padding: var(--space-1) 0;
+    display: inline-block;
+    position: relative;
+}
+
+.footer-link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background: var(--color-primary);
+    transition: width var(--transition-fast);
+}
+
+.footer-link:hover {
+    color: var(--text-primary);
+}
+
+.footer-link:hover::after {
+    width: 100%;
+}
+
+.footer-bottom {
+    border-top: 1px solid var(--border-subtle);
+    padding: var(--space-4) var(--space-6);
+}
+
+.footer-bottom-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.footer-copyright {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.footer-version {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    background: rgba(212, 165, 116, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid rgba(212, 165, 116, 0.3);
+}
+
+/* Mobile Footer Styles */
+@media (max-width: 768px) {
+    .footer-content {
+        flex-direction: column;
+        gap: var(--space-6);
+        padding: var(--space-6) var(--space-4);
+        text-align: center;
+    }
+
+    .footer-left {
+        max-width: 100%;
+        text-align: center;
+    }
+
+    .footer-links {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: var(--space-6);
+        width: 100%;
+    }
+
+    .footer-section {
+        min-width: 120px;
+    }
+
+    .footer-bottom-content {
+        flex-direction: column;
+        gap: var(--space-2);
+        text-align: center;
+        padding: 0 var(--space-4);
+    }
+
+    .footer-description {
+        font-size: var(--text-xs);
+    }
+}
+
+@media (max-width: 480px) {
+    .footer-links {
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+
+    .footer-section {
+        min-width: auto;
+    }
 }
