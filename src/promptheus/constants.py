@@ -2,7 +2,7 @@
 Shared constants for Promptheus configuration and provider behaviour.
 """
 
-VERSION = "0.2.2-dev"
+VERSION = "0.2.3-dev"
 GITHUB_REPO = "https://github.com/abhichandra21/Promptheus"
 GITHUB_ISSUES = f"{GITHUB_REPO}/issues"
 
