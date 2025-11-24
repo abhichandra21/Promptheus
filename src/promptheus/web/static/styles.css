@@ -1703,7 +1703,6 @@ a.btn {
     font-size: var(--text-lg);
     line-height: 1.8;
     color: var(--text-primary);
-    white-space: pre-wrap;
     word-wrap: break-word;
     flex: 1;
     overflow-y: auto;
@@ -1712,6 +1711,7 @@ a.btn {
 }
 
 .optimized-prompt-content {
+    white-space: pre-wrap;
     padding: var(--space-8);
     background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(26, 35, 50, 0.95) 100%);
     border-radius: var(--radius-xl);
@@ -1806,46 +1806,128 @@ a.btn {
 
 /* Status Messages - Alchemical Notifications */
 .message {
-    padding: var(--space-4) var(--space-6);
+    padding: 0;
     border-radius: var(--radius-lg);
     font-family: var(--font-body);
-    font-size: var(--text-base);
-    font-weight: var(--font-medium);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-medium);
+    box-shadow: var(--shadow-md);
+    animation: message-appear 0.4s ease-out;
+    overflow: visible;
+    max-width: 100%;
+    margin: var(--space-4) 0;
+    flex-shrink: 0;
+}
+
+.message-icon {
+    display: none;
+}
+
+.message-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.message-text {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.8;
+    color: var(--text-primary);
+    padding: var(--space-6) var(--space-8);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.error-help {
+    background: rgba(26, 35, 50, 0.5);
+    padding: var(--space-6) var(--space-8);
+    border-top: 1px solid var(--border-subtle);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    min-height: fit-content;
+    flex-shrink: 0;
+}
+
+.error-help strong {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    box-shadow: var(--shadow-sm);
-    animation: message-appear 0.4s ease-out;
-    border: 1px solid;
+    margin-bottom: var(--space-5);
+    color: var(--color-warning);
+    font-weight: 600;
+    font-size: var(--text-base);
+}
+
+.error-help strong::before {
+    content: '💡';
+    font-size: var(--text-lg);
+}
+
+.error-help ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.error-help li {
+    margin: 0;
+    padding: var(--space-2) 0;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    border-bottom: 1px solid rgba(51, 65, 85, 0.2);
+}
+
+.error-help li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.error-help li::before {
+    content: '→';
+    color: var(--color-primary);
+    font-weight: 600;
+    font-size: var(--text-base);
+    flex-shrink: 0;
 }
 
 @keyframes message-appear {
     from {
         opacity: 0;
-        transform: translateY(-10px) scale(0.95);
+        transform: translateY(-8px);
     }
     to {
         opacity: 1;
-        transform: translateY(0) scale(1);
+        transform: translateY(0);
     }
 }
 
 .message-success {
-    background: rgba(20, 184, 166, 0.15);
-    color: var(--color-secondary);
-    border-color: var(--color-secondary);
+    border-color: rgba(45, 212, 191, 0.3);
+}
+
+.message-success .message-text {
+    border-bottom-color: rgba(45, 212, 191, 0.2);
 }
 
 .message-error {
-    background: rgba(239, 68, 68, 0.15);
-    color: var(--color-error);
-    border-color: var(--color-error);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.message-error .message-text {
+    border-bottom-color: rgba(239, 68, 68, 0.2);
 }
 
 .message-info {
-    background: rgba(212, 165, 116, 0.15);
-    color: var(--color-primary);
-    border-color: var(--color-primary);
+    border-color: rgba(212, 165, 116, 0.3);
 }
 
 /* Settings button within error messages */
