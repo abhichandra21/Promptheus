@@ -297,7 +297,7 @@ def reload_provider_instance(
     Returns:
         New provider instance, or None if initialization failed
     """
-    provider_name = app_config.provider or "gemini"
+    provider_name = app_config.provider or "google"
     model_name = app_config.get_model()
 
     try:

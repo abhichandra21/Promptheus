@@ -32,6 +32,16 @@ def find_and_load_dotenv(filename: str = ".env") -> Optional[Path]:
     and load it if found. Stops once the project root markers are crossed.
     Returns the path that was loaded or None.
     """
+    if os.getenv("PROMPTHEUS_SKIP_AUTO_DOTENV"):
+        logger.debug("Skipping auto .env load (PROMPTHEUS_SKIP_AUTO_DOTENV set)")
+        return None
+
+    # Avoid loading developer .env automatically during test runs, but still
+    # allow explicit files passed in by tests.
+    if filename == ".env" and "PYTEST_CURRENT_TEST" in os.environ:
+        logger.debug("Skipping auto .env load for default file (test context detected)")
+        return None
+
     current_dir = Path.cwd().resolve()
 
     for parent in (current_dir, *current_dir.parents):
@@ -50,8 +60,15 @@ def find_and_load_dotenv(filename: str = ".env") -> Optional[Path]:
 
 _LOADED_ENV_PATH = find_and_load_dotenv()
 
-# Providers with full runtime support (keep in sync with promptheus.providers.get_provider)
-SUPPORTED_PROVIDER_IDS = {"google", "anthropic", "openai", "groq", "qwen", "glm"}
+# Providers with full runtime support (keep in sync with promptheus.providers)
+SUPPORTED_PROVIDER_IDS = (
+    "google",
+    "anthropic",
+    "openai",
+    "groq",
+    "qwen",
+    "glm",
+)
 
 
 class Config:
@@ -69,7 +86,15 @@ class Config:
         """Load the provider configuration from the JSON file."""
         config_path = Path(__file__).parent / "providers.json"
         with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            config_data = json.load(f)
+
+        # Backfill aliases when older configs omit them
+        if "provider_aliases" not in config_data:
+            config_data["provider_aliases"] = {"gemini": "google"}
+        else:
+            config_data["provider_aliases"].setdefault("gemini", "google")
+
+        return config_data
 
     def _ensure_provider_config(self) -> Dict[str, Any]:
         if self._provider_config is None:
@@ -193,15 +218,20 @@ class Config:
     def get_model(self) -> str:
         """
         Get the model to use, following a specific override hierarchy.
-        Hierarchy: CLI flag > Provider-specific Env Var > Global Env Var > Default
+        Hierarchy: CLI flag > (Provider env var if not manual provider) > (Global env var if not manual provider) > Default
         """
         # 1. CLI flag (--model)
         if self.model:
             return self.model
 
         config_data = self._ensure_provider_config()
-        provider_id = self.provider or "google"
+        provider_id = self.provider or next(iter(config_data.get("providers", {}) or ["google"]))
         provider_info = config_data.get("providers", {}).get(provider_id, {})
+
+        # For manually set providers, skip environment variables and use defaults
+        # This allows explicit provider switches to take effect without environment interference
+        if self._provider_source == "manual":
+            return provider_info.get("default_model", "")
 
         # 2. Provider-specific environment variable (e.g., OPENAI_MODEL)
         model_env_var = provider_info.get("model_env")
@@ -210,11 +240,10 @@ class Config:
             if env_model:
                 return env_model
 
-        # 3. Global environment variable (PROMPTHEUS_MODEL) unless provider was manually overridden
-        if self._provider_source != "manual":
-            global_env_model = os.getenv("PROMPTHEUS_MODEL")
-            if global_env_model:
-                return global_env_model
+        # 3. Global environment variable (PROMPTHEUS_MODEL)
+        global_env_model = os.getenv("PROMPTHEUS_MODEL")
+        if global_env_model:
+            return global_env_model
 
         # 4. Default model from providers.json
         return provider_info.get("default_model", "")
@@ -222,7 +251,7 @@ class Config:
     def get_provider_config(self) -> Dict[str, Any]:
         """Get provider-specific configuration."""
         config_data = self._ensure_provider_config()
-        provider = self.provider or "google"
+        provider = self.provider or next(iter(config_data.get("providers", {}) or ["google"]))
         provider_info = config_data["providers"][provider]
 
         config = {}

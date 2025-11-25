@@ -32,7 +32,7 @@ def test_test_provider_connection_uses_selected_model(monkeypatch):
     config.reset()
 
     # Ensure provider detection works without hitting the network
-    config.set_provider("gemini")
+    config.set_provider("google")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
     captured = {}

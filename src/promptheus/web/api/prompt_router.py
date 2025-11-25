@@ -145,16 +145,30 @@ class PromptResponse(BaseModel):
 @router.post("/prompt/submit", response_model=PromptResponse)
 async def submit_prompt(request: PromptRequest):
     """Submit a prompt for processing."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
         # Create configuration
         app_config = Config()
+        logger.debug(f"[submit_prompt] Initial provider from config: {app_config.provider}")
+        logger.debug(f"[submit_prompt] Request provider: {request.provider}")
+        logger.debug(f"[submit_prompt] Request model: {request.model}")
+
         if request.provider:
             app_config.set_provider(request.provider)
+            logger.debug(f"[submit_prompt] Set provider from request: {request.provider}")
         if request.model and request.model != LOAD_ALL_MODELS_SENTINEL:
             app_config.set_model(request.model)
-        
-        # Create provider instance
-        provider_name = app_config.provider or "gemini"
+            logger.debug(f"[submit_prompt] Set model from request: {request.model}")
+
+        # Create provider instance - use detected provider, no hardcoded fallback
+        provider_name = app_config.provider
+        if not provider_name:
+            logger.error("[submit_prompt] No provider detected! Check environment variables.")
+            raise HTTPException(status_code=500, detail="No provider configured")
+
+        logger.info(f"[submit_prompt] Using provider: {provider_name}, model: {app_config.get_model()}")
         provider = get_provider(provider_name, app_config, app_config.get_model())
         
         # Create an argument-like object to pass to the processing function
@@ -167,7 +181,7 @@ async def submit_prompt(request: PromptRequest):
                 # Add other attributes that might be accessed
                 self.file = None
                 self.provider = request.provider
-                self.model = None
+                self.model = request.model
                 self.version = False
                 self.verbose = False
         
@@ -216,12 +230,21 @@ async def submit_prompt(request: PromptRequest):
             follow_up_questions=[],
         )
     except Exception as e:
+        logger.exception("[submit_prompt] Error processing prompt")
+        # Try to get provider from config, fallback to request provider
+        error_provider = "unknown"
+        try:
+            temp_config = Config()
+            error_provider = temp_config.provider or request.provider or "unknown"
+        except:
+            error_provider = request.provider or "unknown"
+
         return PromptResponse(
             success=False,
             original_prompt=request.prompt,
             refined_prompt="",
             task_type="",
-            provider=request.provider or "gemini",
+            provider=error_provider,
             model="",
             questions=[],
             follow_up_questions=[],
@@ -232,14 +255,22 @@ async def submit_prompt(request: PromptRequest):
 @router.post("/prompt/tweak")
 async def tweak_prompt(request: TweakRequest):
     """Tweak/refine an existing prompt based on user instructions."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
         # Create configuration
         app_config = Config()
         if request.provider:
             app_config.set_provider(request.provider)
 
-        # Create provider instance
-        provider_name = app_config.provider or "gemini"
+        # Create provider instance - use detected provider, no hardcoded fallback
+        provider_name = app_config.provider
+        if not provider_name:
+            logger.error("[tweak_prompt] No provider detected!")
+            raise HTTPException(status_code=500, detail="No provider configured")
+
+        logger.info(f"[tweak_prompt] Using provider: {provider_name}")
         provider = get_provider(provider_name, app_config, app_config.get_model())
 
         # Tweak the prompt
@@ -272,6 +303,9 @@ async def stream_prompt(
     style: str = "default"
 ):
     """Stream prompt refinement using Server-Sent Events (SSE)."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     async def event_generator():
         try:
             # Create configuration
@@ -281,8 +315,18 @@ async def stream_prompt(
             if model and model != LOAD_ALL_MODELS_SENTINEL:
                 app_config.set_model(model)
 
-            # Create provider instance
-            provider_name = app_config.provider or "gemini"
+            # Create provider instance - use detected provider, no hardcoded fallback
+            provider_name = app_config.provider
+            if not provider_name:
+                logger.error("[stream_prompt] No provider detected!")
+                error_data = {
+                    "type": "error",
+                    "content": "No provider configured"
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+                return
+
+            logger.info(f"[stream_prompt] Using provider: {provider_name}")
             provider_instance = get_provider(provider_name, app_config, app_config.get_model())
 
             # Process the prompt (skip questions in streaming mode)

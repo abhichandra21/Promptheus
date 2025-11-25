@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Promptheus - Transform raw prompts into optimized gold through digital alchemy">
     <title>Promptheus - Alchemical Prompt Optimization</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=1764005259">
     <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
 </head>
 <body>
@@ -19,14 +19,17 @@
             <div class="top-bar-controls">
                 <div class="provider-config-group">
                     <div class="provider-selector">
-                        <span>Provider:</span>
-                        <select id="provider-select">
+                        <label for="provider-select">Provider:</label>
+                        <select id="provider-select"
+                                aria-label="Select AI provider for processing prompts">
                             <option value="">Loading...</option>
                         </select>
                     </div>
                     <div class="provider-selector">
-                        <span>Model:</span>
-                        <select id="model-select" disabled>
+                        <label for="model-select">Model:</label>
+                        <select id="model-select"
+                                disabled
+                                aria-label="Select AI model from chosen provider">
                             <option value="">Auto</option>
                         </select>
                     </div>
@@ -39,8 +42,53 @@
                     <span>Settings</span>
                 </button>
             </div>
+            <button id="hamburger-btn" class="hamburger-btn" aria-label="Open mobile menu" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </header>
+
+    <!-- Mobile Menu -->
+    <nav id="mobile-menu" class="mobile-menu" aria-hidden="true">
+        <div class="mobile-menu-header">
+            <div class="mobile-menu-title">Controls</div>
+            <button id="mobile-menu-close" class="mobile-menu-close" aria-label="Close menu">✕</button>
+        </div>
+        <div class="mobile-menu-section">
+            <div class="mobile-menu-section-title">Provider & Model</div>
+            <div class="provider-selector-mobile">
+                <label for="provider-select-mobile">Provider:</label>
+                <select id="provider-select-mobile"
+                        aria-label="Select AI provider"
+                        aria-describedby="provider-mobile-status">
+                    <option value="">Loading...</option>
+                </select>
+                <span id="provider-mobile-status" class="sr-only">Synced with main toolbar</span>
+                <span class="sync-indicator" id="provider-sync-indicator" aria-hidden="true">⟲</span>
+            </div>
+            <div class="provider-selector-mobile">
+                <label for="model-select-mobile">Model:</label>
+                <select id="model-select-mobile"
+                        disabled
+                        aria-label="Select AI model"
+                        aria-describedby="model-mobile-status">
+                    <option value="">Auto</option>
+                </select>
+                <span id="model-mobile-status" class="sr-only">Synced with main toolbar</span>
+                <span class="sync-indicator" id="model-sync-indicator" aria-hidden="true">⟲</span>
+            </div>
+        </div>
+        <a href="/web-ui-guide.html" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="width: 100%;">
+            <span>?</span>
+            <span>Help</span>
+        </a>
+        <button id="settings-btn-mobile" class="btn btn-secondary" style="width: 100%;">
+            <span>⚙</span>
+            <span>Settings</span>
+        </button>
+    </nav>
 
     <!-- Main Content Area -->
     <main class="main-content">
@@ -54,23 +102,16 @@
                 <div class="prompt-toolbar" role="toolbar" aria-label="Prompt controls">
                     <div class="toolbar-left">
                         <div class="toolbar-item">
-                            <label class="toolbar-label" for="question-mode" id="mode-label">
-                                <span class="toolbar-text">Mode</span>
-                                <button class="toolbar-help-icon" data-help-for="mode" aria-label="Mode help">
-                                    <span>ℹ</span>
-                                </button>
-                            </label>
-                            <div class="alchemical-dropdown" id="mode-dropdown">
-                                <select id="question-mode" class="toolbar-select" aria-labelledby="mode-label">
+                            <div class="provider-selector" id="mode-selector">
+                                <span>Mode:</span>
+                                <select id="question-mode">
                                     <option value="auto">Auto</option>
                                     <option value="force">Always Ask</option>
                                     <option value="skip">Skip Questions</option>
                                 </select>
-                                <div class="alchemical-dropdown-panel">
-                                    <div class="alchemical-option" data-value="auto">Auto</div>
-                                    <div class="alchemical-option" data-value="force">Always Ask</div>
-                                    <div class="alchemical-option" data-value="skip">Skip Questions</div>
-                                </div>
+                                <button class="toolbar-help-icon" data-help-for="mode" aria-label="Mode help">
+                                    <span>ℹ</span>
+                                </button>
                             </div>
                             <!-- Help tooltip for Mode -->
                             <div class="help-tooltip" id="mode-help-tooltip">
@@ -95,27 +136,18 @@
                             </div>
                         </div>
                         <div class="toolbar-item">
-                            <label class="toolbar-label" for="style-select" id="style-label">
-                                <span class="toolbar-text">Style</span>
-                                <button class="toolbar-help-icon" data-help-for="style" aria-label="Style help">
-                                    <span>ℹ</span>
-                                </button>
-                            </label>
-                            <div class="alchemical-dropdown" id="style-dropdown">
-                                <select id="style-select" class="toolbar-select" aria-labelledby="style-label">
+                            <div class="provider-selector" id="style-selector">
+                                <span>Style:</span>
+                                <select id="style-select">
                                     <option value="default">Default</option>
                                     <option value="bullets">Bullets</option>
                                     <option value="steps">Steps</option>
                                     <option value="plain">Plain</option>
                                     <option value="concise">Concise</option>
                                 </select>
-                                <div class="alchemical-dropdown-panel">
-                                    <div class="alchemical-option" data-value="default">Default</div>
-                                    <div class="alchemical-option" data-value="bullets">Bullets</div>
-                                    <div class="alchemical-option" data-value="steps">Steps</div>
-                                    <div class="alchemical-option" data-value="plain">Plain</div>
-                                    <div class="alchemical-option" data-value="concise">Concise</div>
-                                </div>
+                                <button class="toolbar-help-icon" data-help-for="style" aria-label="Style help">
+                                    <span>ℹ</span>
+                                </button>
                             </div>
                             <!-- Help tooltip for Style -->
                             <div class="help-tooltip" id="style-help-tooltip">
@@ -202,10 +234,7 @@
                 </div>
             </div>
             <div id="output" aria-live="polite" aria-atomic="true">
-                <p class="message message-info">
-                    <span>💡</span>
-                    <span>Your optimized prompt will appear here</span>
-                </p>
+                <!-- Output messages will appear here dynamically -->
             </div>
         </section>
         </div>
@@ -328,16 +357,87 @@
                 <!-- About Section -->
                 <section class="settings-category about-section">
                     <h3 class="settings-category-heading">About</h3>
-                    <div class="settings-item">
-                        <p class="settings-description">
-                            Promptheus - AI-powered prompt optimization tool
-                        </p>
+                    <div class="about-container">
+                        <div class="about-header">
+                            <div class="about-logo">
+                                <span class="logo-symbol">⚗</span>
+                            </div>
+                            <div class="about-title">
+                                <h4>Promptheus</h4>
+                                <p class="about-tagline">Digital Alchemy for Prompt Optimization</p>
+                            </div>
+                        </div>
+
+                        <div class="about-content">
+                            <div class="about-description">
+                                <p>Transform your raw prompts into golden perfection through AI-powered optimization</p>
+                            </div>
+
+                            <div class="version-section">
+                                <div class="version-header">
+                                    <span class="version-icon">🜃</span>
+                                    <span class="version-label">Build Information</span>
+                                </div>
+                                <div class="version-details">
+                                    <div class="version-row">
+                                        <span class="version-field">Version:</span>
+                                        <span id="version-text" class="version-value">Loading...</span>
+                                    </div>
+                                    <div id="build-info" class="build-details"></div>
+                                </div>
+                            </div>
+
+                            <div class="about-links">
+                                <a href="https://github.com/abhichandra21/Promptheus" target="_blank" rel="noopener noreferrer" class="about-link">
+                                    <span class="about-link-icon">🔗</span>
+                                    <span>GitHub Repository</span>
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
         </aside>
     </div>
 
-    <script src="app.js?v=1763735543"></script>
+      <!-- Footer -->
+    <footer class="app-footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <div class="footer-logo">
+                    <span class="logo-symbol">⚗</span>
+                    <span class="footer-title">Promptheus</span>
+                </div>
+                <p class="footer-description">AI-powered prompt optimization through digital alchemy</p>
+            </div>
+
+            <div class="footer-links">
+                <div class="footer-section">
+                    <h4 class="footer-section-title">Product</h4>
+                    <ul class="footer-link-list">
+                        <li><a href="/web-ui-guide.html" target="_blank" rel="noopener noreferrer" class="footer-link">Documentation</a></li>
+                        <li><a href="#" onclick="window.promptheusApp.showKeyboardShortcuts()" class="footer-link">Keyboard Shortcuts</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4 class="footer-section-title">Resources</h4>
+                    <ul class="footer-link-list">
+                        <li><a href="https://github.com/abhichandra21/Promptheus" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a></li>
+                        <li><a href="#" onclick="window.promptheusApp.openSettings()" class="footer-link">About</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <div class="footer-bottom-content">
+                <span class="footer-copyright">© 2024 Promptheus</span>
+                <span id="footer-version" class="footer-version">Loading...</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js?v=1764013588"></script>
 </body>
 </html>

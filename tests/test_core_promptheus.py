@@ -206,19 +206,19 @@ def test_process_single_prompt_with_refinement(mock_provider, mock_config, mock_
 class DummyConfig:
     """Simple config stub for end-to-end style tests."""
 
-    provider = "gemini"
+    provider = "google"
 
     def get_model(self) -> str:
         return "gemini-1.5-pro"
 
     def get_configured_providers(self):
-        return ["gemini", "openai"]
+        return ["google", "openai"]
 
 
 class FullFlowProvider:
     """Provider stub that behaves like a happy-path generation backend."""
 
-    name = "stub-gemini"
+    name = "stub-google"
 
     def generate_questions(self, initial_prompt: str, system_instruction: str):
         return {

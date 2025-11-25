@@ -651,7 +651,7 @@ def main() -> None:
         if initial_prompt:
             io.notify("[green]✓[/green] Got prompt from stdin")
 
-    provider_name = app_config.provider or "gemini"
+    provider_name = app_config.provider or "google"
     try:
         provider = get_provider(provider_name, app_config, app_config.get_model())
     except Exception as exc:
@@ -705,7 +705,8 @@ def main() -> None:
                 output_format = getattr(args, "output_format", "plain")
                 if output_format == "json":
                     import json
-                    io.console_out.print(json.dumps({"prompt": final_prompt, "task_type": task_type}))
+                    # Write JSON directly to stdout without Rich formatting to avoid line wrapping
+                    sys.stdout.write(json.dumps({"refined_prompt": final_prompt, "task_type": task_type}) + "\n")
                 else:  # plain
                     io.console_out.print(final_prompt)
             else:
