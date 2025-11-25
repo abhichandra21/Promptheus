@@ -67,7 +67,7 @@ jobs:
             -e PROMPTHEUS_ENABLE_HISTORY="${PROMPTHEUS_ENABLE_HISTORY:-true}" \
             ${{ env.IMAGE_NAME }}:test \
             python -m promptheus.main --skip-questions -o json "What is artificial intelligence?" \
-            2>&1 | tee /tmp/cli_test_1_full.txt | grep -o '{.*}' | tail -1 > /tmp/cli_test_1.json
+            2>&1 | tee /tmp/cli_test_1_full.txt | grep -E '^\{"refined_prompt"' > /tmp/cli_test_1.json
 
           # Check for structured refined prompt output
           if jq -e '.refined_prompt and (.refined_prompt | type == "string") and (.refined_prompt | length > 10)' /tmp/cli_test_1.json >/dev/null 2>&1; then
@@ -108,7 +108,7 @@ jobs:
             -e PROMPTHEUS_ENABLE_HISTORY="${PROMPTHEUS_ENABLE_HISTORY:-true}" \
             ${{ env.IMAGE_NAME }}:test \
             python -m promptheus.main --skip-questions -o json "Create a comprehensive guide on machine learning algorithms" \
-            2>&1 | tee /tmp/cli_test_2_full.txt | grep -o '{.*}' | tail -1 > /tmp/cli_test_2.json
+            2>&1 | tee /tmp/cli_test_2_full.txt | grep -E '^\{"refined_prompt"' > /tmp/cli_test_2.json
 
           if jq -e '.refined_prompt and (.refined_prompt | type == "string") and (.refined_prompt | test("guide|algorithm"; "i"))' /tmp/cli_test_2.json >/dev/null 2>&1; then
             echo "✓ CLI test 2 passed: Complex prompt refinement works"

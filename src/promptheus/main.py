@@ -705,7 +705,8 @@ def main() -> None:
                 output_format = getattr(args, "output_format", "plain")
                 if output_format == "json":
                     import json
-                    io.console_out.print(json.dumps({"refined_prompt": final_prompt, "task_type": task_type}))
+                    # Write JSON directly to stdout without Rich formatting to avoid line wrapping
+                    sys.stdout.write(json.dumps({"refined_prompt": final_prompt, "task_type": task_type}) + "\n")
                 else:  # plain
                     io.console_out.print(final_prompt)
             else:
