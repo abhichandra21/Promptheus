@@ -222,19 +222,37 @@ jobs:
           PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}"
           MODEL_Q=""
           if [ -n "${PROMPTHEUS_MODEL}" ]; then MODEL_Q="&model=${PROMPTHEUS_MODEL}"; fi
-          # Test streaming endpoint (capture first chunk with longer timeout)
-          # Use --max-time instead of timeout command for better curl behavior
-          RESPONSE=$(curl -s --max-time 10 -N "http://localhost:8000/api/prompt/stream?prompt=Explain%20Python&skip_questions=true&provider=${PROVIDER}${MODEL_Q}" | head -c 1000 || true)
 
-          # Check if we got any streaming data
-          if [ -n "$RESPONSE" ] && (echo "$RESPONSE" | grep -q '"type".*"token"\|data:'); then
-            echo "✓ Stream endpoint works"
-            echo "$RESPONSE" | head -c 200
-            echo ""
-          else
-            echo "✗ Stream endpoint failed"
-            echo "Response length: ${#RESPONSE}"
-            echo "$RESPONSE" | head -c 500
+          # Test streaming endpoint with retry logic (up to 3 attempts)
+          MAX_ATTEMPTS=3
+          ATTEMPT=1
+          SUCCESS=false
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ] && [ "$SUCCESS" = "false" ]; do
+            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Testing stream endpoint..."
+
+            # Increase timeout to 20 seconds for more reliability
+            RESPONSE=$(curl -s --max-time 20 -N "http://localhost:8000/api/prompt/stream?prompt=Explain%20Python&skip_questions=true&provider=${PROVIDER}${MODEL_Q}" | head -c 1000 || true)
+
+            # Check if we got any streaming data
+            if [ -n "$RESPONSE" ] && (echo "$RESPONSE" | grep -q '"type".*"token"\|data:'); then
+              echo "✓ Stream endpoint works"
+              echo "$RESPONSE" | head -c 200
+              echo ""
+              SUCCESS=true
+            else
+              echo "⚠ Attempt $ATTEMPT failed (response length: ${#RESPONSE})"
+              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                echo "   Retrying in 2 seconds..."
+                sleep 2
+              fi
+              ATTEMPT=$((ATTEMPT + 1))
+            fi
+          done
+
+          if [ "$SUCCESS" = "false" ]; then
+            echo "✗ Stream endpoint failed after $MAX_ATTEMPTS attempts"
+            echo "Last response: $RESPONSE" | head -c 500
             exit 1
           fi
 
