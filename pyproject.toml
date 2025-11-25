@@ -39,6 +39,7 @@ uvicorn = {version = "^0.24.0", extras = ["standard"]}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "~=8.4.0"
+aiohttp = "^3.13.2"
 
 [tool.poetry.scripts]
 promptheus = "promptheus.main:main"

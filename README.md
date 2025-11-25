@@ -102,7 +102,7 @@ promptheus
 
 **Pipeline Integration**
 ```bash
-echo "Create a REST API schema" | promptheus | jq '.prompt'
+echo "Create a REST API schema" | promptheus | jq '.refined_prompt'
 cat prompts.txt | while read line; do promptheus "$line"; done
 ```
 

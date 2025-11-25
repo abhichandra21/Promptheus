@@ -705,7 +705,7 @@ def main() -> None:
                 output_format = getattr(args, "output_format", "plain")
                 if output_format == "json":
                     import json
-                    io.console_out.print(json.dumps({"prompt": final_prompt, "task_type": task_type}))
+                    io.console_out.print(json.dumps({"refined_prompt": final_prompt, "task_type": task_type}))
                 else:  # plain
                     io.console_out.print(final_prompt)
             else:
