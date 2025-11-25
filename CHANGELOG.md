@@ -2,6 +2,41 @@
 
 All notable changes to Promptheus are documented in this file.
 
+## [0.2.4] - 2025-11-25
+
+### Added
+- **CI/CD Workflow Badges**: Added status badges for GitHub Pages deployment, Docker builds, and package publishing
+- **Web UI Guide**: Comprehensive web interface documentation with interactive examples
+- **Sample Prompts Documentation**: Enhanced test prompts demonstrating adaptive task detection (analysis vs generation)
+- **Version Display System**: Dev build tracking in web UI with automatic version detection
+- **Docker Test Workflow**: Automated Docker container testing in CI pipeline
+
+### Changed
+- **Web UI Improvements**:
+  - Redesigned message and error help styles
+  - Improved mobile responsive layout and dropdown styling
+  - Enhanced provider selection with better error handling
+  - Added cache-busting for JavaScript and CSS files
+  - Consistent dropdown styling with footer navigation
+  - Improved About section design matching existing design system
+- **Provider Configuration**: Fixed provider model selection to properly handle environment variables on manual switches
+- **JSON Output**: Changed output key from 'prompt' to 'refined_prompt' for consistency
+- **Dependency Management**: Standardized dependency specifications across configuration files
+- **Documentation**: Renamed sample_prompts.txt to sample_prompts.md with improved formatting
+
+### Fixed
+- **Mobile Responsiveness**: Fixed horizontal scroll issues and layout problems on mobile devices
+- **Web UI Streaming**: Added retry logic to stream endpoint test in CI
+- **JSON Formatting**: Fixed JSON output formatting for CLI commands
+- **Dropdown Sync**: Improved mobile dropdown synchronization and accessibility
+- **No-cache Headers**: Added proper cache headers to index.html responses
+
+### Technical Details
+- Improved Docker test scripts and configuration
+- Enhanced CI workflow with environment variable support
+- Better error handling in web API endpoints
+- Accessibility improvements in mobile UI components
+
 ## [0.2.0] - 2025-11-21
 
 ### Added
