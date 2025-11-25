@@ -1,5 +1,6 @@
 #!/bin/bash
 # Promptheus server wrapper script for systemd service
+set -euo pipefail
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

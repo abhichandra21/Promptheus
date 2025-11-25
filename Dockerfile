@@ -14,14 +14,12 @@ COPY pyproject.toml poetry.lock README.md ./
 # Install poetry
 RUN pip install --no-cache-dir poetry==1.7.1
 
+# Copy application code (needed before poetry install for local package)
 COPY src/ ./src/
 
 # Install dependencies with poetry (no dev dependencies)
 RUN poetry config virtualenvs.create false \
     && poetry install --only main --no-interaction --no-ansi
-
-# Copy application code
-COPY src/ ./src/
 
 # Set PYTHONPATH so Python can find the promptheus module
 ENV PYTHONPATH=/app/src

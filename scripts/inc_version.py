@@ -122,9 +122,9 @@ def main():
     )
 
     parser.add_argument(
-        "--no-commit",
+        "--commit",
         action="store_true",
-        help="Don't commit to git"
+        help="Explicitly commit the version bump"
     )
 
     args = parser.parse_args()
@@ -146,9 +146,11 @@ def main():
     # Update file
     update_version(new_version)
 
-    # Commit to git unless skipped
-    if not args.no_commit:
+    # Commit to git only when explicitly requested
+    if args.commit:
         commit_version_change(current_version, new_version, args.build_type)
+    else:
+        print("Skipped git commit (pass --commit to create one).")
 
     print(f"\n✓ Version incremented successfully!")
     print(f"  {current_version} → {new_version}")
