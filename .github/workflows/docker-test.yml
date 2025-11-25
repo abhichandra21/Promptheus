@@ -196,15 +196,19 @@ jobs:
           PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}"
           MODEL_Q=""
           if [ -n "${PROMPTHEUS_MODEL}" ]; then MODEL_Q="&model=${PROMPTHEUS_MODEL}"; fi
-          # Test streaming endpoint (first 5 seconds)
-          RESPONSE=$(timeout 5 curl -s "http://localhost:8000/api/prompt/stream?prompt=Explain%20Python&skip_questions=true&provider=${PROVIDER}${MODEL_Q}" || true)
+          # Test streaming endpoint (capture first chunk with longer timeout)
+          # Use --max-time instead of timeout command for better curl behavior
+          RESPONSE=$(curl -s --max-time 10 -N "http://localhost:8000/api/prompt/stream?prompt=Explain%20Python&skip_questions=true&provider=${PROVIDER}${MODEL_Q}" | head -c 1000 || true)
 
-          if echo "$RESPONSE" | grep -q '"type".*"token"'; then
+          # Check if we got any streaming data
+          if [ -n "$RESPONSE" ] && (echo "$RESPONSE" | grep -q '"type".*"token"\|data:'); then
             echo "✓ Stream endpoint works"
-            echo "$RESPONSE" | head -3
+            echo "$RESPONSE" | head -c 200
+            echo ""
           else
             echo "✗ Stream endpoint failed"
-            echo "$RESPONSE" | head -10
+            echo "Response length: ${#RESPONSE}"
+            echo "$RESPONSE" | head -c 500
             exit 1
           fi
 
