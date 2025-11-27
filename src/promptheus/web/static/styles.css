@@ -3966,11 +3966,31 @@ a.btn {
         padding: var(--space-2);
     }
 
-    .btn {
+    /* Wizard action buttons - share space, don't take full width */
+    .wizard-actions {
+        gap: var(--space-2);
+    }
+
+    .wizard-actions .btn {
+        flex: 1;
+        min-width: 0;
+        padding: var(--space-3) var(--space-3);
+        font-size: var(--text-sm);
+    }
+
+    /* Primary action buttons should be full width */
+    .prompt-controls .btn-primary,
+    .prompt-controls .btn {
         width: 100%;
-        justify-content: center;
-        padding: var(--space-4);
+        padding: var(--space-3) var(--space-4);
         font-size: var(--text-base);
+    }
+
+    /* History and navigation buttons */
+    .history-header .btn-sm {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--text-xs);
+        white-space: nowrap;
     }
 
     .history-grid {
