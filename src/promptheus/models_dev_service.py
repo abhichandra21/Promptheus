@@ -268,7 +268,17 @@ def get_sync_models_for_provider(provider_id: str, filter_text_only: bool = True
         return await service.get_models_for_provider(provider_id, filter_text_only)
 
     try:
-        return asyncio.run(_get_models())
+        # Check if we're already in an event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an event loop, create a task and run it
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _get_models())
+                return future.result()
+        except RuntimeError:
+            # No event loop running, use asyncio.run()
+            return asyncio.run(_get_models())
     except Exception as exc:
         raise RuntimeError(f"Failed to get models for provider {provider_id}: {exc}") from exc
 

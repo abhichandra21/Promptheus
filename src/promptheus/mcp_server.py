@@ -43,6 +43,7 @@ from promptheus.prompts import (
     CLARIFICATION_SYSTEM_INSTRUCTION,
     GENERATION_SYSTEM_INSTRUCTION,
     ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION,
+    TWEAK_SYSTEM_INSTRUCTION,
 )
 
 # Initialize logger (configured once at module level)
@@ -454,6 +455,269 @@ if mcp:
 
         except Exception as e:
             logger.exception("Error during prompt refinement")
+            return {
+                "type": "error",
+                "error_type": type(e).__name__,
+                "message": sanitize_error_message(str(e)),
+            }
+
+
+    @mcp.tool()
+    def tweak_prompt(
+        prompt: str,
+        modification: str,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> RefineResult:
+        """
+        Make a specific modification to an existing prompt.
+
+        This tool applies surgical edits to prompts without changing their core intent.
+        Use this when you have a refined prompt and want to make targeted adjustments.
+
+        Args:
+            prompt: The current prompt to modify (required)
+            modification: Description of what to change (required)
+                Examples: "make it more formal", "add code examples", "shorten it"
+            provider: Override provider (optional)
+            model: Override model name (optional)
+
+        Returns:
+            {"type": "refined", "prompt": "..."} - Modified prompt
+            {"type": "error", ...} - If modification fails
+
+        Examples:
+            tweak_prompt(
+                prompt="Write a technical blog post about Docker",
+                modification="make it more beginner-friendly"
+            )
+        """
+        logger.info(f"tweak_prompt called: modification='{modification[:50]}...'")
+
+        # Validate inputs
+        validation_error = _validate_prompt(prompt)
+        if validation_error:
+            return validation_error
+
+        if not modification or not modification.strip():
+            return {
+                "type": "error",
+                "error_type": "ValidationError",
+                "message": "Modification description cannot be empty",
+            }
+
+        # Initialize provider
+        llm_provider, provider_error = _initialize_provider(provider, model)
+        if provider_error:
+            return provider_error
+
+        try:
+            tweaked = llm_provider.tweak_prompt(
+                prompt, modification, TWEAK_SYSTEM_INSTRUCTION
+            )
+
+            return {
+                "type": "refined",
+                "prompt": tweaked,
+            }
+
+        except Exception as e:
+            logger.exception("Error during prompt tweaking")
+            return {
+                "type": "error",
+                "error_type": type(e).__name__,
+                "message": sanitize_error_message(str(e)),
+            }
+
+    @mcp.tool()
+    def list_models(
+        providers: Optional[List[str]] = None,
+        limit: int = 20,
+        include_nontext: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        List available models from configured AI providers.
+
+        Shows which models are available for each provider you have API keys for.
+        Useful for discovering new models or checking model availability.
+
+        Args:
+            providers: Optional list of provider names to query (e.g., ["google", "openai"])
+                      If not specified, queries all configured providers
+            limit: Maximum models to return per provider (default: 20, use 0 for all)
+            include_nontext: Include non-text models like vision/embedding (default: False)
+
+        Returns:
+            {
+                "type": "success",
+                "providers": {
+                    "google": {
+                        "available": true,
+                        "models": [{"id": "...", "name": "..."}],
+                        "total_count": 15,
+                        "showing": 10
+                    },
+                    ...
+                }
+            }
+
+        Examples:
+            list_models()  # All providers, text models only
+            list_models(providers=["google", "openai"], limit=10)
+            list_models(include_nontext=True)  # Include vision/embedding models
+        """
+        logger.info(
+            f"list_models called: providers={providers}, limit={limit}, "
+            f"include_nontext={include_nontext}"
+        )
+
+        try:
+            from promptheus.commands.providers import get_models_data
+
+            config = Config()
+            provider_list = providers if providers else None
+
+            models_data = get_models_data(
+                config, provider_list, include_nontext=include_nontext, limit=limit
+            )
+
+            return {
+                "type": "success",
+                "providers": models_data,
+            }
+
+        except Exception as e:
+            logger.exception("Error listing models")
+            return {
+                "type": "error",
+                "error_type": type(e).__name__,
+                "message": sanitize_error_message(str(e)),
+            }
+
+    @mcp.tool()
+    def list_providers() -> Dict[str, Any]:
+        """
+        List all configured AI providers and their status.
+
+        Shows which providers have valid API keys configured and are ready to use.
+        Use this to check your environment setup before calling other tools.
+
+        Returns:
+            {
+                "type": "success",
+                "providers": {
+                    "google": {"configured": true, "model": "gemini-2.0-flash-exp"},
+                    "openai": {"configured": false, "error": "No API key found"},
+                    ...
+                }
+            }
+
+        Example:
+            list_providers()  # Check which providers are ready
+        """
+        logger.info("list_providers called")
+
+        try:
+            config = Config()
+            provider_status = {}
+
+            from promptheus.config import SUPPORTED_PROVIDER_IDS
+
+            for provider_id in SUPPORTED_PROVIDER_IDS:
+                # Try to get provider instance
+                try:
+                    temp_config = Config()
+                    temp_config.set_provider(provider_id)
+
+                    if temp_config.validate():
+                        provider_inst = get_provider(
+                            provider_id, temp_config, temp_config.get_model()
+                        )
+                        provider_status[provider_id] = {
+                            "configured": True,
+                            "model": temp_config.get_model(),
+                        }
+                    else:
+                        errors = temp_config.consume_error_messages()
+                        provider_status[provider_id] = {
+                            "configured": False,
+                            "error": errors[0] if errors else "Configuration invalid",
+                        }
+                except Exception as e:
+                    provider_status[provider_id] = {
+                        "configured": False,
+                        "error": sanitize_error_message(str(e)),
+                    }
+
+            return {
+                "type": "success",
+                "providers": provider_status,
+            }
+
+        except Exception as e:
+            logger.exception("Error listing providers")
+            return {
+                "type": "error",
+                "error_type": type(e).__name__,
+                "message": sanitize_error_message(str(e)),
+            }
+
+    @mcp.tool()
+    def validate_environment(
+        providers: Optional[List[str]] = None,
+        test_connection: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Validate environment configuration and optionally test API connections.
+
+        Checks that API keys are configured correctly and can connect to provider APIs.
+        Use this for troubleshooting configuration issues.
+
+        Args:
+            providers: Optional list of provider names to validate (e.g., ["google", "openai"])
+                      If not specified, validates all configured providers
+            test_connection: If True, makes a test API call to verify connectivity
+                           (default: False, only checks configuration)
+
+        Returns:
+            {
+                "type": "success",
+                "validation": {
+                    "google": {
+                        "configured": true,
+                        "connection_test": "passed" (if test_connection=True)
+                    },
+                    ...
+                }
+            }
+
+        Examples:
+            validate_environment()  # Quick config check
+            validate_environment(test_connection=True)  # Full API test
+            validate_environment(providers=["openai"], test_connection=True)
+        """
+        logger.info(
+            f"validate_environment called: providers={providers}, "
+            f"test_connection={test_connection}"
+        )
+
+        try:
+            from promptheus.commands.providers import get_validation_data
+
+            config = Config()
+            provider_list = providers if providers else None
+
+            validation_data = get_validation_data(
+                config, provider_list, test_connection
+            )
+
+            return {
+                "type": "success",
+                "validation": validation_data,
+            }
+
+        except Exception as e:
+            logger.exception("Error validating environment")
             return {
                 "type": "error",
                 "error_type": type(e).__name__,

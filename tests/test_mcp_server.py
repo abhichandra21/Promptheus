@@ -1,6 +1,7 @@
 import sys
 import types
 from typing import Any, Dict, List, Tuple
+from unittest.mock import Mock
 
 
 def _install_dummy_mcp():
@@ -184,4 +185,327 @@ def test_refine_prompt_uses_provider_error_response():
     result = mcp_server.refine_prompt(prompt="Write something")
 
     assert result is error_response
+
+
+# ============================================================================
+# Tests for tweak_prompt tool
+# ============================================================================
+
+
+class FakeTweakProvider:
+    """Fake provider for tweak_prompt tests."""
+
+    def __init__(self):
+        self.calls = []
+
+    def tweak_prompt(self, prompt: str, modification: str, system_instruction: str) -> str:
+        self.calls.append(("tweak_prompt", prompt, modification, system_instruction))
+        return f"tweaked:{prompt}|mod:{modification}"
+
+
+def test_tweak_prompt_success():
+    """tweak_prompt should call provider tweak_prompt and return result."""
+    fake = FakeTweakProvider()
+
+    def _init_stub(provider: str | None, model: str | None):
+        return fake, None
+
+    mcp_server._initialize_provider = _init_stub  # type: ignore[attr-defined]
+
+    result = mcp_server.tweak_prompt(
+        prompt="Write a technical blog post",
+        modification="make it more beginner-friendly"
+    )
+
+    assert result["type"] == "refined"
+    assert "tweaked:Write a technical blog post" in result["prompt"]
+    assert "beginner-friendly" in result["prompt"]
+
+
+def test_tweak_prompt_empty_modification():
+    """tweak_prompt should return error for empty modification."""
+    def _init_stub(provider: str | None, model: str | None):
+        raise AssertionError("Should not initialize provider for empty modification")
+
+    mcp_server._initialize_provider = _init_stub  # type: ignore[attr-defined]
+
+    result = mcp_server.tweak_prompt(
+        prompt="Some prompt",
+        modification=""
+    )
+
+    assert result["type"] == "error"
+    assert result["error_type"] == "ValidationError"
+    assert "modification" in result["message"].lower()
+
+
+def test_tweak_prompt_empty_prompt():
+    """tweak_prompt should validate prompt before modification."""
+    result = mcp_server.tweak_prompt(
+        prompt="",
+        modification="make it better"
+    )
+
+    assert result["type"] == "error"
+    assert result["error_type"] == "ValidationError"
+
+
+# ============================================================================
+# Tests for list_models tool
+# ============================================================================
+
+
+def test_list_models_success(monkeypatch):
+    """list_models should return model data from providers."""
+    def mock_get_models_data(config, providers, include_nontext, limit):
+        return {
+            "google": {
+                "available": True,
+                "models": [
+                    {"id": "gemini-pro", "name": "gemini-pro"},
+                    {"id": "gemini-flash", "name": "gemini-flash"}
+                ],
+                "total_count": 2,
+                "showing": 2
+            },
+            "openai": {
+                "available": False,
+                "error": "No API key found",
+                "models": []
+            }
+        }
+
+    monkeypatch.setattr(
+        "promptheus.commands.providers.get_models_data",
+        mock_get_models_data
+    )
+
+    result = mcp_server.list_models()
+
+    assert result["type"] == "success"
+    assert "google" in result["providers"]
+    assert result["providers"]["google"]["available"] is True
+    assert len(result["providers"]["google"]["models"]) == 2
+
+
+def test_list_models_with_filters(monkeypatch):
+    """list_models should pass provider filters, limit, and include_nontext."""
+    called_with = {}
+
+    def mock_get_models_data(config, providers, include_nontext, limit):
+        called_with["providers"] = providers
+        called_with["limit"] = limit
+        called_with["include_nontext"] = include_nontext
+        return {}
+
+    monkeypatch.setattr(
+        "promptheus.commands.providers.get_models_data",
+        mock_get_models_data
+    )
+
+    mcp_server.list_models(providers=["google", "openai"], limit=10, include_nontext=True)
+
+    assert called_with["providers"] == ["google", "openai"]
+    assert called_with["limit"] == 10
+    assert called_with["include_nontext"] is True
+
+
+def test_list_models_defaults(monkeypatch):
+    """list_models should use defaults when no parameters provided (matches CLI)."""
+    called_with = {}
+
+    def mock_get_models_data(config, providers, include_nontext, limit):
+        called_with["providers"] = providers
+        called_with["include_nontext"] = include_nontext
+        called_with["limit"] = limit
+        return {}
+
+    monkeypatch.setattr(
+        "promptheus.commands.providers.get_models_data",
+        mock_get_models_data
+    )
+
+    mcp_server.list_models()
+
+    # Providers should be None (all providers), not a specific list
+    assert called_with["providers"] is None
+    assert called_with["include_nontext"] is False
+    assert called_with["limit"] == 20
+
+
+# ============================================================================
+# Tests for list_providers tool
+# ============================================================================
+
+
+def test_list_providers_success(monkeypatch):
+    """list_providers should return status for all providers."""
+    # Mock Config to return test data
+    class MockConfig:
+        def __init__(self):
+            pass
+
+        def set_provider(self, provider):
+            pass
+
+        def validate(self):
+            return True
+
+        def get_model(self):
+            return "test-model"
+
+        def consume_error_messages(self):
+            return []
+
+    monkeypatch.setattr("promptheus.mcp_server.Config", MockConfig)
+    monkeypatch.setattr("promptheus.config.SUPPORTED_PROVIDER_IDS", ["google", "openai"])
+
+    def mock_get_provider(provider_id, config, model):
+        return Mock()
+
+    monkeypatch.setattr("promptheus.mcp_server.get_provider", mock_get_provider)
+
+    result = mcp_server.list_providers()
+
+    assert result["type"] == "success"
+    assert "google" in result["providers"]
+    assert result["providers"]["google"]["configured"] is True
+
+
+# ============================================================================
+# Tests for validate_environment tool
+# ============================================================================
+
+
+def test_validate_environment_basic(monkeypatch):
+    """validate_environment should return configuration status."""
+    def mock_get_validation_data(config, providers, test_connection):
+        return {
+            "google": {
+                "configured": True,
+                "api_key_status": "set"
+            },
+            "openai": {
+                "configured": False,
+                "api_key_status": "missing_OPENAI_API_KEY"
+            }
+        }
+
+    monkeypatch.setattr(
+        "promptheus.commands.providers.get_validation_data",
+        mock_get_validation_data
+    )
+
+    result = mcp_server.validate_environment()
+
+    assert result["type"] == "success"
+    assert "google" in result["validation"]
+    assert result["validation"]["google"]["configured"] is True
+
+
+def test_validate_environment_with_connection_test(monkeypatch):
+    """validate_environment with test_connection should include connection results."""
+    def mock_get_validation_data(config, providers, test_connection):
+        return {
+            "google": {
+                "configured": True,
+                "api_key_status": "set",
+                "connection_test": "passed"
+            }
+        }
+
+    monkeypatch.setattr(
+        "promptheus.commands.providers.get_validation_data",
+        mock_get_validation_data
+    )
+
+    result = mcp_server.validate_environment(test_connection=True)
+
+    assert result["validation"]["google"]["connection_test"] == "passed"
+
+
+def test_validate_environment_defaults(monkeypatch):
+    """validate_environment should validate all providers when none specified (matches CLI)."""
+    called_with = {}
+
+    def mock_get_validation_data(config, providers, test_connection):
+        called_with["providers"] = providers
+        called_with["test_connection"] = test_connection
+        return {}
+
+    monkeypatch.setattr(
+        "promptheus.commands.providers.get_validation_data",
+        mock_get_validation_data
+    )
+
+    mcp_server.validate_environment()
+
+    # Providers should be None (all providers), not a specific list
+    assert called_with["providers"] is None
+    assert called_with["test_connection"] is False
+
+
+def test_validate_environment_with_specific_providers(monkeypatch):
+    """validate_environment should accept specific providers list."""
+    called_with = {}
+
+    def mock_get_validation_data(config, providers, test_connection):
+        called_with["providers"] = providers
+        called_with["test_connection"] = test_connection
+        return {}
+
+    monkeypatch.setattr(
+        "promptheus.commands.providers.get_validation_data",
+        mock_get_validation_data
+    )
+
+    mcp_server.validate_environment(providers=["openai", "anthropic"], test_connection=True)
+
+    assert called_with["providers"] == ["openai", "anthropic"]
+    assert called_with["test_connection"] is True
+
+
+# ============================================================================
+# Tests for helper functions
+# ============================================================================
+
+
+def test_validate_prompt_too_long():
+    """Prompt exceeding MAX_PROMPT_LENGTH should fail validation."""
+    long_prompt = "x" * (mcp_server.MAX_PROMPT_LENGTH + 1)
+    result = mcp_server._validate_prompt(long_prompt)
+
+    assert result is not None
+    assert result["type"] == "error"
+    assert "maximum length" in result["message"]
+
+
+def test_build_question_mapping():
+    """_build_question_mapping should create correct ID-to-text mapping."""
+    questions = [
+        {"question": "Q1"},
+        {"question": "Q2"},
+        {"question": "Q3"}
+    ]
+
+    mapping = mcp_server._build_question_mapping(questions)
+
+    assert mapping == {
+        "q0": "Q1",
+        "q1": "Q2",
+        "q2": "Q3"
+    }
+
+
+def test_ask_user_question_injection():
+    """set_ask_user_question should inject custom function."""
+    original_fn = mcp_server._ask_user_question_fn
+
+    mock_fn = Mock()
+    mcp_server.set_ask_user_question(mock_fn)
+
+    assert mcp_server._ask_user_question_fn is mock_fn
+
+    # Restore
+    mcp_server.set_ask_user_question(original_fn)
 
