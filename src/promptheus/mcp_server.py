@@ -46,8 +46,6 @@ from promptheus.prompts import (
     TWEAK_SYSTEM_INSTRUCTION,
 )
 
-# Initialize logger (configured once at module level)
-logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger("promptheus.mcp")
 
 # Initialize FastMCP
@@ -89,17 +87,19 @@ MAX_PROMPT_LENGTH = 50000  # characters
 def _ensure_mcp_available():
     """Verify MCP package is installed."""
     if mcp is None:
-        print(
-            "Error: 'mcp' package is not installed. "
-            "Please install it with 'pip install mcp'.",
-            file=sys.stderr,
+        raise ImportError(
+            "The 'mcp' package is not installed. "
+            "Please install it with 'pip install mcp'."
         )
-        sys.exit(1)
 
 
 NEXT_ACTION_HINT = (
-    "Use this refined prompt as input to your main LLM or tool. "
-    'For the Promptheus CLI, you can run: promptheus --skip-questions "<refined prompt here>".'
+    "This refined prompt is now ready to use. "
+    "If the user asked you to execute/run the prompt, use this refined prompt directly with your own capabilities to generate the requested content. "
+    "IMPORTANT: Do NOT call Promptheus again to execute - Promptheus only refines prompts, it does not generate content. "
+    "Use this refined prompt to create the actual output with your native LLM capabilities. "
+    "If the user only asked for refinement, present the refined prompt to them for review. "
+    'For CLI usage: promptheus --skip-questions "<refined prompt here>"'
 )
 
 
@@ -216,7 +216,7 @@ def _try_interactive_questions(
 
     try:
         logger.info("Using interactive AskUserQuestion mode")
-        answers = {}
+        answers: Dict[str, str] = {}
 
         for i, q in enumerate(questions):
             q_id = f"q{i}"
@@ -319,7 +319,8 @@ def _format_clarification_response(
             "1. Map each answer to its corresponding question ID (q0, q1, etc.)\n"
             "2. Call promptheus.refine_prompt with:\n"
             "   - prompt: <original prompt text>\n"
-            "   - answers: {q0: <answer0>, q1: <answer1>, ...}"
+            "   - answers: {q0: <answer0>, q1: <answer1>, ...}\n"
+            "   - answer_mapping: the 'answer_mapping' object from this response"
         ),
     }
 
@@ -329,6 +330,7 @@ if mcp:
     def refine_prompt(
         prompt: str,
         answers: Optional[Dict[str, str]] = None,
+        answer_mapping: Optional[Dict[str, str]] = None,
         provider: Optional[str] = None,
         model: Optional[str] = None,
     ) -> RefineResult:
@@ -345,11 +347,17 @@ if mcp:
            - Use the AskUserQuestion tool with the questions from "questions_for_ask_user_question"
            - Map the user's answers to question IDs (q0, q1, q2, etc.)
            - Call refine_prompt again with both prompt and answers dict
-        3. If response type is "refined", return the prompt to the user
+        3. If response type is "refined":
+           - If user asked to "execute" or "run" the prompt, use the refined prompt with your native capabilities to generate content
+           - Otherwise, present the refined prompt to the user for review
+           - Note: Promptheus only refines prompts, it does not execute them
 
         Args:
             prompt: The initial prompt to refine (required)
             answers: Dict of {question_id: answer} if responding to questions (optional)
+            answer_mapping: Dict of {question_id: question_text} matching the original
+                questions returned in a previous clarification_needed response (optional
+                but recommended when answers are provided)
             provider: Override provider (e.g., 'google', 'anthropic') (optional)
             model: Override model name (optional)
 
@@ -394,9 +402,12 @@ if mcp:
             if answers:
                 logger.info(f"Refining with {len(answers)} answers")
 
-                # Build question mapping from answer keys
-                # (Ideally we'd preserve original mapping, but we reconstruct from keys)
-                mapping = {key: f"Question: {key}" for key in answers.keys()}
+                # Prefer caller-provided mapping so the provider can see the original
+                # question text; fall back to generic labels for backward compatibility.
+                if answer_mapping:
+                    mapping = answer_mapping
+                else:
+                    mapping = {key: f"Question: {key}" for key in answers.keys()}
 
                 refined = llm_provider.refine_from_answers(
                     prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
@@ -619,26 +630,24 @@ if mcp:
 
         try:
             config = Config()
-            provider_status = {}
+            provider_status: Dict[str, Any] = {}
 
             from promptheus.config import SUPPORTED_PROVIDER_IDS
 
             for provider_id in SUPPORTED_PROVIDER_IDS:
-                # Try to get provider instance
+                # Try to get provider instance; handle per-provider failures so one
+                # misconfigured provider does not break the entire response.
                 try:
-                    temp_config = Config()
-                    temp_config.set_provider(provider_id)
+                    config.set_provider(provider_id)
 
-                    if temp_config.validate():
-                        provider_inst = get_provider(
-                            provider_id, temp_config, temp_config.get_model()
-                        )
+                    if config.validate():
+                        get_provider(provider_id, config, config.get_model())
                         provider_status[provider_id] = {
                             "configured": True,
-                            "model": temp_config.get_model(),
+                            "model": config.get_model(),
                         }
                     else:
-                        errors = temp_config.consume_error_messages()
+                        errors = config.consume_error_messages()
                         provider_status[provider_id] = {
                             "configured": False,
                             "error": errors[0] if errors else "Configuration invalid",
@@ -727,6 +736,10 @@ if mcp:
 
 def run_mcp_server():
     """Entry point for the MCP server."""
+    # Configure basic logging only when running the MCP server directly to avoid
+    # overriding application-wide logging when imported as a module.
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+
     _ensure_mcp_available()
     logger.info("Starting Promptheus MCP server")
 
@@ -738,4 +751,8 @@ def run_mcp_server():
 
 
 if __name__ == "__main__":
-    run_mcp_server()
+    try:
+        run_mcp_server()
+    except ImportError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)

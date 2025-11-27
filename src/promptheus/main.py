@@ -584,9 +584,14 @@ def main() -> None:
         sys.exit(0)
 
     if getattr(args, "command", None) == "mcp":
-        from promptheus.mcp_server import run_mcp_server
-        run_mcp_server()
-        sys.exit(0)
+        try:
+            from promptheus.mcp_server import run_mcp_server
+            run_mcp_server()
+            sys.exit(0)
+        except ImportError as exc:
+            io.notify(f"[red]✗[/red] {exc}")
+            io.notify("[dim]Install the 'mcp' package to use the MCP server: pip install mcp[/dim]")
+            sys.exit(1)
 
     # Show provider status in a friendly way
     for message in app_config.consume_status_messages():
