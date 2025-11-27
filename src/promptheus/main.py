@@ -583,6 +583,11 @@ def main() -> None:
         )
         sys.exit(0)
 
+    if getattr(args, "command", None) == "mcp":
+        from promptheus.mcp_server import run_mcp_server
+        run_mcp_server()
+        sys.exit(0)
+
     # Show provider status in a friendly way
     for message in app_config.consume_status_messages():
         io.notify(f"[cyan]●[/cyan] {message}")
