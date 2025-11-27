@@ -86,7 +86,7 @@ def test_refine_prompt_with_answers_uses_refine_from_answers():
     fake = _stub_provider(analysis_result=None)
 
     result = mcp_server.refine_prompt(
-        prompt="Write something", answers={"q0": "Audience", "q1": "Tone"}
+        prompt="Write something", answers={"q0": "Developers", "q1": "Formal tone"}
     )
 
     assert result["type"] == "refined"
@@ -96,8 +96,8 @@ def test_refine_prompt_with_answers_uses_refine_from_answers():
     assert fake.calls[0][0] == "refine_from_answers"
     _, initial_prompt, answers, mapping, _ = fake.calls[0]
     assert initial_prompt == "Write something"
-    assert answers == {"q0": "Audience", "q1": "Tone"}
-    # Mapping should contain the same keys
+    assert answers == {"q0": "Developers", "q1": "Formal tone"}
+    # Mapping should fall back to generic labels when no answer_mapping is provided
     assert mapping["q0"] == "Question: q0"
     assert mapping["q1"] == "Question: q1"
 
@@ -127,6 +127,33 @@ def test_refine_prompt_returns_clarification_needed_when_questions_present():
         "q0": "Who is the audience?",
         "q1": "Preferred tone?",
     }
+
+
+def test_refine_prompt_uses_answer_mapping_when_provided():
+    """When answer_mapping is provided, refine_prompt should pass it through to the provider."""
+    fake = _stub_provider(analysis_result=None)
+
+    answers = {"q0": "Developers", "q1": "Formal tone"}
+    answer_mapping = {
+        "q0": "Who is the audience?",
+        "q1": "Preferred tone?",
+    }
+
+    result = mcp_server.refine_prompt(
+        prompt="Write something detailed about APIs",
+        answers=answers,
+        answer_mapping=answer_mapping,
+    )
+
+    assert result["type"] == "refined"
+    assert result["prompt"].startswith("refined:Write something detailed about APIs")
+
+    # Verify refine_from_answers was called with the provided mapping
+    assert fake.calls[0][0] == "refine_from_answers"
+    _, initial_prompt, passed_answers, passed_mapping, _ = fake.calls[0]
+    assert initial_prompt == "Write something detailed about APIs"
+    assert passed_answers == answers
+    assert passed_mapping == answer_mapping
 
 
 def test_refine_prompt_light_refine_when_no_questions():
@@ -372,6 +399,50 @@ def test_list_providers_success(monkeypatch):
     assert result["providers"]["google"]["configured"] is True
 
 
+def test_list_providers_handles_per_provider_exceptions(monkeypatch):
+    """list_providers should capture per-provider failures in the providers map."""
+
+    class MockConfig:
+        def __init__(self):
+            self._validate_calls = 0
+
+        def set_provider(self, provider):
+            # No-op for this test
+            pass
+
+        def validate(self):
+            self._validate_calls += 1
+            # Simulate an unexpected error on the second validate call
+            if self._validate_calls == 2:
+                raise RuntimeError("Unexpected validation failure")
+            return True
+
+        def get_model(self):
+            return "test-model"
+
+        def consume_error_messages(self):
+            return []
+
+    monkeypatch.setattr("promptheus.mcp_server.Config", MockConfig)
+    monkeypatch.setattr(
+        "promptheus.config.SUPPORTED_PROVIDER_IDS", ["google", "openai"]
+    )
+
+    def mock_get_provider(provider_id, config, model):
+        return Mock()
+
+    monkeypatch.setattr("promptheus.mcp_server.get_provider", mock_get_provider)
+
+    result = mcp_server.list_providers()
+
+    assert result["type"] == "success"
+    providers = result["providers"]
+    assert providers["google"]["configured"] is True
+    # The second provider should be marked as misconfigured with an error message
+    assert providers["openai"]["configured"] is False
+    assert "Unexpected validation failure" in providers["openai"]["error"]
+
+
 # ============================================================================
 # Tests for validate_environment tool
 # ============================================================================
@@ -508,4 +579,3 @@ def test_ask_user_question_injection():
 
     # Restore
     mcp_server.set_ask_user_question(original_fn)
-
