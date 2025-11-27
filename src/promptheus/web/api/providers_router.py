@@ -157,14 +157,37 @@ async def select_provider(selection: ProviderSelection):
         # Update the configuration
         app_config.set_provider(selection.provider_id)
 
-        # Persist the change to environment
+        # Get the default model for this provider and set it
+        providers_config = load_providers_config()
+        provider_config = providers_config.get('providers', {}).get(selection.provider_id, {})
+        default_model = provider_config.get('default_model', '')
+
+        # Force OpenRouter to use auto-routing and keep envs in sync
+        if selection.provider_id == "openrouter":
+            default_model = "openrouter/auto"
+
+        # Persist the changes to environment
         from dotenv import set_key
         from promptheus.config import find_and_load_dotenv
 
         env_path = find_and_load_dotenv()
         if env_path:
             set_key(env_path, "PROMPTHEUS_PROVIDER", selection.provider_id)
+            # Set the model to the provider's default
+            if default_model:
+                model_env_key = provider_config.get('model_env', 'PROMPTHEUS_MODEL')
+                set_key(env_path, model_env_key, default_model)
+                # Keep the global PROMPTHEUS_MODEL aligned for OpenRouter
+                if selection.provider_id == "openrouter":
+                    set_key(env_path, "PROMPTHEUS_MODEL", default_model)
+
         os.environ["PROMPTHEUS_PROVIDER"] = selection.provider_id
+        # Set the model in environment as well
+        if default_model:
+            model_env_key = provider_config.get('model_env', 'PROMPTHEUS_MODEL')
+            os.environ[model_env_key] = default_model
+            if selection.provider_id == "openrouter":
+                os.environ["PROMPTHEUS_MODEL"] = default_model
 
         available = validate_provider(selection.provider_id, app_config)
         return {"current_provider": selection.provider_id, "available": available}
@@ -174,10 +197,16 @@ async def select_provider(selection: ProviderSelection):
 
 @router.get("/providers/{provider_id}/models", response_model=ModelsResponseWithFilter)
 async def get_provider_models(provider_id: str, include_nontext: bool = False, fetch_all: bool = False):
-    """Get available models for a specific provider using models.dev.
+    """Get available models for a specific provider.
+
+    For most providers, uses models.dev service for comprehensive model listings.
+    For OpenRouter, queries the provider's API directly since:
+    - OpenRouter is an aggregator with hundreds of models from multiple providers
+    - Model availability is API-key specific (not all users can access all models)
+    - models.dev doesn't have OpenRouter's dynamic, user-specific model catalog
 
     Args:
-        provider_id: The provider ID (e.g., 'google', 'openai')
+        provider_id: The provider ID (e.g., 'google', 'openai', 'openrouter')
         include_nontext: If True, include non-text-generation models
         fetch_all: Compatibility alias for include_nontext (used by Web UI)
     """
@@ -190,6 +219,31 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
             raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
 
         provider_config = providers_config['providers'][provider_id]
+
+        # Special handling for OpenRouter: query the provider's API directly
+        if provider_id == "openrouter":
+            try:
+                provider = get_provider(provider_id, app_config)
+                models = provider.get_available_models()
+
+                # Get current model for OpenRouter
+                current_model = provider_config.get('default_model', 'openrouter/auto')
+                if app_config.provider == provider_id:
+                    current_model = app_config.get_model()
+
+                return ModelsResponseWithFilter(
+                    provider_id=provider_id,
+                    models=models,
+                    current_model=current_model,
+                    text_generation_models=models,
+                    all_models=models,
+                    cache_last_updated=None
+                )
+            except Exception as e:
+                error_msg = sanitize_error_message(str(e))
+                raise HTTPException(status_code=500, detail=f"Failed to fetch models from OpenRouter API: {error_msg}")
+
+        # For other providers, use models.dev service
         service = get_service()
 
         # Get models from models.dev with single fetch and local filtering
@@ -313,14 +367,28 @@ async def select_model(selection: ModelSelection):
 
         provider_config = providers_config['providers'][selection.provider_id]
 
-        # Validate model by checking if it exists in models.dev
-        try:
-            models = await get_models_for_provider(selection.provider_id)
-            if selection.model not in models:
-                raise HTTPException(status_code=400, detail=f"Model {selection.model} not found for provider {selection.provider_id}")
-        except Exception as e:
-            # If models.dev is unavailable, still allow the selection
-            pass
+        # Validate model based on provider type
+        if selection.provider_id == "openrouter":
+            # For OpenRouter, get models from provider API
+            try:
+                provider = get_provider(selection.provider_id, app_config)
+                models = provider.get_available_models()
+                if selection.model not in models:
+                    raise HTTPException(status_code=400, detail=f"Model {selection.model} not found for provider {selection.provider_id}")
+            except HTTPException:
+                raise
+            except Exception:
+                # If API call fails, still allow the selection
+                pass
+        else:
+            # For other providers, validate using models.dev
+            try:
+                models = await get_models_for_provider(selection.provider_id)
+                if selection.model not in models:
+                    raise HTTPException(status_code=400, detail=f"Model {selection.model} not found for provider {selection.provider_id}")
+            except Exception as e:
+                # If models.dev is unavailable, still allow the selection
+                pass
 
         # Update the configuration
         app_config.set_model(selection.model)

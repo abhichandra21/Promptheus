@@ -90,6 +90,21 @@
         "supports_vision": false,
         "max_output_tokens": 8192
       }
+    },
+    "openrouter": {
+      "display_name": "OpenRouter",
+      "default_model": "openrouter/auto",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "model_env": "OPENROUTER_MODEL",
+      "base_url_env": "OPENROUTER_BASE_URL",
+      "api_key_prefixes": ["sk-or-"],
+      "api_key_url": "https://openrouter.ai/keys",
+      "capabilities": {
+        "supports_json": true,
+        "supports_tools": true,
+        "supports_vision": true,
+        "max_output_tokens": 8192
+      }
     }
   }
 }
