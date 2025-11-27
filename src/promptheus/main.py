@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import time
 from argparse import Namespace
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -397,6 +398,7 @@ def process_single_prompt(
     Returns:
         Tuple of (final_prompt, task_type) if successful, None otherwise
     """
+    start_time = time.perf_counter()
     try:
         plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, io, app_config)
 
@@ -459,13 +461,23 @@ def process_single_prompt(
 
     # Save to history
     try:
+        processing_latency_sec = time.perf_counter() - start_time
+        clarifying_questions_count = len(plan.questions or [])
+        skip_questions_flag = getattr(args, "skip_questions", False)
+        refine_flag = getattr(args, "refine", False)
+
         history = get_history(app_config)
         history.save_entry(
             original_prompt=initial_prompt,
             refined_prompt=final_prompt,
             task_type=plan.task_type,
             provider=provider.name if hasattr(provider, 'name') else app_config.provider,
-            model=app_config.get_model()
+            model=app_config.get_model(),
+            processing_latency_sec=processing_latency_sec,
+            clarifying_questions_count=clarifying_questions_count,
+            source="cli",
+            skip_questions=skip_questions_flag,
+            refine_mode=refine_flag,
         )
         logger.debug("Saved prompt to history")
     except Exception as exc:

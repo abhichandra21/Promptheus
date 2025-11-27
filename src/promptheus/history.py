@@ -47,6 +47,11 @@ class HistoryEntry:
     task_type: Optional[str] = None
     provider: Optional[str] = None
     model: Optional[str] = None
+    processing_latency_sec: Optional[float] = None
+    clarifying_questions_count: Optional[int] = None
+    source: Optional[str] = None
+    skip_questions: Optional[bool] = None
+    refine_mode: Optional[bool] = None
 
     def to_dict(self):
         """Convert to dictionary."""
@@ -112,7 +117,13 @@ class PromptHistory:
         refined_prompt: str,
         task_type: Optional[str] = None,
         provider: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        *,
+        processing_latency_sec: Optional[float] = None,
+        clarifying_questions_count: Optional[int] = None,
+        source: Optional[str] = None,
+        skip_questions: Optional[bool] = None,
+        refine_mode: Optional[bool] = None,
     ) -> None:
         """
         Save a history entry in O(1) time using append-only JSONL format.
@@ -135,7 +146,12 @@ class PromptHistory:
             refined_prompt=refined_prompt,
             task_type=task_type,
             provider=provider,
-            model=model
+            model=model,
+            processing_latency_sec=processing_latency_sec,
+            clarifying_questions_count=clarifying_questions_count,
+            source=source,
+            skip_questions=skip_questions,
+            refine_mode=refine_mode,
         )
 
         try:

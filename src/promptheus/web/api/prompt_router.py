@@ -1,6 +1,7 @@
 """Prompt API router for Promptheus Web UI."""
 import asyncio
 import json
+import time
 from typing import Dict, Any, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
@@ -198,6 +199,7 @@ async def submit_prompt(request: PromptRequest):
             mapping = {key: key for key in request.answers.keys()}
 
         # Process the prompt using the web-compatible function
+        start_time = time.perf_counter()
         final_prompt, task_type = await process_prompt_web(
             provider=provider,
             initial_prompt=request.prompt,
@@ -208,7 +210,9 @@ async def submit_prompt(request: PromptRequest):
             app_config=app_config,
             style=request.style,
         )
-        
+        processing_latency_sec = time.perf_counter() - start_time
+        clarifying_questions_count = len(request.answers or {}) if request.answers else 0
+
         # Save to history
         history = get_history(app_config)
         history.save_entry(
@@ -216,7 +220,12 @@ async def submit_prompt(request: PromptRequest):
             refined_prompt=final_prompt,
             task_type=task_type,
             provider=provider_name,
-            model=app_config.get_model()
+            model=app_config.get_model(),
+            processing_latency_sec=processing_latency_sec,
+            clarifying_questions_count=clarifying_questions_count,
+            source="api_submit",
+            skip_questions=request.skip_questions,
+            refine_mode=request.refine,
         )
 
         return PromptResponse(
@@ -330,6 +339,7 @@ async def stream_prompt(
             provider_instance = get_provider(provider_name, app_config, app_config.get_model())
 
             # Process the prompt (skip questions in streaming mode)
+            start_time = time.perf_counter()
             final_prompt, task_type = await process_prompt_web(
                 provider=provider_instance,
                 initial_prompt=prompt,
@@ -340,6 +350,7 @@ async def stream_prompt(
                 app_config=app_config,
                 style=style,
             )
+            processing_latency_sec = time.perf_counter() - start_time
 
             # Save to history
             history = get_history(app_config)
@@ -348,7 +359,12 @@ async def stream_prompt(
                 refined_prompt=final_prompt,
                 task_type=task_type,
                 provider=provider_name,
-                model=app_config.get_model()
+                model=app_config.get_model(),
+                processing_latency_sec=processing_latency_sec,
+                clarifying_questions_count=0,
+                source="api_stream",
+                skip_questions=skip_questions,
+                refine_mode=refine,
             )
 
             # Stream the response character by character for effect
