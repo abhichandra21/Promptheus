@@ -11,6 +11,7 @@ from promptheus.config import Config
 from promptheus.providers import get_provider, LLMProvider
 from promptheus.io_context import IOContext
 from promptheus.history import get_history
+from promptheus.telemetry import record_prompt_event
 from promptheus.question_prompter import create_prompter
 from promptheus.prompts import (
     ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION,
@@ -219,6 +220,18 @@ async def submit_prompt(request: PromptRequest):
             model=app_config.get_model()
         )
 
+        record_prompt_event(
+            source="api_submit",
+            provider=provider_name,
+            model=app_config.get_model(),
+            task_type=task_type,
+            processing_latency_sec=processing_latency_sec,
+            clarifying_questions_count=clarifying_questions_count,
+            skip_questions=request.skip_questions,
+            refine_mode=request.refine,
+            success=True,
+        )
+
         return PromptResponse(
             success=True,
             original_prompt=request.prompt,
@@ -349,6 +362,18 @@ async def stream_prompt(
                 task_type=task_type,
                 provider=provider_name,
                 model=app_config.get_model()
+            )
+
+            record_prompt_event(
+                source="api_stream",
+                provider=provider_name,
+                model=app_config.get_model(),
+                task_type=task_type,
+                processing_latency_sec=processing_latency_sec,
+                clarifying_questions_count=0,
+                skip_questions=skip_questions,
+                refine_mode=refine,
+                success=True,
             )
 
             # Stream the response character by character for effect
