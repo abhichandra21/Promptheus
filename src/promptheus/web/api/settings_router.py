@@ -59,7 +59,7 @@ async def get_settings():
             description="Select the AI provider to use for prompt refinement",
             type="select",
             value=app_config.provider or "",
-            options=["", "google", "anthropic", "openai", "groq", "qwen", "glm"],
+            options=["", "google", "anthropic", "openai", "groq", "qwen", "glm", "openrouter"],
             category="provider"
         ))
 
@@ -92,6 +92,7 @@ async def get_settings():
             ("GROQ_API_KEY", "Groq API Key", "API key for Groq models"),
             ("DASHSCOPE_API_KEY", "Qwen API Key", "API key for Qwen/DashScope models"),
             ("ZHIPUAI_API_KEY", "GLM API Key", "API key for Zhipu GLM models"),
+            ("OPENROUTER_API_KEY", "OpenRouter API Key", "API key for OpenRouter models"),
         ]
 
         for key, label, description in api_keys:
@@ -126,8 +127,8 @@ async def update_settings(update: SettingsUpdate):
         # Validate the setting key
         valid_keys = [
             "PROMPTHEUS_PROVIDER", "PROMPTHEUS_MODEL", "PROMPTHEUS_ENABLE_HISTORY",
-            "GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", 
-            "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZHIPUAI_API_KEY"
+            "GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+            "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZHIPUAI_API_KEY", "OPENROUTER_API_KEY"
         ]
         
         if update.key not in valid_keys:
@@ -178,7 +179,8 @@ async def validate_api_key(request: ValidationRequest):
             "anthropic": "ANTHROPIC_API_KEY",
             "groq": "GROQ_API_KEY",
             "qwen": "DASHSCOPE_API_KEY",
-            "glm": "ZHIPUAI_API_KEY"
+            "glm": "ZHIPUAI_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY"
         }
 
         if provider_id not in env_key_map:
@@ -187,15 +189,26 @@ async def validate_api_key(request: ValidationRequest):
                 provider=provider_id,
                 error=f"Unknown provider: {provider_id}",
                 error_type="invalid_provider",
-                suggestion="Choose a valid provider: google, openai, anthropic, groq, qwen, or glm"
+                suggestion="Choose a valid provider: google, openai, anthropic, groq, qwen, glm, or openrouter"
             )
 
         env_key = env_key_map[provider_id]
         original_key = os.getenv(env_key)
 
+        # Save and clear any model env vars to prevent interference
+        original_promptheus_model = os.getenv("PROMPTHEUS_MODEL")
+        original_provider_model_env = provider_id.upper() + "_MODEL"
+        original_provider_model = os.getenv(original_provider_model_env)
+
         try:
             # Temporarily set the API key
             os.environ[env_key] = api_key
+
+            # Clear model environment variables to ensure validation uses specified model
+            if "PROMPTHEUS_MODEL" in os.environ:
+                del os.environ["PROMPTHEUS_MODEL"]
+            if original_provider_model_env in os.environ:
+                del os.environ[original_provider_model_env]
 
             # Build config scoped to this provider so validation uses the supplied key
             app_config = Config()
@@ -207,6 +220,53 @@ async def validate_api_key(request: ValidationRequest):
             default_model = provider_info.get("default_model")
             example_models = provider_info.get("example_models", [])
             model_for_validation = default_model or (example_models[0] if example_models else None)
+
+            # Special handling for OpenRouter: always use 'openrouter/auto' for validation
+            # This ensures the validation works regardless of the user's model access/credits
+            if provider_id == "openrouter":
+                import httpx
+
+                model_for_validation = "openrouter/auto"
+
+                # Validate OpenRouter keys via the lightweight models endpoint with a short timeout
+                base_url = os.getenv(provider_info.get("base_url_env", ""), "").rstrip("/") or "https://openrouter.ai/api/v1"
+                models_url = f"{base_url}/models"
+                headers = {"Authorization": f"Bearer {api_key}"}
+
+                try:
+                    response = httpx.get(models_url, headers=headers, timeout=10.0)
+                    if response.status_code == 200:
+                        return ValidationResponse(
+                            valid=True,
+                            provider=provider_id,
+                            models_available=["openrouter/auto"]
+                        )
+
+                    sanitized_error = sanitize_error_message(response.text or f"Status {response.status_code}")
+                    return ValidationResponse(
+                        valid=False,
+                        provider=provider_id,
+                        error=sanitized_error,
+                        error_type="validation_error",
+                        suggestion="Ensure the OpenRouter key has at least one allowed provider/model enabled; routing always uses openrouter/auto."
+                    )
+                except httpx.TimeoutException:
+                    return ValidationResponse(
+                        valid=False,
+                        provider=provider_id,
+                        error="OpenRouter validation timed out",
+                        error_type="network_error",
+                        suggestion="OpenRouter models endpoint did not respond in time; try again or check connectivity."
+                    )
+                except Exception as e:
+                    sanitized_error = sanitize_error_message(str(e))
+                    return ValidationResponse(
+                        valid=False,
+                        provider=provider_id,
+                        error=sanitized_error,
+                        error_type="validation_error",
+                        suggestion="Ensure the OpenRouter key has at least one allowed provider/model enabled; routing always uses openrouter/auto."
+                    )
 
             # Try to initialize the provider with current configuration and provider-scoped model
             provider = get_provider(provider_id, app_config, model_for_validation)
@@ -272,6 +332,12 @@ async def validate_api_key(request: ValidationRequest):
                 os.environ[env_key] = original_key
             elif env_key in os.environ:
                 del os.environ[env_key]
+
+            # Restore original model environment variables
+            if original_promptheus_model is not None:
+                os.environ["PROMPTHEUS_MODEL"] = original_promptheus_model
+            if original_provider_model is not None:
+                os.environ[original_provider_model_env] = original_provider_model
 
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
