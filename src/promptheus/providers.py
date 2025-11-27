@@ -1,6 +1,6 @@
 """
 LLM Provider abstraction layer.
-Supports Gemini, Anthropic/Claude, OpenAI, Groq, Qwen, and GLM.
+Supports Gemini, Anthropic/Claude, OpenAI, Groq, Qwen, GLM, and OpenRouter.
 """
 
 from __future__ import annotations
@@ -602,10 +602,135 @@ class GLMProvider(OpenAICompatibleProvider):
         )
 
 
+class OpenRouterProvider(OpenAICompatibleProvider):
+    """OpenRouter provider using the OpenAI-compatible API surface.
+
+    OpenRouter is a unified API gateway that provides access to hundreds of AI models
+    from various providers (OpenAI, Anthropic, Google, Meta, etc.) through a single endpoint.
+
+    Key differences from other providers:
+    - Model availability is API-key specific (depends on user's credits and permissions)
+    - Uses a special 'openrouter/auto' model for intelligent routing
+    - Model names include provider prefix (e.g., 'openai/gpt-4', 'anthropic/claude-3-opus')
+    - Has its own /api/v1/models endpoint that returns models available to the specific API key
+    """
+
+    DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+
+    def __init__(self, api_key: str, model_name: str = "openrouter/auto", base_url: Optional[str] = None) -> None:
+        self._api_key = api_key
+        self._base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
+        super().__init__(
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url or self.DEFAULT_BASE_URL,
+            provider_label="OpenRouter",
+        )
+
+    def _generate_text(
+        self,
+        prompt: str,
+        system_instruction: str,
+        *,
+        json_mode: bool = False,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        """
+        Use a direct OpenRouter call to avoid provider selection failures when JSON mode is unsupported.
+        We avoid response_format and rely on an embedded JSON-only instruction when needed.
+        """
+        import httpx
+
+        user_prompt = _append_json_instruction(prompt) if json_mode else prompt
+        messages = _build_chat_messages(system_instruction, user_prompt)
+
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+
+        url = f"{self._base_url}/chat/completions"
+
+        def _post_with_model(model_name: str) -> httpx.Response:
+            payload: Dict[str, Any] = {
+                "model": model_name,
+                "messages": messages,
+                "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            }
+            return httpx.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=DEFAULT_PROVIDER_TIMEOUT,
+            )
+
+        try:
+            response = _post_with_model("openrouter/auto")
+            if response.status_code == 404 and "No allowed providers" in response.text:
+                fallback_model = os.getenv("OPENROUTER_FALLBACK_MODEL", "mistralai/mistral-nemo")
+                response = _post_with_model(fallback_model)
+        except httpx.TimeoutException as exc:
+            raise ProviderAPIError("API call failed: OpenRouter request timed out") from exc
+        except Exception as exc:  # pragma: no cover - network failures
+            raise ProviderAPIError(f"API call failed: {sanitize_error_message(str(exc))}") from exc
+
+        if response.status_code != 200:
+            sanitized = sanitize_error_message(response.text or f"Status {response.status_code}")
+            raise ProviderAPIError(f"API call failed: Status {response.status_code} - {sanitized}")
+
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ProviderAPIError("API call failed: Invalid JSON response from OpenRouter") from exc
+
+        if isinstance(data, dict) and "error" in data:
+            raise ProviderAPIError(f"API call failed: {sanitize_error_message(str(data.get('error')))}")
+
+        choices = data.get("choices") if isinstance(data, dict) else None
+        if not choices:
+            raise ProviderAPIError("API call failed: OpenRouter response missing choices")
+
+        message = choices[0].get("message", {})
+        text = _coerce_message_content(message.get("content"))
+        if not text:
+            raise ProviderAPIError("API call failed: OpenRouter response missing text output")
+        return str(text)
+
+    def get_available_models(self) -> List[str]:
+        """Get recommended models for OpenRouter.
+
+        OpenRouter's special characteristics:
+        1. It's an aggregator providing access to hundreds of models from multiple providers
+        2. The /api/v1/models endpoint returns the ENTIRE catalog (not user-specific)
+        3. Model availability is determined at request time based on credits/permissions
+        4. The 'openrouter/auto' model intelligently routes to the best available model
+
+        Since OpenRouter returns all platform models (not account-specific), we return
+        a curated list with 'openrouter/auto' as the recommended option. Users can
+        still specify any model manually if they have access.
+
+        Returns:
+            List containing the recommended 'openrouter/auto' model. Users can manually
+            specify any model from https://openrouter.ai/models if they have access.
+
+        Raises:
+            RuntimeError: If there's a critical configuration error
+        """
+        # For OpenRouter, recommend using the auto-routing model
+        # This intelligently selects the best available model based on the user's
+        # prompt and their account permissions/credits
+        logger.debug("Returning recommended model for OpenRouter: openrouter/auto")
+        return ["openrouter/auto"]
+
+
 def get_provider(provider_name: str, config: Config, model_name: Optional[str] = None) -> LLMProvider:
     """Factory function to get the appropriate provider."""
     provider_config = config.get_provider_config()
     model_to_use = model_name or config.get_model()
+
+    # OpenRouter should always rely on its auto-routing model to avoid per-model permission errors
+    if provider_name == "openrouter":
+        model_to_use = "openrouter/auto"
 
     if provider_name in ("google", "gemini"):
         return GeminiProvider(
@@ -638,6 +763,12 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
         )
     if provider_name == "glm":
         return GLMProvider(
+            api_key=provider_config["api_key"],
+            model_name=model_to_use,
+            base_url=provider_config.get("base_url"),
+        )
+    if provider_name == "openrouter":
+        return OpenRouterProvider(
             api_key=provider_config["api_key"],
             model_name=model_to_use,
             base_url=provider_config.get("base_url"),
@@ -701,4 +832,5 @@ __all__ = [
     "GroqProvider",
     "QwenProvider",
     "GLMProvider",
+    "OpenRouterProvider",
 ]

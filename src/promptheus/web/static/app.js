@@ -1558,8 +1558,9 @@ class PromptheusApp {
      * @param {Array} models - Array of model names
      * @param {string} currentModel - Currently selected model
      * @param {boolean} disabled - Whether dropdown should be disabled
+     * @param {boolean} isOpenRouter - Whether this is OpenRouter provider
      */
-    syncMobileModelDropdown(models, currentModel, disabled = false) {
+    syncMobileModelDropdown(models, currentModel, disabled = false, isOpenRouter = false) {
         const modelSelectMobile = document.getElementById('model-select-mobile');
         if (!modelSelectMobile) return;
 
@@ -1569,7 +1570,13 @@ class PromptheusApp {
             models.forEach((model, index) => {
                 const option = document.createElement('option');
                 option.value = model;
-                option.textContent = model;
+
+                // For OpenRouter, show friendly "Auto" text instead of "openrouter/auto"
+                if (isOpenRouter && model === 'openrouter/auto') {
+                    option.textContent = 'Auto';
+                } else {
+                    option.textContent = model;
+                }
 
                 // Select current model if set, otherwise select first model
                 if (currentModel) {
@@ -1593,12 +1600,22 @@ class PromptheusApp {
     populateModelSelect(modelSelect, models, currentModel, fetchedAll) {
         modelSelect.innerHTML = '';
 
+        // Check if this is OpenRouter provider
+        const providerId = document.getElementById('provider-select')?.value;
+        const isOpenRouter = providerId === 'openrouter';
+
         // If we got models, populate them
         if (models && models.length > 0) {
             models.forEach((model, index) => {
                 const option = document.createElement('option');
                 option.value = model;
-                option.textContent = model;
+
+                // For OpenRouter, show friendly "Auto" text instead of "openrouter/auto"
+                if (isOpenRouter && model === 'openrouter/auto') {
+                    option.textContent = 'Auto';
+                } else {
+                    option.textContent = model;
+                }
 
                 // Select current model if set, otherwise select first model
                 if (currentModel) {
@@ -1611,7 +1628,7 @@ class PromptheusApp {
             });
 
             // Sync mobile model dropdown using helper
-            this.syncMobileModelDropdown(models, currentModel, false);
+            this.syncMobileModelDropdown(models, currentModel, false, isOpenRouter);
         } else {
             // No models found
             const emptyOption = document.createElement('option');
@@ -1620,11 +1637,12 @@ class PromptheusApp {
             modelSelect.appendChild(emptyOption);
 
             // Sync mobile model dropdown using helper
-            this.syncMobileModelDropdown([], currentModel, true);
+            this.syncMobileModelDropdown([], currentModel, true, isOpenRouter);
         }
 
         // Append the "Load All Models" option last so real models stay primary
-        if (!fetchedAll && models && models.length > 0) {
+        // Skip for OpenRouter since it only returns the recommended model
+        if (!fetchedAll && models && models.length > 0 && !isOpenRouter) {
             const loadAllOption = document.createElement('option');
             loadAllOption.value = '__load_all__';
             loadAllOption.textContent = '↻ Load All Models...';
