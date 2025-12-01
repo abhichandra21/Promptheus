@@ -247,4 +247,195 @@ Some provider libraries may not yet support Python 3.14. For providers experienc
 2. For other providers, consider using Python 3.13 or earlier until compatibility is ensured
 3. Use virtual environments to isolate different Python versions as needed
 4. Pytest warnings are configured in `pyproject.toml` to suppress known deprecation warnings
+
+## MCP Server Architecture
+
+### Overview
+The MCP (Model Context Protocol) server exposes Promptheus functionality as standardized tools for integration with MCP-compatible clients.
+
+### Core Components
+
+**MCP Server Implementation (`src/promptheus/mcp_server.py`)**
+- **FastMCP Framework**: Provides tool registration and protocol handling
+- **Tool Registry**: Five exposed tools with consistent interfaces
+- **AskUserQuestion Integration**: Dual-mode support (interactive/structured)
+- **Error Sanitization**: Consistent error handling across all tools
+
+**Exposed Tools:**
+1. **refine_prompt**: Intelligent prompt refinement with Q&A workflow
+2. **tweak_prompt**: Surgical prompt modifications
+3. **list_models**: Provider model discovery
+4. **list_providers**: Configuration status checking
+5. **validate_environment**: Environment validation with connectivity testing
+
+### Response Format Standards
+
+**Success Responses:**
+```python
+# Refined prompt response
+{"type": "refined", "prompt": "...", "next_action": "..."}
+
+# Model/provider list response
+{"type": "success", "providers": {...}, "models": {...}}
+```
+
+**Clarification Response:**
+```python
+{
+  "type": "clarification_needed",
+  "task_type": "analysis" | "generation",
+  "questions_for_ask_user_question": [...],
+  "answer_mapping": {"q0": "Question text", ...},
+  "instructions": "..."
+}
+```
+
+**Error Response:**
+```python
+{"type": "error", "error_type": "ConfigurationError", "message": "..."}
+```
+
+### AskUserQuestion Integration Modes
+
+**Interactive Mode** (preferred):
+- Client injects AskUserQuestion function via `set_ask_user_question()`
+- Server automatically collects answers interactively
+- Seamless user experience, no client intervention required
+
+**Structured Mode** (fallback):
+- Server returns clarification_needed response
+- Client responsible for AskUserQuestion tool calls
+- Answers mapped back via question IDs (q0, q1, q2, etc.)
+
+### MCP Development Patterns
+
+**Tool Implementation Pattern:**
+```python
+@mcp.tool()
+def tool_name(param: str, optional: Optional[str] = None) -> Dict[str, Any]:
+    # Validate inputs
+    validation_error = _validate_input(param)
+    if validation_error:
+        return validation_error
+    
+    # Initialize provider
+    provider, error = _initialize_provider(provider, model)
+    if error:
+        return error
+    
+    # Execute tool logic
+    try:
+        result = execute_tool_logic()
+        return {"type": "success", "result": result}
+    except Exception as e:
+        return {
+            "type": "error", 
+            "error_type": type(e).__name__,
+            "message": sanitize_error_message(str(e))
+        }
+```
+
+**Question Mapping Pattern:**
+```python
+def _build_question_mapping(questions: List[Dict[str, Any]]) -> QuestionMapping:
+    return {f"q{i}": q.get("question", f"Question {i}") for i, q in enumerate(questions)}
+```
+
+### MCP Server Entry Points
+
+**CLI Integration:**
+```python
+# Subcommand dispatch in main.py
+if getattr(args, "command", None) == "mcp":
+    from promptheus.mcp_server import run_mcp_server
+    run_mcp_server()
+```
+
+**Direct Execution:**
+```python
+# Module entry point
+if __name__ == "__main__":
+    run_mcp_server()
+```
+
+### MCP Testing Strategy
+
+**Unit Testing:**
+- Mock provider responses for tool testing
+- Validate response format consistency
+- Test error handling paths
+- Verify question mapping logic
+
+**Integration Testing:**
+- Test with actual MCP clients
+- Verify AskUserQuestion workflow
+- Test provider fallback behavior
+- Validate environment requirements
+
+**Manual Testing Workflow:**
+1. Start MCP server: `promptheus mcp`
+2. Test basic refinement without questions
+3. Test clarification workflow with questions
+4. Test error conditions (missing keys, invalid providers)
+5. Verify both interactive and structured modes
+
+### MCP Error Handling
+
+**Import Validation:**
+```python
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:
+    FastMCP = None
+    # Graceful fallback with informative error
+```
+
+**Provider Initialization Errors:**
+- Configuration errors (missing API keys)
+- Connection test failures
+- Provider-specific error sanitization
+
+**Tool Execution Errors:**
+- Input validation errors
+- Provider API errors
+- Question generation failures
+- Answer processing errors
+
+### MCP Documentation Standards
+
+**Tool Documentation:**
+- Comprehensive docstrings with examples
+- Parameter descriptions and types
+- Response format specifications
+- Usage workflow descriptions
+
+**Integration Documentation:**
+- JSON request/response examples
+- AskUserQuestion workflow diagrams
+- Error handling procedures
+- Troubleshooting guides
+
+### MCP Security Considerations
+
+**API Key Protection:**
+- Error message sanitization prevents key leakage
+- Provider errors are masked before client exposure
+- Configuration validation happens server-side
+
+**Input Validation:**
+- Prompt length limits (MAX_PROMPT_LENGTH = 50000)
+- Answer mapping validation
+- Provider/model parameter validation
+
+### MCP Performance Optimization
+
+**Caching Strategy:**
+- Model information cached for 24 hours
+- Provider validation results cached
+- Question generation optimized for reuse
+
+**Error Recovery:**
+- Graceful fallback when AskUserQuestion unavailable
+- Provider fallback within tool execution
+- Retry logic for transient failures
 - for 100% of the decisions/questions always ask frontend-developer skill

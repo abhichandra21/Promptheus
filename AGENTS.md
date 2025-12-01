@@ -66,3 +66,37 @@ Promptheus supports clean stdout/stderr separation for scripting and piping:
 - **Output formats**: `-o/--output-format` supports `plain` (default) and `json`
 - **Behavior**: In quiet mode, all UI (status, warnings, spinners, questions) goes to stderr, only the refined prompt goes to stdout
 - **Limitations**: Interactive tweaks and clipboard (`--copy`) are disabled in quiet mode
+
+## MCP Server Integration
+
+Promptheus includes a **Model Context Protocol (MCP) server** for integration with MCP-compatible clients and AI toolchains.
+
+### Starting the MCP Server
+```bash
+# Start MCP server
+promptheus mcp
+
+# Or direct Python execution
+python -m promptheus.mcp_server
+```
+
+### Available MCP Tools
+- **refine_prompt**: Intelligent prompt refinement with Q&A workflow
+- **tweak_prompt**: Surgical prompt modifications  
+- **list_models**: Provider model discovery
+- **list_providers**: Configuration status checking
+- **validate_environment**: Environment validation with connectivity testing
+
+### MCP Integration Workflow
+1. **Initial Request**: Call `refine_prompt` with basic prompt
+2. **Clarification Handling**: Process `clarification_needed` responses with AskUserQuestion
+3. **Final Refinement**: Submit answers for optimized prompt generation
+4. **Tool Integration**: Use refined prompts with client's native LLM capabilities
+
+### MCP Development Guidelines
+- Tools return consistent response formats (success/clarification/error)
+- Support both interactive and structured AskUserQuestion modes
+- Maintain comprehensive error handling with sanitized messages
+- Document all tools with JSON examples and usage patterns
+
+For detailed MCP documentation, see the [MCP Server section in README.md](README.md#mcp-server).

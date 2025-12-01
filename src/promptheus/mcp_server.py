@@ -54,31 +54,72 @@ if FastMCP:
 else:
     mcp = None
 
-# AskUserQuestion injection point
-# MCP clients can inject this function to enable interactive questioning
-# Default: None (falls back to structured JSON responses)
-_ask_user_question_fn = None
-
-
-def set_ask_user_question(fn):
-    """
-    Inject an AskUserQuestion implementation for interactive mode.
-
-    Args:
-        fn: Callable that takes questions list and returns answers
-            Expected signature: fn(questions: List[Dict]) -> Dict[str, str]
-    """
-    global _ask_user_question_fn
-    _ask_user_question_fn = fn
-    logger.info("AskUserQuestion function registered for interactive mode")
-
-
 # Type aliases for clarity
 QuestionMapping = Dict[str, str]  # Maps question IDs to question text
 RefinedResponse = Dict[str, Any]
 ClarificationResponse = Dict[str, Any]
 ErrorResponse = Dict[str, Any]
 RefineResult = Union[RefinedResponse, ClarificationResponse, ErrorResponse]
+AskUserFn = Optional[
+    # questions: list of question dicts; returns mapping from question id to answer
+    # or a richer result dict that contains an "answers" mapping.
+    Any
+]
+
+# AskUserQuestion injection point.
+# MCP clients can inject this function to enable interactive questioning.
+# Default: None (falls back to structured JSON responses).
+# Integration summary:
+# - Call set_ask_user_question(fn) once after loading the MCP server.
+# - fn will be called as fn(questions: List[Dict[str, Any]]) where each dict includes:
+#     {"id": "q0", "question": "...", "header": "Q1", "multiSelect": bool,
+#      "required": bool, "options": [{"label": "...", "description": "..."}]}
+# - fn must return either:
+#     {"q0": "answer", "q1": ["a", "b"]} or {"answers": {...}}.
+# - Missing or empty answers for required questions cause a fallback to
+#   the structured clarification_needed response.
+_ask_user_question_fn: AskUserFn = None
+
+
+def set_ask_user_question(fn: Optional[Any]) -> None:
+    """
+    Inject an AskUserQuestion implementation for interactive mode.
+
+    Contract:
+    - The injected callable must accept a single argument:
+        questions: List[Dict[str, Any]]
+      Each question dict will have at least:
+        {
+            "id": "q0",                      # Stable question identifier
+            "question": "<full question>",   # Human readable text
+            "header": "Q1",                  # Short label
+            "multiSelect": bool,             # True when checkbox-style
+            "options": [                     # Optional
+                {"label": "<option>", "description": "<option>"}
+            ],
+            "required": bool                 # Present for clarity
+        }
+
+    - The callable must return one of:
+        1) A mapping of question ids to answers, for example:
+           {"q0": "Answer text", "q1": ["opt-a", "opt-b"]}
+        2) A dict with an "answers" key whose value is such a mapping.
+
+      Answers may be strings or lists of strings. Optional questions may be
+      omitted from the mapping. For required questions, missing or empty
+      answers are treated as failure and cause a fallback to the structured
+      clarification_needed response.
+
+    Any exception or invalid return value from the callable is treated as a
+    failure and will cause refine_prompt to return a clarification_needed
+    payload instead of attempting interactive refinement.
+    """
+    global _ask_user_question_fn
+    _ask_user_question_fn = fn
+    if fn is not None:
+        logger.info("AskUserQuestion function registered for interactive mode")
+    else:
+        logger.info("AskUserQuestion function cleared; interactive mode disabled")
 
 # Configuration
 MAX_PROMPT_LENGTH = 50000  # characters
@@ -207,8 +248,21 @@ def _try_interactive_questions(
     """
     Attempt to ask questions interactively using AskUserQuestion.
 
+    Contract with injected AskUserQuestion:
+        - Input: a list of question dicts, each with at least the keys
+          "id", "question", "header", "multiSelect", and optional "options"
+          and "required". This matches the format described in
+          set_ask_user_question.
+        - Output: either
+            * A dict mapping question ids to answers, or
+            * A dict with an "answers" key whose value is that mapping.
+
+      Answers may be strings or lists. Missing answers for required questions
+      or completely empty mappings are treated as a failure.
+
     Returns:
-        Dict of answers if successful, None if AskUserQuestion unavailable or fails
+        Dict of answers keyed by question id if successful, or None if
+        AskUserQuestion is unavailable or fails validation.
     """
     if _ask_user_question_fn is None:
         logger.debug("AskUserQuestion not available, using fallback")
@@ -223,13 +277,15 @@ def _try_interactive_questions(
             q_text = q.get("question", f"Question {i}")
             q_type = q.get("type", "text")
             options = q.get("options", [])
-            required = q.get("required", True)
+            required = bool(q.get("required", True))
 
-            # Format question for AskUserQuestion
+            # Format question for AskUserQuestion.
             question_data = {
+                "id": q_id,
                 "question": q_text,
                 "header": f"Q{i+1}",
                 "multiSelect": q_type == "checkbox",
+                "required": required,
             }
 
             if q_type in ("radio", "checkbox") and options:
@@ -237,34 +293,47 @@ def _try_interactive_questions(
                     {"label": opt, "description": opt} for opt in options
                 ]
 
-            # Call injected AskUserQuestion function
+            # Call injected AskUserQuestion function for this single question.
             result = _ask_user_question_fn([question_data])
 
-            # Extract answer from result
-            if result and isinstance(result, dict):
-                # Handle dict response with question keys
-                answer = result.get(q_text) or result.get(q_id)
-                if answer:
-                    # Handle list results (from multiselect)
-                    if isinstance(answer, list):
-                        answers[q_id] = ", ".join(str(a) for a in answer)
-                    else:
-                        answers[q_id] = str(answer)
-            elif result and isinstance(result, list) and len(result) > 0:
-                # Handle list response
+            # Normalize into a flat mapping.
+            answer_value: Any = None
+            if isinstance(result, dict):
+                result_mapping = result.get("answers", result)
+                if isinstance(result_mapping, dict):
+                    answer_value = (
+                        result_mapping.get(q_id)
+                        or result_mapping.get(q_text)
+                        or result_mapping.get(question_data["header"])
+                    )
+            elif isinstance(result, list) and result:
+                # For list responses, use first element or the first list.
                 if isinstance(result[0], list):
-                    # Multiselect: list of selected options
-                    answers[q_id] = ", ".join(str(a) for a in result[0])
+                    answer_value = result[0]
                 else:
-                    # Single select: first item
-                    answers[q_id] = str(result[0])
-            elif not required:
-                # Skip optional questions with no answer
-                logger.debug(f"Skipping optional question {q_id}")
-            else:
-                # Required question with no valid answer
+                    answer_value = result[0]
+
+            if answer_value is None or (
+                isinstance(answer_value, str) and not answer_value.strip()
+            ):
+                if not required:
+                    logger.debug(f"Skipping optional question {q_id}")
+                    continue
                 logger.warning(f"No valid answer for required question {q_id}")
                 return None
+
+            # Normalize lists for multiselect; everything stored as comma-separated text.
+            if isinstance(answer_value, list):
+                if not answer_value and required:
+                    logger.warning(f"No valid answer for required question {q_id}")
+                    return None
+                answers[q_id] = ", ".join(str(a) for a in answer_value)
+            else:
+                answers[q_id] = str(answer_value)
+
+        if not answers:
+            logger.warning("AskUserQuestion returned no usable answers")
+            return None
 
         return answers
 
@@ -292,10 +361,13 @@ def _format_clarification_response(
     # Format questions for AskUserQuestion tool
     formatted_questions = []
     for i, q in enumerate(questions):
+        q_id = f"q{i}"
         q_data = {
+            "id": q_id,
             "question": q.get("question", f"Question {i}"),
             "header": f"Q{i+1}",
             "multiSelect": q.get("type") == "checkbox",
+            "required": q.get("required", True),
         }
         if q.get("type") in ("radio", "checkbox") and q.get("options"):
             q_data["options"] = [

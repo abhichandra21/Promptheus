@@ -187,6 +187,125 @@ For providers requiring custom integration (e.g., Gemini, Anthropic):
 4. Update validation utilities
 5. Document provider setup in README.md
 
+## MCP Server Development
+
+### MCP Server Architecture
+
+The MCP server implementation (`src/promptheus/mcp_server.py`) provides:
+
+**Core Components:**
+- **FastMCP Integration**: Uses FastMCP framework for tool exposure
+- **Tool Registry**: Five exposed tools (`refine_prompt`, `tweak_prompt`, `list_models`, `list_providers`, `validate_environment`)
+- **AskUserQuestion Integration**: Supports both interactive and structured modes
+- **Error Handling**: Consistent error response format across all tools
+
+**Key Design Patterns:**
+```python
+# Tool registration pattern
+@mcp.tool()
+def refine_prompt(prompt: str, answers: Optional[Dict[str, str]] = None, ...) -> RefineResult:
+    # Tool implementation
+    
+# Response type pattern
+Union[RefinedResponse, ClarificationResponse, ErrorResponse]
+```
+
+### MCP Development Guidelines
+
+**Adding New MCP Tools:**
+1. Implement tool function with proper type hints
+2. Use consistent response format (success/error/clarification)
+3. Add comprehensive docstring with examples
+4. Test with both interactive and structured modes
+5. Update documentation with tool usage examples
+
+**AskUserQuestion Integration:**
+```python
+# Interactive mode (when AskUserQuestion available)
+interactive_answers = _try_interactive_questions(questions)
+if interactive_answers:
+    return _build_refined_response(refined_prompt)
+
+# Structured mode (fallback)
+return _format_clarification_response(questions, task_type, mapping)
+```
+
+**Error Handling Pattern:**
+```python
+return {
+    "type": "error",
+    "error_type": type(e).__name__,
+    "message": sanitize_error_message(str(e)),
+}
+```
+
+### Testing MCP Server
+
+**Unit Testing:**
+```bash
+# Test individual MCP tools
+pytest tests/test_mcp_server.py -v
+
+# Test with mock providers
+pytest tests/test_mcp_server.py::test_refine_prompt_mock -v
+```
+
+**Integration Testing:**
+```bash
+# Test MCP server startup
+python -m promptheus.mcp_server
+
+# Test with actual MCP client
+# Use MCP-compatible client to call tools
+# Verify response formats and error handling
+```
+
+**Manual Testing Workflow:**
+```bash
+# 1. Start MCP server
+promptheus mcp
+
+# 2. Test basic refinement (should work without questions)
+promptheus mcp  # Then test refine_prompt with "Explain recursion"
+
+# 3. Test clarification workflow
+# Use prompt that triggers questions: "Write a blog post"
+
+# 4. Test error handling
+# Try with invalid provider or missing API keys
+```
+
+### MCP Client Integration Testing
+
+**Test AskUserQuestion Flow:**
+```bash
+# Test structured clarification response
+# Verify questions_for_ask_user_question format
+# Test answer mapping and second refinement call
+
+# Expected workflow:
+# 1. Call refine_prompt("Write something")
+# 2. Receive clarification_needed response
+# 3. Use AskUserQuestion with provided questions
+# 4. Call refine_prompt again with answers
+# 5. Receive refined prompt
+```
+
+### MCP Documentation Requirements
+
+**When Adding MCP Features:**
+1. Update tool docstrings with usage examples
+2. Add examples to README.md MCP section
+3. Update troubleshooting.md with new error cases
+4. Add integration examples to usage.md
+5. Update architecture documentation in CLAUDE.md
+
+**Documentation Standards:**
+- Include JSON request/response examples
+- Document error conditions and handling
+- Provide workflow diagrams for complex interactions
+- Include troubleshooting steps for common issues
+
 ## Communication Channels
 
 **Issue Reporting:**

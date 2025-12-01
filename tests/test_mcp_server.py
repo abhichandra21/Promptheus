@@ -1,11 +1,22 @@
 import sys
 import types
+import asyncio
 from typing import Any, Dict, List, Tuple
 from unittest.mock import Mock
+
+import pytest
 
 
 def _install_dummy_mcp():
     """Install a minimal dummy mcp.server.fastmcp implementation for tests."""
+    # If the real mcp package is available, prefer it so that tests can
+    # exercise the actual FastMCP integration.
+    try:
+        import mcp.server.fastmcp  # type: ignore[import]
+        return
+    except Exception:
+        pass
+
     if "mcp.server.fastmcp" in sys.modules:
         return
 
@@ -579,3 +590,192 @@ def test_ask_user_question_injection():
 
     # Restore
     mcp_server.set_ask_user_question(original_fn)
+
+
+def _install_interactive_stub(analysis_result: Any) -> FakeProvider:
+    """Helper to configure provider and enable AskUserQuestion for interactive tests."""
+    fake_provider = _stub_provider(analysis_result=analysis_result)
+    return fake_provider
+
+
+def test_refine_prompt_uses_interactive_answers_when_available():
+    """Interactive AskUser path should refine directly when valid answers are returned."""
+    analysis_result = {
+        "task_type": "generation",
+        "questions": [
+            {"question": "Who is the audience?", "type": "text", "required": True},
+            {
+                "question": "Preferred tone?",
+                "type": "radio",
+                "options": ["Formal", "Casual"],
+                "required": True,
+            },
+        ],
+    }
+    fake = _install_interactive_stub(analysis_result)
+
+    original_fn = mcp_server._ask_user_question_fn
+
+    def ask_user_fn(questions):
+        # Each call receives a single question in a list
+        assert isinstance(questions, list)
+        assert len(questions) == 1
+        q = questions[0]
+        q_id = q["id"]
+        if q_id == "q0":
+            return {"answers": {q_id: "Developers"}}
+        if q_id == "q1":
+            return {"answers": {q_id: ["Formal"]}}
+        return {"answers": {}}
+
+    try:
+        mcp_server.set_ask_user_question(ask_user_fn)
+
+        result = mcp_server.refine_prompt(prompt="Write a blog post about our product")
+
+        assert result["type"] == "refined"
+        assert result["prompt"].startswith("refined:Write a blog post about our product")
+
+        # Provider should see answers for both questions and the mapping ids
+        assert any(call[0] == "refine_from_answers" for call in fake.calls)
+        refine_call = next(call for call in fake.calls if call[0] == "refine_from_answers")
+        _, initial_prompt, answers, mapping, _ = refine_call
+        assert initial_prompt == "Write a blog post about our product"
+        assert answers == {"q0": "Developers", "q1": "Formal"}
+        assert mapping["q0"] == "Who is the audience?"
+        assert mapping["q1"] == "Preferred tone?"
+    finally:
+        mcp_server.set_ask_user_question(original_fn)
+
+
+def test_refine_prompt_falls_back_when_required_answer_missing():
+    """If AskUserQuestion omits a required answer, refine_prompt should fall back to clarification_needed."""
+    analysis_result = {
+        "task_type": "generation",
+        "questions": [
+            {"question": "Who is the audience?", "type": "text", "required": True},
+        ],
+    }
+    _install_interactive_stub(analysis_result)
+
+    original_fn = mcp_server._ask_user_question_fn
+
+    def ask_user_fn(questions):
+        # Return empty mapping, simulating an interactive client that did not answer
+        return {"answers": {}}
+
+    try:
+        mcp_server.set_ask_user_question(ask_user_fn)
+
+        result = mcp_server.refine_prompt(prompt="Write a blog post")
+
+        assert result["type"] == "clarification_needed"
+        assert "questions_for_ask_user_question" in result
+        assert result["task_type"] == "generation"
+    finally:
+        mcp_server.set_ask_user_question(original_fn)
+
+
+def test_refine_prompt_falls_back_when_ask_user_raises():
+    """If AskUserQuestion raises, refine_prompt should fall back to clarification_needed."""
+    analysis_result = {
+        "task_type": "generation",
+        "questions": [
+            {"question": "Who is the audience?", "type": "text", "required": True},
+        ],
+    }
+    _install_interactive_stub(analysis_result)
+
+    original_fn = mcp_server._ask_user_question_fn
+
+    def ask_user_fn(questions):
+        raise RuntimeError("simulated AskUser failure")
+
+    try:
+        mcp_server.set_ask_user_question(ask_user_fn)
+
+        result = mcp_server.refine_prompt(prompt="Write a blog post")
+
+        assert result["type"] == "clarification_needed"
+        assert "questions_for_ask_user_question" in result
+    finally:
+        mcp_server.set_ask_user_question(original_fn)
+
+
+def test_refine_prompt_falls_back_when_ask_user_returns_invalid_type():
+    """Invalid AskUserQuestion return types should trigger structured clarification response."""
+    analysis_result = {
+        "task_type": "generation",
+        "questions": [
+            {"question": "Who is the audience?", "type": "text", "required": True},
+        ],
+    }
+    _install_interactive_stub(analysis_result)
+
+    original_fn = mcp_server._ask_user_question_fn
+
+    def ask_user_fn(questions):
+        # Return a type that _try_interactive_questions does not understand
+        return 42
+
+    try:
+        mcp_server.set_ask_user_question(ask_user_fn)
+
+        result = mcp_server.refine_prompt(prompt="Write a blog post")
+
+        assert result["type"] == "clarification_needed"
+        assert "questions_for_ask_user_question" in result
+    finally:
+        mcp_server.set_ask_user_question(original_fn)
+
+
+# ============================================================================
+# FastMCP integration smoke test using the real mcp package
+# ============================================================================
+
+
+def test_fastmcp_integration_with_real_package():
+    """Smoke test that uses the real FastMCP when available."""
+    fastmcp_module = pytest.importorskip("mcp.server.fastmcp")
+
+    # Skip when the dummy stub is in use (no real mcp package installed).
+    if getattr(fastmcp_module.FastMCP, "__name__", "") == "DummyFastMCP":
+        pytest.skip("Real mcp FastMCP not available; using test stub")
+
+    # At this point promptheus.mcp_server should have bound its global mcp
+    # instance to the real FastMCP class.
+    assert isinstance(mcp_server.mcp, fastmcp_module.FastMCP)
+
+    # Stub provider initialization so the tool can run without real API keys.
+    fake = _stub_provider(analysis_result=None)
+
+    tools = mcp_server.mcp._tool_manager.list_tools()
+    tool_names = [t.name for t in tools]
+    assert "refine_prompt" in tool_names
+
+    refine_tool = next(t for t in tools if t.name == "refine_prompt")
+
+    async def invoke_tool() -> Dict[str, Any]:
+        result = await mcp_server.mcp._tool_manager.call_tool(
+            refine_tool.name,
+            {"prompt": "Test prompt via FastMCP"},
+        )
+        return result
+
+    result = asyncio.run(invoke_tool())
+
+    assert isinstance(result, dict)
+    assert result["type"] == "refined"
+    assert result["prompt"].startswith("light:Test prompt via FastMCP")
+    # Ensure our fake provider was exercised through the FastMCP tool wrapper
+    assert any(call[0] == "light_refine" for call in fake.calls)
+
+
+def test_ensure_mcp_available_raises_when_mcp_missing(monkeypatch):
+    """_ensure_mcp_available should raise ImportError when FastMCP is not initialized."""
+    monkeypatch.setattr(mcp_server, "mcp", None)
+
+    with pytest.raises(ImportError) as excinfo:
+        mcp_server._ensure_mcp_available()
+
+    assert "The 'mcp' package is not installed" in str(excinfo.value)

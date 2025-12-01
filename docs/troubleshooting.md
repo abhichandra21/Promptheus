@@ -206,3 +206,179 @@ When reporting issues, include the following information:
 5. **Current model cache status:** If issue related to model discovery
 
 **Issue Tracker:** https://github.com/abhichandra21/Promptheus/issues
+
+## MCP Server Issues
+
+### MCP Package Not Installed
+
+**Symptom:** Error message when starting MCP server
+```
+Error: The 'mcp' package is not installed. Please install it with 'pip install mcp'.
+```
+
+**Resolution:**
+```bash
+# Install MCP package
+pip install mcp
+
+# Or install with development dependencies
+pip install -e .[dev]
+
+# Verify installation
+python -c "import mcp; print('MCP installed successfully')"
+```
+
+### MCP Server Connection Issues
+
+**Symptom:** MCP client cannot connect to Promptheus MCP server
+
+**Diagnostic Steps:**
+```bash
+# Verify MCP server starts correctly
+promptheus mcp
+
+# Check for error messages in server output
+# Test with direct Python execution
+python -m promptheus.mcp_server
+
+# Verify provider configuration
+promptheus validate --test-connection
+```
+
+**Common Causes:**
+- Missing provider API keys
+- MCP package not properly installed
+- Port conflicts (MCP uses stdio transport)
+
+### MCP Tool Execution Errors
+
+**Symptom:** MCP tools return error responses
+
+**Diagnostic Commands:**
+```bash
+# Test individual MCP tools
+# Use MCP client to call list_providers
+# Use MCP client to call validate_environment
+
+# Check provider status
+promptheus list-providers
+
+# Validate environment configuration
+promptheus validate --providers google,openai
+```
+
+**Common Error Types:**
+```json
+{
+  "type": "error",
+  "error_type": "ConfigurationError",
+  "message": "No provider configured. Please set API keys in environment."
+}
+```
+
+**Resolution:**
+```bash
+# Configure provider API keys
+promptheus auth google
+promptheus auth openai
+
+# Or manually set in .env file
+echo "GOOGLE_API_KEY=your_key_here" >> .env
+echo "OPENAI_API_KEY=your_key_here" >> .env
+```
+
+### AskUserQuestion Integration Issues
+
+**Symptom:** MCP server not handling clarification questions properly
+
+**Understanding the Integration Modes:**
+
+**Interactive Mode** (when AskUserQuestion is available):
+- Server automatically asks questions via injected AskUserQuestion function
+- Seamless user experience within supported clients
+
+**Structured Mode** (fallback):
+- Server returns `clarification_needed` response with formatted questions
+- Client responsible for calling AskUserQuestion tool
+- Answers mapped back via `answer_mapping` dictionary
+
+**Debugging AskUserQuestion Issues:**
+```bash
+# Test refine_prompt workflow
+# Step 1: Call with basic prompt that should trigger questions
+# Step 2: Verify clarification_needed response format
+# Step 3: Check questions_for_ask_user_question array format
+# Step 4: Verify answer_mapping structure
+```
+
+**Expected Response Format:**
+```json
+{
+  "type": "clarification_needed",
+  "questions_for_ask_user_question": [
+    {
+      "question": "Who is your target audience?",
+      "header": "Q1",
+      "multiSelect": false,
+      "options": [
+        {"label": "Technical professionals", "description": "Technical professionals"}
+      ]
+    }
+  ],
+  "answer_mapping": {
+    "q0": "Who is your target audience?"
+  }
+}
+```
+
+### MCP Client Compatibility Issues
+
+**Symptom:** MCP client cannot properly communicate with Promptheus MCP server
+
+**Resolution:**
+```bash
+# Ensure MCP client supports:
+# - Tool calling capabilities
+# - JSON response processing
+# - AskUserQuestion tool (for interactive mode)
+
+# Test with basic tool calls first
+# Verify response format compatibility
+# Check error handling consistency
+```
+
+### Performance Issues with MCP Server
+
+**Symptom:** Slow response times from MCP tools
+
+**Diagnostic Steps:**
+```bash
+# Test provider connectivity
+promptheus validate --test-connection
+
+# Check for model fallback behavior
+# Monitor API response times
+# Verify cache utilization (model cache, etc.)
+```
+
+**Optimization Tips:**
+- Use specific provider/model parameters to avoid auto-detection overhead
+- Ensure provider API keys are valid to prevent retry delays
+- Consider using cached model information when available
+
+### MCP Server Logging and Debugging
+
+**Enable Debug Logging:**
+```bash
+# Set logging level for MCP server
+export LOG_LEVEL=DEBUG
+
+# Run MCP server with verbose output
+promptheus mcp --verbose  # If supported by client
+```
+
+**Common Debug Information:**
+- Provider initialization sequence
+- Tool execution timing
+- Question generation process
+- Answer mapping validation

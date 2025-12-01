@@ -110,6 +110,218 @@ cat prompts.txt | while read line; do promptheus "$line"; done
 
 **Testing & Examples**: See [sample_prompts.md](sample_prompts.md) for test prompts demonstrating adaptive task detection (analysis vs generation).
 
+## MCP Server
+
+Promptheus includes a **Model Context Protocol (MCP) server** that exposes prompt refinement capabilities as standardized tools for integration with MCP-compatible clients.
+
+### What the MCP Server Does
+
+The Promptheus MCP server provides:
+- **Prompt refinement with Q&A**: Intelligent prompt optimization through adaptive questioning
+- **Prompt tweaking**: Surgical modifications to existing prompts  
+- **Model/provider inspection**: Discovery and validation of available AI providers
+- **Environment validation**: Configuration checking and connectivity testing
+
+### Starting the MCP Server
+
+```bash
+# Start the MCP server
+promptheus mcp
+
+# Or run directly with Python
+python -m promptheus.mcp_server
+```
+
+**Prerequisites:**
+- MCP package installed: `pip install mcp` (included in requirements.txt)
+- At least one provider API key configured (see [Configuration](#configuration))
+
+### Available MCP Tools
+
+#### `refine_prompt`
+Intelligent prompt refinement with optional clarification questions.
+
+**Inputs:**
+- `prompt` (required): The initial prompt to refine
+- `answers` (optional): Dictionary mapping question IDs to answers `{q0: "answer", q1: "answer"}`
+- `answer_mapping` (optional): Maps question IDs to original question text
+- `provider` (optional): Override provider (e.g., "google", "openai")
+- `model` (optional): Override model name
+
+**Response Types:**
+- `{"type": "refined", "prompt": "...", "next_action": "..."}`: Success with refined prompt
+- `{"type": "clarification_needed", "questions_for_ask_user_question": [...], "answer_mapping": {...}}`: Questions needed
+- `{"type": "error", "error_type": "...", "message": "..."}`: Error occurred
+
+#### `tweak_prompt`
+Apply targeted modifications to existing prompts.
+
+**Inputs:**
+- `prompt` (required): Current prompt to modify
+- `modification` (required): Description of changes (e.g., "make it shorter")
+- `provider`, `model` (optional): Provider/model overrides
+
+**Returns:**
+- `{"type": "refined", "prompt": "..."}`: Modified prompt
+
+#### `list_models`
+Discover available models from configured providers.
+
+**Inputs:**
+- `providers` (optional): List of provider names to query
+- `limit` (optional): Max models per provider (default: 20)
+- `include_nontext` (optional): Include vision/embedding models
+
+**Returns:**
+- `{"type": "success", "providers": {"google": {"available": true, "models": [...]}}}`
+
+#### `list_providers`
+Check provider configuration status.
+
+**Returns:**
+- `{"type": "success", "providers": {"google": {"configured": true, "model": "..."}}}`
+
+#### `validate_environment`
+Test environment configuration and API connectivity.
+
+**Inputs:**
+- `providers` (optional): Specific providers to validate
+- `test_connection` (optional): Test actual API connectivity
+
+**Returns:**
+- `{"type": "success", "validation": {"google": {"configured": true, "connection_test": "passed"}}}`
+
+### Prompt Refinement Workflow with Q&A
+
+The MCP server supports a structured clarification workflow for optimal prompt refinement:
+
+#### Step 1: Initial Refinement Request
+```json
+{
+  "tool": "refine_prompt",
+  "arguments": {
+    "prompt": "Write a blog post about machine learning"
+  }
+}
+```
+
+#### Step 2: Handle Clarification Response
+```json
+{
+  "type": "clarification_needed",
+  "task_type": "generation",
+  "message": "To refine this prompt effectively, I need to ask...",
+  "questions_for_ask_user_question": [
+    {
+      "question": "Who is your target audience?",
+      "header": "Q1",
+      "multiSelect": false,
+      "options": [
+        {"label": "Technical professionals", "description": "Technical professionals"},
+        {"label": "Business executives", "description": "Business executives"}
+      ]
+    }
+  ],
+  "answer_mapping": {
+    "q0": "Who is your target audience?"
+  }
+}
+```
+
+#### Step 3: Collect User Answers
+Use your MCP client's `AskUserQuestion` tool with the provided questions, then map answers to question IDs.
+
+#### Step 4: Final Refinement with Answers
+```json
+{
+  "tool": "refine_prompt", 
+  "arguments": {
+    "prompt": "Write a blog post about machine learning",
+    "answers": {"q0": "Technical professionals"},
+    "answer_mapping": {"q0": "Who is your target audience?"}
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "type": "refined",
+  "prompt": "Write a comprehensive technical blog post about machine learning fundamentals targeted at software engineers and technical professionals. Include practical code examples and architectural patterns...",
+  "next_action": "This refined prompt is now ready to use. If the user asked you to execute/run the prompt, use this refined prompt directly with your own capabilities..."
+}
+```
+
+### AskUser Integration Contract
+
+The MCP server operates in two modes:
+
+**Interactive Mode** (when AskUserQuestion is available):
+- Automatically asks clarification questions via injected AskUserQuestion function
+- Returns refined prompt immediately after collecting answers
+- Seamless user experience within supported clients
+
+**Structured Mode** (fallback for all clients):
+- Returns `clarification_needed` response with formatted questions
+- Client responsible for calling AskUserQuestion tool
+- Answers mapped back via `answer_mapping` dictionary
+
+**Question Format:**
+Each question in `questions_for_ask_user_question` includes:
+- `question`: The question text to display
+- `header`: Short identifier (Q1, Q2, etc.)
+- `multiSelect`: Boolean for multi-select options
+- `options`: Array of `{label, description}` for radio/checkbox questions
+
+**Answer Mapping:**
+- Question IDs follow pattern: `q0`, `q1`, `q2`, etc.
+- Answers dictionary uses these IDs as keys: `{"q0": "answer", "q1": "answer"}`
+- `answer_mapping` preserves original question text for provider context
+
+### Troubleshooting MCP
+
+**MCP Package Not Installed**
+```
+Error: The 'mcp' package is not installed. Please install it with 'pip install mcp'.
+```
+**Fix:** `pip install mcp` or install Promptheus with dev dependencies: `pip install -e .[dev]`
+
+**Missing Provider API Keys**
+```json
+{
+  "type": "error",
+  "error_type": "ConfigurationError", 
+  "message": "No provider configured. Please set API keys in environment."
+}
+```
+**Diagnosis:** Use `list_providers` or `validate_environment` tools to check configuration status
+
+**Provider Misconfiguration**
+```json
+{
+  "type": "success",
+  "providers": {
+    "google": {"configured": false, "error": "GOOGLE_API_KEY not found"},
+    "openai": {"configured": true, "model": "gpt-4o"}
+  }
+}
+```
+**Fix:** Set missing API keys in `.env` file or environment variables
+
+**Connection Test Failures**
+```json
+{
+  "type": "success", 
+  "validation": {
+    "google": {
+      "configured": true,
+      "connection_test": "failed: Authentication error"
+    }
+  }
+}
+```
+**Fix:** Verify API keys are valid and have necessary permissions
+
 ## Full Documentation
 
 **Quick reference**: `promptheus --help`

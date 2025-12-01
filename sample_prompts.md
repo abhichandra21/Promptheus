@@ -244,3 +244,220 @@ Write comprehensive API documentation for a user management service with authent
 - **Edge cases** test the boundary between task types
 - Use **skip mode** (`-s`) when you want to bypass questions for any task
 - Use **refine mode** (`-r`) to force questions on any task
+
+---
+
+## MCP Server Testing Examples
+
+These examples demonstrate how to test the Promptheus MCP server integration with MCP-compatible clients.
+
+### Basic MCP Tool Testing
+
+**Test 1: List Available Providers**
+```bash
+# MCP client call
+mcp-client call list_providers
+
+# Expected response format
+{
+  "type": "success",
+  "providers": {
+    "google": {"configured": true, "model": "gemini-2.0-flash-exp"},
+    "openai": {"configured": false, "error": "No API key found"}
+  }
+}
+```
+
+**Test 2: Validate Environment**
+```bash
+# MCP client call with connection test
+mcp-client call validate_environment --test-connection true
+
+# Expected response shows provider status
+{
+  "type": "success", 
+  "validation": {
+    "google": {"configured": true, "connection_test": "passed"}
+  }
+}
+```
+
+### MCP Refinement Workflow Testing
+
+**Test 3: Direct Refinement (No Questions)**
+```bash
+# MCP client call for analysis task
+mcp-client call refine_prompt --prompt "Explain Docker containers"
+
+# Expected: Direct refinement without questions
+{
+  "type": "refined",
+  "prompt": "Provide a comprehensive explanation of Docker containers...",
+  "next_action": "This refined prompt is now ready to use..."
+}
+```
+
+**Test 4: Clarification Workflow (With Questions)**
+```bash
+# MCP client call for generation task
+mcp-client call refine_prompt --prompt "Write a blog post"
+
+# Expected: Clarification needed response
+{
+  "type": "clarification_needed",
+  "task_type": "generation",
+  "questions_for_ask_user_question": [
+    {
+      "question": "Who is your target audience?",
+      "header": "Q1", 
+      "multiSelect": false,
+      "options": [
+        {"label": "Technical professionals", "description": "Technical professionals"},
+        {"label": "Business executives", "description": "Business executives"}
+      ]
+    }
+  ],
+  "answer_mapping": {"q0": "Who is your target audience?"}
+}
+```
+
+**Test 5: Complete Refinement with Answers**
+```bash
+# MCP client call with answers from AskUserQuestion
+mcp-client call refine_prompt \
+  --prompt "Write a blog post" \
+  --answers '{"q0": "Technical professionals"}' \
+  --answer-mapping '{"q0": "Who is your target audience?"}'
+
+# Expected: Final refined prompt
+{
+  "type": "refined",
+  "prompt": "Write a comprehensive technical blog post about... targeted at software engineers...",
+  "next_action": "This refined prompt is now ready to use..."
+}
+```
+
+### MCP Tweak Tool Testing
+
+**Test 6: Prompt Modification**
+```bash
+# MCP client call for prompt tweaking
+mcp-client call tweak_prompt \
+  --prompt "Write a technical blog post about Docker" \
+  --modification "make it more beginner-friendly"
+
+# Expected: Modified prompt
+{
+  "type": "refined",
+  "prompt": "Write an accessible beginner-friendly blog post about Docker..."
+}
+```
+
+### MCP Error Handling Testing
+
+**Test 7: Missing Provider Configuration**
+```bash
+# MCP client call without configured providers
+mcp-client call refine_prompt --prompt "Test prompt"
+
+# Expected: Configuration error
+{
+  "type": "error",
+  "error_type": "ConfigurationError",
+  "message": "No provider configured. Please set API keys in environment."
+}
+```
+
+**Test 8: Invalid Provider**
+```bash
+# MCP client call with invalid provider
+mcp-client call refine_prompt \
+  --prompt "Test prompt" \
+  --provider "invalid_provider"
+
+# Expected: Provider error
+{
+  "type": "error", 
+  "error_type": "ConfigurationError",
+  "message": "Provider 'invalid_provider' is not supported."
+}
+```
+
+### MCP Integration Testing
+
+**Test 9: Model Discovery**
+```bash
+# MCP client call to list models
+mcp-client call list_models --providers "google" --limit 5
+
+# Expected: Model list with metadata
+{
+  "type": "success",
+  "providers": {
+    "google": {
+      "available": true,
+      "models": [
+        {"id": "gemini-2.0-flash-exp", "name": "Gemini 2.0 Flash"},
+        {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro"}
+      ],
+      "total_count": 15,
+      "showing": 5
+    }
+  }
+}
+```
+
+### MCP Workflow Integration Examples
+
+**Example 1: AI Toolchain Integration**
+```bash
+# Use MCP-refined prompt in larger AI workflow
+REFINED_PROMPT=$(mcp-client call refine_prompt --prompt "Create API documentation" | jq -r '.prompt')
+echo "$REFINED_PROMPT" | claude exec --generate-docs
+```
+
+**Example 2: Batch Processing with MCP**
+```bash
+# Process multiple prompts through MCP
+for prompt in "Write a blog post" "Create a tutorial" "Draft an email"; do
+  echo "Processing: $prompt"
+  mcp-client call refine_prompt --prompt "$prompt" > "refined_${prompt// /_}.json"
+done
+```
+
+**Example 3: Interactive MCP Session**
+```bash
+# Start MCP server for interactive use
+promptheus mcp
+
+# In another terminal, use MCP client for interactive refinement
+mcp-client interactive
+> refine_prompt "Write a technical article"
+# Handle clarification questions interactively
+# Use refined output with other tools
+```
+
+### MCP Testing Checklist
+
+**Basic Functionality:**
+- [ ] MCP server starts without errors
+- [ ] All five tools are accessible
+- [ ] Provider configuration is detected
+- [ ] Error handling works correctly
+
+**Refinement Workflow:**
+- [ ] Direct refinement works for analysis tasks
+- [ ] Clarification workflow triggers for generation tasks
+- [ ] AskUserQuestion integration functions properly
+- [ ] Answer mapping works correctly
+
+**Integration Testing:**
+- [ ] MCP client can connect to server
+- [ ] JSON responses are properly formatted
+- [ ] Error responses include actionable information
+- [ ] Provider fallback behavior works
+
+**Performance Testing:**
+- [ ] Response times are reasonable (< 5 seconds)
+- [ ] No memory leaks during extended use
+- [ ] Concurrent requests are handled properly

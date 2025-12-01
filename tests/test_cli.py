@@ -148,3 +148,9 @@ def test_build_parser_help():
     help_text = parser.format_help()
     assert "Promptheus" in help_text
     assert "AI-powered prompt engineering CLI tool" in help_text
+
+
+def test_parse_args_mcp_command():
+    """Test parsing with the mcp subcommand."""
+    args = parse_arguments(["mcp"])
+    assert args.command == "mcp"

@@ -391,3 +391,39 @@ def test_process_single_prompt_history_failure_does_not_abort(monkeypatch):
 
     assert result == ("Refined: Plan outputs", "generation")
     logger_mock.warning.assert_called_once()
+
+
+def test_main_mcp_subcommand_dispatches_and_handles_import_error(monkeypatch):
+    """CLI wiring: main() should dispatch to run_mcp_server and handle ImportError."""
+    import promptheus.main as main_module
+
+    # Simulate parsed arguments for the mcp subcommand.
+    args = Namespace(
+        command="mcp",
+        version=False,
+        verbose=False,
+        provider=None,
+        model=None,
+    )
+
+    monkeypatch.setattr(main_module, "parse_arguments", lambda: args)
+
+    notifications = []
+
+    class DummyIO:
+        def __init__(self) -> None:
+            self.notify = notifications.append
+
+    monkeypatch.setattr(main_module, "IOContext", type("IOContextStub", (), {"create": staticmethod(lambda: DummyIO())}))
+
+    def failing_run_mcp_server():
+        raise ImportError("The 'mcp' package is not installed. Please install it with 'pip install mcp'.")
+
+    monkeypatch.setattr("promptheus.mcp_server.run_mcp_server", failing_run_mcp_server)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main_module.main()
+
+    # CLI should exit with non-zero status and emit a helpful message.
+    assert excinfo.value.code == 1
+    assert any("The 'mcp' package is not installed" in msg for msg in notifications)

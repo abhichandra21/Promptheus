@@ -36,6 +36,16 @@
             --sidebar-width: 280px;
         }
 
+        @font-face {
+            font-family: 'IBM Plex Serif';
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Fira Code';
+            font-display: swap;
+        }
+
         body {
             font-family: 'IBM Plex Serif', Georgia, serif;
             line-height: 1.7;
@@ -143,7 +153,7 @@
         h1, h2, h3, h4, h5, h6 {
             font-family: 'IBM Plex Serif', Georgia, serif;
             font-weight: 700;
-            line-height: 1.2;
+            line-height: 1.1;
             margin-bottom: 1rem;
             margin-top: 2rem;
         }
@@ -154,7 +164,7 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            letter-spacing: -0.5px;
+            letter-spacing: -0.02em;
         }
 
         h2 {
@@ -165,11 +175,19 @@
             border-left: 4px solid var(--accent-gold);
             border-bottom: none;
             position: relative;
+            letter-spacing: -0.01em;
         }
 
         h2::before {
-            content: '⚗️';
+            content: '';
+            display: inline-block;
+            width: 1.25rem;
+            height: 1.25rem;
             margin-right: 0.5rem;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23D4A574' d='M9 2v5.5L4 17c-.6 1.2.1 2.5 1.5 2.5h13c1.4 0 2.1-1.3 1.5-2.5l-5-9.5V2h-6zm2 1h2v5l.4.8 1.6 3.2H9l1.6-3.2.4-.8V3z'/%3E%3Ccircle cx='9' cy='13' r='1' fill='%23D4A574'/%3E%3Ccircle cx='15' cy='15' r='1' fill='%23D4A574'/%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            vertical-align: middle;
             opacity: 0.7;
         }
 
@@ -490,16 +508,73 @@
             margin: 0;
             font-size: 0.95rem;
         }
+
+        /* Enhanced focus states */
+        *:focus-visible {
+            outline: 3px solid var(--accent-gold);
+            outline-offset: 3px;
+            border-radius: 4px;
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            .back-to-top,
+            .nav-links a,
+            .info-box,
+            .command,
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Additional responsive breakpoints */
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 1.5rem;
+            }
+
+            .sidebar {
+                width: 85%;
+                max-width: 300px;
+            }
+        }
+
+        @media (min-width: 481px) and (max-width: 768px) {
+            .main-content {
+                padding: 2rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
+    <!-- SVG Icon Sprite -->
+    <svg style="display: none;" aria-hidden="true">
+        <defs>
+            <!-- Alchemical Flask Icon -->
+            <symbol id="icon-flask" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M9 2v5.5L4 17c-.6 1.2.1 2.5 1.5 2.5h13c1.4 0 2.1-1.3 1.5-2.5l-5-9.5V2h-6zm2 1h2v5l.4.8 1.6 3.2H9l1.6-3.2.4-.8V3z"/>
+                <circle cx="9" cy="13" r="1" fill="currentColor"/>
+                <circle cx="15" cy="15" r="1" fill="currentColor"/>
+            </symbol>
+        </defs>
+    </svg>
+
+    <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu">☰</button>
 
     <div class="docs-container">
         <!-- Sidebar Navigation -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h1>⚗️ Promptheus</h1>
+                <h1 style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="currentColor" d="M9 2v5.5L4 17c-.6 1.2.1 2.5 1.5 2.5h13c1.4 0 2.1-1.3 1.5-2.5l-5-9.5V2h-6zm2 1h2v5l.4.8 1.6 3.2H9l1.6-3.2.4-.8V3z"/>
+                        <circle cx="9" cy="13" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="15" r="1" fill="currentColor"/>
+                    </svg>
+                    Promptheus
+                </h1>
                 <p>Complete Documentation</p>
                 <a href="index.html" style="color: var(--accent-gold); text-decoration: none; font-size: 0.875rem;">← Back to Home</a>
             </div>
@@ -558,6 +633,7 @@
                     <div class="nav-section-title">Reference</div>
                     <ul class="nav-links">
                         <li><a href="#command-reference">Command Reference</a></li>
+                        <li><a href="#mcp-server">MCP Server</a></li>
                         <li><a href="#examples">Usage Examples</a></li>
                         <li><a href="#contributing">Contributing</a></li>
                     </ul>
@@ -1224,12 +1300,12 @@ promptheus auth openai</code></pre>
                 <h3>Skip Validation</h3>
                 <p>For testing or offline configuration:</p>
 
-                <pre><code>promptheus auth openai --skip-validation</code></pre>
+                <pre data-label="Shell"><code>promptheus auth openai --skip-validation</code></pre>
 
                 <h3>Manual Configuration</h3>
                 <p>Alternatively, manually edit your <code>.env</code> file:</p>
 
-                <pre><code># .env file
+                <pre data-label="Config"><code># .env file
 GOOGLE_API_KEY=your_key_here
 ANTHROPIC_API_KEY=your_key_here
 OPENAI_API_KEY=your_key_here</code></pre>
@@ -1242,13 +1318,13 @@ OPENAI_API_KEY=your_key_here</code></pre>
                 <h3>Plain Text (Default)</h3>
                 <p>Standard plain text output suitable for reading and piping:</p>
 
-                <pre><code>promptheus "Write a haiku"
+                <pre data-label="Shell"><code>promptheus "Write a haiku"
 promptheus -o plain "Write a story"</code></pre>
 
                 <h3>JSON Output</h3>
                 <p>Structured JSON format with metadata for programmatic processing:</p>
 
-                <pre><code>promptheus -o json "Create API schema"</code></pre>
+                <pre data-label="Shell"><code>promptheus -o json "Create API schema"</code></pre>
 
                 <p>JSON output includes:</p>
                 <ul>
@@ -1261,7 +1337,7 @@ promptheus -o plain "Write a story"</code></pre>
 
                 <h3>Processing JSON Output</h3>
 
-                <pre><code># Extract refined prompt
+                <pre data-label="Shell"><code># Extract refined prompt
 promptheus -o json "prompt" | jq -r '.refined_prompt'
 
 # Extract metadata
@@ -1277,7 +1353,7 @@ promptheus -o json "prompt" | jq '.' > output.json</code></pre>
 
                 <h3>Provider Configuration</h3>
 
-                <pre><code># Override auto-detection
+                <pre data-label="Shell"><code># Override auto-detection
 export PROMPTHEUS_PROVIDER=google
 # Options: google, anthropic, openai, groq, qwen, glm
 
@@ -1286,14 +1362,14 @@ export PROMPTHEUS_MODEL=gemini-2.0-flash-exp</code></pre>
 
                 <h3>History Management</h3>
 
-                <pre><code># Enable/disable history
+                <pre data-label="Shell"><code># Enable/disable history
 export PROMPTHEUS_ENABLE_HISTORY=1   # Enable
 export PROMPTHEUS_ENABLE_HISTORY=0   # Disable
 # Values: 1/0, true/false, yes/no, on/off</code></pre>
 
                 <h3>Logging Configuration</h3>
 
-                <pre><code># Enable debug mode
+                <pre data-label="Shell"><code># Enable debug mode
 export PROMPTHEUS_DEBUG=1
 
 # Set log level
@@ -1323,7 +1399,7 @@ export PROMPTHEUS_LOG_FILE=app.log</code></pre>
                 <h3>Configuration Validation</h3>
                 <p>Verify your setup is correct:</p>
 
-                <pre><code># Basic validation
+                <pre data-label="Shell"><code># Basic validation
 promptheus validate
 
 # Test live API connections
@@ -1334,7 +1410,7 @@ promptheus validate --providers google,anthropic</code></pre>
 
                 <h3>Model Discovery</h3>
 
-                <pre><code># List all available models
+                <pre data-label="Shell"><code># List all available models
 promptheus list-models
 
 # Filter by providers
@@ -1349,7 +1425,7 @@ promptheus list-models --limit 10</code></pre>
                 <h3>Environment Template</h3>
                 <p>Generate a template <code>.env</code> file:</p>
 
-                <pre><code># Single provider
+                <pre data-label="Shell"><code># Single provider
 promptheus template openai > .env
 
 # Multiple providers
@@ -1364,7 +1440,7 @@ promptheus template openai,google,anthropic > .env</code></pre>
 
                 <div class="info-box">
                     <h4>Problem: Command not found</h4>
-                    <pre><code>pip install -e .
+                    <pre data-label="Shell"><code>pip install -e .
 which promptheus
 python -m promptheus.main "Test"</code></pre>
                 </div>
@@ -1373,7 +1449,7 @@ python -m promptheus.main "Test"</code></pre>
 
                 <div class="info-box">
                     <h4>Problem: No API key found</h4>
-                    <pre><code># Verify .env file exists and has keys
+                    <pre data-label="Shell"><code># Verify .env file exists and has keys
 cat .env
 
 # Check environment variables
@@ -1388,7 +1464,7 @@ promptheus validate --test-connection</code></pre>
                 <div class="info-box">
                     <h4>Problem: Clipboard not working</h4>
                     <p><strong>Linux:</strong> Install xclip or xsel</p>
-                    <pre><code>sudo apt-get install xclip</code></pre>
+                    <pre data-label="Shell"><code>sudo apt-get install xclip</code></pre>
                     <p><strong>macOS/Windows:</strong> Native clipboard support included</p>
                     <p><strong>WSL:</strong> May require X server configuration</p>
                 </div>
@@ -1408,7 +1484,7 @@ promptheus validate --test-connection</code></pre>
                 <h3>Debug Mode</h3>
                 <p>Enable verbose output for troubleshooting:</p>
 
-                <pre><code># Enable debug mode
+                <pre data-label="Shell"><code># Enable debug mode
 PROMPTHEUS_DEBUG=1 promptheus "test prompt"
 
 # Set log level
@@ -1469,7 +1545,7 @@ PROMPTHEUS_LOG_FILE=debug.log promptheus "test"</code></pre>
 
                 <h3>Common Flag Combinations</h3>
 
-                <pre><code># Skip questions + copy
+                <pre data-label="Shell"><code># Skip questions + copy
 promptheus -s -c "Generate docs"
 
 # JSON output + specific provider
@@ -1482,13 +1558,164 @@ promptheus -s -f prompt.txt
 promptheus --provider openai --model gpt-4o "Analyze code"</code></pre>
             </section>
 
+            <!-- MCP Server Section -->
+            <section id="mcp-server">
+                <h2>MCP Server</h2>
+
+                <div class="info-box">
+                    <h4>🔌 Model Context Protocol Server</h4>
+                    <p>Promptheus includes a built-in MCP server that exposes prompt refinement capabilities as standardized tools for integration with MCP-compatible clients and AI toolchains.</p>
+                </div>
+
+                <h3>Starting the MCP Server</h3>
+
+                <pre data-label="Shell"><code># Start the MCP server
+promptheus mcp
+
+# Or run directly with Python
+python -m promptheus.mcp_server</code></pre>
+
+                <h3>Prerequisites</h3>
+                <ul>
+                    <li>MCP package installed: <code>pip install mcp</code> (included in requirements.txt)</li>
+                    <li>At least one provider API key configured</li>
+                </ul>
+
+                <h3>Available MCP Tools</h3>
+
+                <h4>refine_prompt</h4>
+                <p>Intelligent prompt refinement with optional clarification questions.</p>
+                <ul>
+                    <li><strong>Inputs:</strong> prompt (required), answers (optional), answer_mapping (optional), provider (optional), model (optional)</li>
+                    <li><strong>Response Types:</strong>
+                        <ul>
+                            <li><code>{"type": "refined", "prompt": "...", "next_action": "..."}</code> - Success</li>
+                            <li><code>{"type": "clarification_needed", "questions_for_ask_user_question": [...], "answer_mapping": {...}}</code> - Questions needed</li>
+                            <li><code>{"type": "error", "error_type": "...", "message": "..."}</code> - Error</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <h4>tweak_prompt</h4>
+                <p>Apply targeted modifications to existing prompts.</p>
+                <ul>
+                    <li><strong>Inputs:</strong> prompt (required), modification (required), provider (optional), model (optional)</li>
+                    <li><strong>Returns:</strong> <code>{"type": "refined", "prompt": "..."}</code></li>
+                </ul>
+
+                <h4>list_models</h4>
+                <p>Discover available models from configured providers.</p>
+                <ul>
+                    <li><strong>Inputs:</strong> providers (optional), limit (optional), include_nontext (optional)</li>
+                    <li><strong>Returns:</strong> <code>{"type": "success", "providers": {...}}</code></li>
+                </ul>
+
+                <h4>list_providers</h4>
+                <p>Check provider configuration status.</p>
+                <ul>
+                    <li><strong>Returns:</strong> <code>{"type": "success", "providers": {...}}</code></li>
+                </ul>
+
+                <h4>validate_environment</h4>
+                <p>Test environment configuration and API connectivity.</p>
+                <ul>
+                    <li><strong>Inputs:</strong> providers (optional), test_connection (optional)</li>
+                    <li><strong>Returns:</strong> <code>{"type": "success", "validation": {...}}</code></li>
+                </ul>
+
+                <h3>Prompt Refinement Workflow</h3>
+
+                <h4>Step 1: Initial Refinement Request</h4>
+                <pre data-label="JSON"><code>{
+  "tool": "refine_prompt",
+  "arguments": {
+    "prompt": "Write a blog post about machine learning"
+  }
+}</code></pre>
+
+                <h4>Step 2: Handle Clarification Response</h4>
+                <pre data-label="JSON"><code>{
+  "type": "clarification_needed",
+  "task_type": "generation",
+  "questions_for_ask_user_question": [
+    {
+      "question": "Who is your target audience?",
+      "header": "Q1",
+      "multiSelect": false,
+      "options": [
+        {"label": "Technical professionals", "description": "Technical professionals"},
+        {"label": "Business executives", "description": "Business executives"}
+      ]
+    }
+  ],
+  "answer_mapping": {
+    "q0": "Who is your target audience?"
+  }
+}</code></pre>
+
+                <h4>Step 3: Final Refinement with Answers</h4>
+                <pre data-label="JSON"><code>{
+  "tool": "refine_prompt", 
+  "arguments": {
+    "prompt": "Write a blog post about machine learning",
+    "answers": {"q0": "Technical professionals"},
+    "answer_mapping": {"q0": "Who is your target audience?"}
+  }
+}
+
+# Response:
+{
+  "type": "refined",
+  "prompt": "Write a comprehensive technical blog post about machine learning fundamentals targeted at software engineers...",
+  "next_action": "This refined prompt is now ready to use..."
+}</code></pre>
+
+                <h3>AskUser Integration</h3>
+
+                <p>The MCP server supports two modes:</p>
+                <ul>
+                    <li><strong>Interactive Mode:</strong> When AskUserQuestion is available, questions are asked automatically</li>
+                    <li><strong>Structured Mode:</strong> Returns clarification_needed with formatted questions for client handling</li>
+                </ul>
+
+                <h3>MCP Integration Examples</h3>
+
+                <pre data-label="Shell"><code># Basic MCP client integration
+REFINED_PROMPT=$(mcp-client call refine_prompt --prompt "Create API docs" | jq -r '.prompt')
+echo "$REFINED_PROMPT" | claude exec --generate-docs
+
+# Batch processing with MCP
+for prompt in "Write blog" "Create tutorial" "Draft email"; do
+  mcp-client call refine_prompt --prompt "$prompt" > "refined_${prompt// /_}.json"
+done</code></pre>
+
+                <h3>Troubleshooting</h3>
+
+                <div class="info-box">
+                    <h4>MCP Package Not Installed</h4>
+                    <pre><code>pip install mcp
+# Or install with development dependencies
+pip install -e .[dev]</code></pre>
+                </div>
+
+                <div class="info-box">
+                    <h4>Missing Provider API Keys</h4>
+                    <pre><code># Use list_providers to check status
+mcp-client call list_providers
+
+# Configure API keys
+promptheus auth google
+promptheus auth openai</code></pre>
+                </div>
+            </section>
+
             <!-- Examples Section -->
             <section id="examples">
                 <h2>Usage Examples</h2>
 
                 <h3>Content Generation</h3>
 
-                <pre><code># Blog post with interactive questions
+                <pre data-label="Shell"><code># Blog post with interactive questions
 promptheus "Write a blog post about AI"
 
 # Quick content without questions
@@ -1499,7 +1726,7 @@ promptheus -c "Create social media posts"</code></pre>
 
                 <h3>Code Analysis</h3>
 
-                <pre><code># Analyze code (auto-skips questions)
+                <pre data-label="Shell"><code># Analyze code (auto-skips questions)
 promptheus "Analyze the main.py file"
 
 # Code review prompt
@@ -1510,7 +1737,7 @@ promptheus --provider google "Create unit tests for authentication"</code></pre>
 
                 <h3>Pipeline Workflows</h3>
 
-                <pre><code># Generate and save
+                <pre data-label="Shell"><code># Generate and save
 promptheus "Write tutorial" > tutorial.md
 
 # Batch processing
@@ -1528,7 +1755,7 @@ promptheus "Draft outline" | \
 
                 <h3>Interactive Session Workflow</h3>
 
-                <pre><code># Start interactive mode
+                <pre data-label="Interactive"><code># Start interactive mode
 promptheus
 
 # Switch provider
@@ -1555,7 +1782,7 @@ promptheus
 
                 <h3>Getting Started</h3>
 
-                <pre><code># Clone repository
+                <pre data-label="Shell"><code># Clone repository
 git clone https://github.com/abhichandra21/Promptheus.git
 cd Promptheus
 

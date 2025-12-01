@@ -10,6 +10,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
+    <!-- Distinctive fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+
     <!-- Critical CSS -->
     <style>
         /* CSS Reset & Base Styles */
@@ -26,6 +29,9 @@
             --accent-gold: #D4A574;
             --accent-gold-light: #E5B88A;
             --accent-gold-dark: #B8935F;
+            --accent-emerald: #4ADE80;
+            --accent-cyan: #06B6D4;
+            --accent-rose: #F43F5E;
             --text-primary: #E2E8F0;
             --text-secondary: #94A3B8;
             --text-muted: #64748B;
@@ -35,9 +41,19 @@
             --shadow-glow: 0 0 60px rgba(212, 165, 116, 0.2);
         }
 
+        @font-face {
+            font-family: 'IBM Plex Serif';
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Fira Code';
+            font-display: swap;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
+            font-family: 'IBM Plex Serif', Georgia, serif;
+            line-height: 1.7;
             color: var(--text-primary);
             background: var(--bg-primary);
             overflow-x: hidden;
@@ -50,15 +66,27 @@
         }
 
         h1, h2, h3, h4, h5, h6 {
+            font-family: 'IBM Plex Serif', Georgia, serif;
             font-weight: 700;
-            line-height: 1.2;
+            line-height: 1.1;
             margin-bottom: 1rem;
         }
 
-        h1 { font-size: clamp(2.5rem, 5vw, 4rem); }
-        h2 { font-size: clamp(2rem, 4vw, 3rem); }
-        h3 { font-size: clamp(1.5rem, 3vw, 2rem); }
-        h4 { font-size: 1.25rem; }
+        h1 {
+            font-size: clamp(2.5rem, 5vw, 3.5rem);
+            letter-spacing: -0.02em;
+        }
+        h2 {
+            font-size: clamp(1.75rem, 3vw, 2.25rem);
+            margin-top: 3rem;
+            letter-spacing: -0.01em;
+        }
+        h3 {
+            font-size: clamp(1.5rem, 2.5vw, 1.875rem);
+        }
+        h4 {
+            font-size: 1.25rem;
+        }
 
         p { margin-bottom: 1rem; }
 
@@ -143,13 +171,14 @@
         }
 
         .hero-text h1 {
-            font-size: clamp(2.5rem, 5vw, 4rem);
-            font-weight: 800;
+            font-size: clamp(2.5rem, 5vw, 3.5rem);
+            font-weight: 900;
             margin-bottom: 1rem;
             background: var(--gradient-gold);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            letter-spacing: -0.02em;
         }
 
         .hero-text .subheadline {
@@ -186,6 +215,7 @@
             position: relative;
             background: radial-gradient(circle, rgba(212, 165, 116, 0.1) 0%, transparent 70%);
             animation: rotate 20s linear infinite;
+            will-change: transform;
         }
 
         .alchemical-circle::before {
@@ -495,6 +525,138 @@
             background: var(--bg-secondary);
         }
 
+        /* MCP Server Section */
+        .mcp-server {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
+        }
+
+        .mcp-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .mcp-card {
+            background: var(--bg-tertiary);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mcp-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top right, rgba(212, 165, 116, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .mcp-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-gold);
+            box-shadow: var(--shadow-gold);
+        }
+
+        .mcp-card:hover::before {
+            opacity: 1;
+        }
+
+        .mcp-card h3 {
+            color: var(--accent-gold-light);
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            margin-top: 0;
+        }
+
+        .mcp-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .mcp-card li {
+            margin-bottom: 0.5rem;
+            padding-left: 1.5rem;
+            position: relative;
+            color: var(--text-secondary);
+        }
+
+        .mcp-card li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent-emerald);
+        }
+
+        .mcp-card p {
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .mcp-details {
+            background: var(--bg-tertiary);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+        }
+
+        .mcp-details h3 {
+            color: var(--accent-gold-light);
+            margin-bottom: 1rem;
+            margin-top: 0;
+        }
+
+        .mcp-details ol {
+            margin-left: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .mcp-details li {
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .mcp-details code {
+            background: rgba(212, 165, 116, 0.1);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            color: var(--accent-emerald);
+            font-family: 'Fira Code', monospace;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, rgba(212, 165, 116, 0.08) 0%, rgba(212, 165, 116, 0.03) 100%);
+            border-left: 5px solid var(--accent-gold);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-top: 1px solid rgba(212, 165, 116, 0.2);
+            border-right: 1px solid rgba(212, 165, 116, 0.1);
+            border-bottom: 1px solid rgba(212, 165, 116, 0.1);
+        }
+
+        .info-box h4 {
+            color: var(--accent-gold);
+            margin: 0 0 0.75rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .info-box p {
+            color: var(--text-secondary);
+            margin: 0.5rem 0;
+        }
+
         .install-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -578,7 +740,39 @@
         }
 
         /* Responsive Design */
-        @media (max-width: 768px) {
+        /* Mobile - 480px and below */
+        @media (max-width: 480px) {
+            .container {
+                padding: 0 1rem;
+            }
+
+            .hero-content {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+                text-align: center;
+            }
+
+            .hero-buttons {
+                justify-content: center;
+                flex-direction: column;
+            }
+
+            .hero-buttons .btn {
+                width: 100%;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .alchemical-circle {
+                width: 200px;
+                height: 200px;
+            }
+        }
+
+        /* Tablet Portrait - 481px to 768px */
+        @media (min-width: 481px) and (max-width: 768px) {
             .hero-content {
                 grid-template-columns: 1fr;
                 gap: 2rem;
@@ -594,13 +788,21 @@
                 grid-template-columns: 1fr;
             }
 
+            .features-grid {
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            }
+        }
+
+        /* Tablet Landscape and below - 1024px and below */
+        @media (max-width: 1024px) {
+            .demo-container,
+            .install-grid {
+                grid-template-columns: 1fr;
+            }
+
             .footer-content {
                 grid-template-columns: 1fr;
                 text-align: center;
-            }
-
-            .features-grid {
-                grid-template-columns: 1fr;
             }
 
             .providers-grid {
@@ -666,6 +868,26 @@
             outline-offset: 2px;
         }
 
+        *:focus-visible {
+            outline: 3px solid var(--accent-gold);
+            outline-offset: 3px;
+            border-radius: 4px;
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            .alchemical-circle,
+            .fade-in,
+            .btn,
+            .feature-card,
+            .provider-badge,
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
         /* Skip to content link */
         .skip-link {
             position: absolute;
@@ -681,9 +903,126 @@
         .skip-link:focus {
             top: 0;
         }
+
+        /* SVG Icon Styles */
+        .icon {
+            width: 1.25em;
+            height: 1.25em;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+
+        .feature-icon .icon {
+            width: 1.75rem;
+            height: 1.75rem;
+            margin: 0;
+        }
+
+        .alchemical-circle::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4rem;
+            height: 4rem;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23D4A574' d='M9 2v5.5L4 17c-.6 1.2.1 2.5 1.5 2.5h13c1.4 0 2.1-1.3 1.5-2.5l-5-9.5V2h-6zm2 1h2v5l.4.8 1.6 3.2H9l1.6-3.2.4-.8V3z'/%3E%3Ccircle cx='9' cy='13' r='1' fill='%23D4A574'/%3E%3Ccircle cx='15' cy='15' r='1' fill='%23D4A574'/%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            animation: pulse 2s ease-in-out infinite;
+        }
     </style>
 </head>
 <body>
+    <!-- SVG Icon Sprite -->
+    <svg style="display: none;" aria-hidden="true">
+        <defs>
+            <!-- Alchemical Flask Icon -->
+            <symbol id="icon-flask" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M9 2v5.5L4 17c-.6 1.2.1 2.5 1.5 2.5h13c1.4 0 2.1-1.3 1.5-2.5l-5-9.5V2h-6zm2 1h2v5l.4.8 1.6 3.2H9l1.6-3.2.4-.8V3z"/>
+                <circle cx="9" cy="13" r="1" fill="currentColor"/>
+                <circle cx="15" cy="15" r="1" fill="currentColor"/>
+            </symbol>
+
+            <!-- Crystal Ball Icon -->
+            <symbol id="icon-crystal" viewBox="0 0 24 24">
+                <circle cx="12" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path d="M6 17.5c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path d="M9 11c.5-1 1.5-2 3-2s2.5 1 3 2" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.6"/>
+            </symbol>
+
+            <!-- Question Icon -->
+            <symbol id="icon-question" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path d="M10 9c0-1.1.9-2 2-2s2 .9 2 2c0 .8-.5 1.5-1.2 1.8-.8.3-1.3 1-1.3 1.9" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                <circle cx="12" cy="17" r="1" fill="currentColor"/>
+            </symbol>
+
+            <!-- Mask/Theater Icon -->
+            <symbol id="icon-mask" viewBox="0 0 24 24">
+                <path d="M12 2C7 2 3 5.6 3 10c0 3.3 2 6.1 5 7.4V20l4-2 4 2v-2.6c3-1.3 5-4.1 5-7.4 0-4.4-4-8-9-8z" stroke="currentColor" stroke-width="2" fill="none"/>
+                <circle cx="9" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="15" cy="10" r="1.5" fill="currentColor"/>
+                <path d="M9 13c.5.8 1.5 1.5 3 1.5s2.5-.7 3-1.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </symbol>
+
+            <!-- Keyboard Icon -->
+            <symbol id="icon-keyboard" viewBox="0 0 24 24">
+                <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="5" y1="9" x2="7" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="9" y1="9" x2="11" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="13" y1="9" x2="15" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="17" y1="9" x2="19" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="7" y1="15" x2="17" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </symbol>
+
+            <!-- Monitor/Screen Icon -->
+            <symbol id="icon-monitor" viewBox="0 0 24 24">
+                <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="8" y1="21" x2="16" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="2"/>
+            </symbol>
+
+            <!-- Plug/Connection Icon -->
+            <symbol id="icon-plug" viewBox="0 0 24 24">
+                <path d="M9 2v3m6-3v3M7 5h10c1.1 0 2 .9 2 2v4c0 3-2 5-5 5h-2c-3 0-5-2-5-5V7c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="11" y1="16" x2="11" y2="22" stroke="currentColor" stroke-width="2"/>
+                <line x1="13" y1="16" x2="13" y2="22" stroke="currentColor" stroke-width="2"/>
+            </symbol>
+
+            <!-- Chart/History Icon -->
+            <symbol id="icon-chart" viewBox="0 0 24 24">
+                <path d="M3 3v18h18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                <path d="M7 14l4-4 3 3 5-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="7" cy="14" r="1.5" fill="currentColor"/>
+                <circle cx="11" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="14" cy="13" r="1.5" fill="currentColor"/>
+                <circle cx="19" cy="6" r="1.5" fill="currentColor"/>
+            </symbol>
+
+            <!-- Book/Documentation Icon -->
+            <symbol id="icon-book" viewBox="0 0 24 24">
+                <path d="M4 19.5C4 18.1 5.1 17 6.5 17H20" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path d="M6.5 2H20v20H6.5c-1.4 0-2.5-1.1-2.5-2.5v-15C4 3.1 5.1 2 6.5 2z" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="9" y1="7" x2="17" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="9" y1="11" x2="17" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </symbol>
+
+            <!-- Code/Terminal Icon -->
+            <symbol id="icon-terminal" viewBox="0 0 24 24">
+                <polyline points="4 17 10 11 4 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="19" x2="20" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </symbol>
+
+            <!-- Package/Box Icon -->
+            <symbol id="icon-package" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/>
+                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </symbol>
+        </defs>
+    </svg>
+
     <a href="#main-content" class="skip-link">Skip to content</a>
 
     <!-- Hero Section -->
@@ -698,14 +1037,21 @@
                         From vague ideas to precise instructions.
                     </p>
                     <div class="hero-buttons">
-                        <a href="documentation.html" class="btn btn-primary">
-                            📚 Read Documentation
+                        <a href="documentation.html" class="btn btn-primary" aria-label="Read Documentation">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg>
+                            Read Documentation
                         </a>
-                        <a href="#installation" class="btn btn-secondary">
-                            💻 Install CLI
+                        <a href="#mcp-server" class="btn btn-secondary" aria-label="MCP Server">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-plug"></use></svg>
+                            MCP Server
                         </a>
-                        <a href="https://github.com/abhichandra21/Promptheus" target="_blank" class="btn btn-ghost">
-                            📦 View on GitHub
+                        <a href="#installation" class="btn btn-ghost" aria-label="Install CLI">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-terminal"></use></svg>
+                            Install CLI
+                        </a>
+                        <a href="https://github.com/abhichandra21/Promptheus" target="_blank" class="btn btn-ghost" aria-label="View on GitHub">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-package"></use></svg>
+                            View on GitHub
                         </a>
                     </div>
                 </div>
@@ -730,7 +1076,9 @@
 
                 <div class="features-grid">
                     <div class="feature-card fade-in">
-                        <div class="feature-icon">🔮</div>
+                        <div class="feature-icon">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-crystal"></use></svg>
+                        </div>
                         <h3>Multi-Provider Support</h3>
                         <p>
                             Works with Google Gemini, OpenAI, Anthropic Claude, Groq, Qwen, and GLM.
@@ -739,7 +1087,9 @@
                     </div>
 
                     <div class="feature-card fade-in">
-                        <div class="feature-icon">❓</div>
+                        <div class="feature-icon">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-question"></use></svg>
+                        </div>
                         <h3>Intelligent Questioning</h3>
                         <p>
                             Automatically asks clarifying questions to understand your intent,
@@ -748,7 +1098,9 @@
                     </div>
 
                     <div class="feature-card fade-in">
-                        <div class="feature-icon">🎭</div>
+                        <div class="feature-icon">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-mask"></use></svg>
+                        </div>
                         <h3>Multiple Output Styles</h3>
                         <p>
                             Choose from bullets, steps, plain text, or concise formats.
@@ -757,7 +1109,9 @@
                     </div>
 
                     <div class="feature-card fade-in">
-                        <div class="feature-icon">⌨️</div>
+                        <div class="feature-icon">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-keyboard"></use></svg>
+                        </div>
                         <h3>Powerful CLI Interface</h3>
                         <p>
                             Built for developers and power users with keyboard shortcuts,
@@ -766,7 +1120,9 @@
                     </div>
 
                     <div class="feature-card fade-in">
-                        <div class="feature-icon">🖥️</div>
+                        <div class="feature-icon">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-monitor"></use></svg>
+                        </div>
                         <h3>Beautiful Web Interface</h3>
                         <p>
                             Experience prompt enhancement in a modern, alchemical-themed web UI
@@ -775,7 +1131,20 @@
                     </div>
 
                     <div class="feature-card fade-in">
-                        <div class="feature-icon">📊</div>
+                        <div class="feature-icon">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-plug"></use></svg>
+                        </div>
+                        <h3>MCP Server Integration</h3>
+                        <p>
+                            Built-in Model Context Protocol server for seamless integration
+                            with AI toolchains and MCP-compatible clients.
+                        </p>
+                    </div>
+
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-chart"></use></svg>
+                        </div>
                         <h3>History & Session Management</h3>
                         <p>
                             Track your prompt evolution with built-in history.
@@ -919,6 +1288,75 @@
             </div>
         </section>
 
+        <!-- MCP Server Section -->
+        <section class="mcp-server" id="mcp-server">
+            <div class="container">
+                <div class="section-header">
+                    <h2>MCP Server Integration</h2>
+                    <p class="description">
+                        Built-in Model Context Protocol server for seamless integration with AI toolchains and MCP-compatible clients.
+                    </p>
+                </div>
+
+                <div class="mcp-content">
+                    <div class="mcp-grid">
+                        <div class="mcp-card">
+                            <h3>🚀 Quick Start</h3>
+                            <div class="install-code" style="margin-bottom: 1.5rem;">
+                                <code>promptheus mcp</code>
+                            </div>
+                            <ul>
+                                <li>Start server with single command</li>
+                                <li>Connect via MCP-compatible clients</li>
+                                <li>Call tools using standard MCP protocol</li>
+                                <li>Handle clarifications interactively</li>
+                                <li>Integrate with AI toolchains</li>
+                            </ul>
+                        </div>
+
+                        <div class="mcp-card">
+                            <h3>🛠 Available Tools</h3>
+                            <ul>
+                                <li><strong>refine_prompt</strong> - Intelligent prompt refinement</li>
+                                <li><strong>tweak_prompt</strong> - Surgical prompt modifications</li>
+                                <li><strong>list_models</strong> - Provider model discovery</li>
+                                <li><strong>list_providers</strong> - Configuration status checking</li>
+                                <li><strong>validate_environment</strong> - Environment validation</li>
+                            </ul>
+                        </div>
+
+                        <div class="mcp-card">
+                            <h3>🎯 Use Cases</h3>
+                            <ul>
+                                <li>AI toolchain integration</li>
+                                <li>Batch prompt processing</li>
+                                <li>Custom AI workflows</li>
+                                <li>Development automation</li>
+                                <li>Automated prompt optimization pipelines</li>
+                                <li>Multi-model prompt testing</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mcp-details">
+                        <h3>How It Works</h3>
+                        <ol>
+                            <li><strong>Connect:</strong> Start the MCP server with <code>promptheus mcp</code></li>
+                            <li><strong>Discover:</strong> Use <code>list_providers</code> to check available AI providers</li>
+                            <li><strong>Refine:</strong> Call <code>refine_prompt</code> with your basic prompt</li>
+                            <li><strong>Integrate:</strong> Use the refined prompt with your AI toolchain</li>
+                        </ol>
+
+                        <div class="info-box">
+                            <h4>🔄 Two Integration Modes</h4>
+                            <p><strong>Interactive Mode:</strong> When AskUserQuestion is available, questions are asked automatically.</p>
+                            <p><strong>Structured Mode:</strong> Returns clarification questions for client-side handling.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Installation Section -->
         <section class="installation" id="installation">
             <div class="container">
@@ -990,6 +1428,7 @@ promptheus --provider gemini "Create a marketing plan"
                     <h4>Product</h4>
                     <ul class="footer-links">
                         <li><a href="#features">Features</a></li>
+                        <li><a href="#mcp-server">MCP Server</a></li>
                         <li><a href="#demo">Demo</a></li>
                         <li><a href="#installation">Installation</a></li>
                         <li><a href="documentation.html">Documentation</a></li>
@@ -1018,10 +1457,7 @@ promptheus --provider gemini "Create a marketing plan"
             </div>
 
             <div class="footer-bottom">
-                <p>&copy; 2024 Promptheus. Open source project. MIT License.
-                   <!-- TODO: Add GitHub star count dynamically -->
-                   <!-- <span id="github-stars">⭐ Stars: <span class="loading"></span></span> -->
-                </p>
+                <p>&copy; 2024 Promptheus. Open source project. MIT License.</p>
             </div>
         </div>
     </footer>
@@ -1061,10 +1497,11 @@ promptheus --provider gemini "Create a marketing plan"
             });
         });
 
-        // Smooth scroll behavior (buttons with # links handled by smooth scroll above)
+        // Parallax effect for hero section with throttling
+        let ticking = false;
+        let lastScrollY = 0;
 
-        // Parallax effect for hero section
-        window.addEventListener('scroll', () => {
+        function handleParallax() {
             const scrolled = window.pageYOffset;
             const hero = document.querySelector('.hero');
             const heroContent = document.querySelector('.hero-content');
@@ -1072,6 +1509,16 @@ promptheus --provider gemini "Create a marketing plan"
             if (hero && heroContent) {
                 const parallax = scrolled * 0.5;
                 heroContent.style.transform = `translateY(${parallax}px)`;
+            }
+
+            lastScrollY = scrolled;
+            ticking = false;
+        }
+
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                window.requestAnimationFrame(handleParallax);
+                ticking = true;
             }
         });
 
@@ -1091,21 +1538,8 @@ promptheus --provider gemini "Create a marketing plan"
 
         // Initialize when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
-            // Add any initialization code here
             console.log('Promptheus landing page loaded');
-
-            // You can add GitHub star count fetching here
-            // fetchGitHubStars();
         });
-
-        // GitHub stars fetching (if needed)
-        async function fetchGitHubStars() {
-            // TODO: Add GitHub API call to fetch star count
-            // const response = await fetch('https://api.github.com/repos/abhishekchandra/promptheus');
-            // const data = await response.json();
-            // const stars = data.stargazers_count;
-            // document.getElementById('github-stars').innerHTML = `⭐ Stars: ${stars}`;
-        }
     </script>
 </body>
 </html>
