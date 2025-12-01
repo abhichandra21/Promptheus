@@ -353,13 +353,12 @@ if mcp:
            - Note: Promptheus only refines prompts, it does not execute them
 
         Args:
-            prompt: The initial prompt to refine (required)
-            answers: Dict of {question_id: answer} if responding to questions (optional)
-            answer_mapping: Dict of {question_id: question_text} matching the original
-                questions returned in a previous clarification_needed response (optional
-                but recommended when answers are provided)
-            provider: Override provider (e.g., 'google', 'anthropic') (optional)
-            model: Override model name (optional)
+            prompt: The initial prompt to refine.
+            answers: Optional dictionary mapping question IDs to answers.
+            answer_mapping: Optional dictionary mapping question IDs to original
+                question text. Recommended when providing answers.
+            provider: Override provider (e.g. 'google').
+            model: Override model name.
 
         Returns:
             One of:
@@ -487,11 +486,10 @@ if mcp:
         Use this when you have a refined prompt and want to make targeted adjustments.
 
         Args:
-            prompt: The current prompt to modify (required)
-            modification: Description of what to change (required)
-                Examples: "make it more formal", "add code examples", "shorten it"
-            provider: Override provider (optional)
-            model: Override model name (optional)
+            prompt: The current prompt to modify.
+            modification: Description of what to change (e.g. "make it shorter").
+            provider: Override provider.
+            model: Override model name.
 
         Returns:
             {"type": "refined", "prompt": "..."} - Modified prompt
@@ -553,10 +551,10 @@ if mcp:
         Useful for discovering new models or checking model availability.
 
         Args:
-            providers: Optional list of provider names to query (e.g., ["google", "openai"])
-                      If not specified, queries all configured providers
-            limit: Maximum models to return per provider (default: 20, use 0 for all)
-            include_nontext: Include non-text models like vision/embedding (default: False)
+            providers: List of provider names to query (e.g. ["google"]).
+                Queries all if not specified.
+            limit: Max models per provider (default: 20).
+            include_nontext: Include non-text models (default: False).
 
         Returns:
             {
@@ -683,10 +681,9 @@ if mcp:
         Use this for troubleshooting configuration issues.
 
         Args:
-            providers: Optional list of provider names to validate (e.g., ["google", "openai"])
-                      If not specified, validates all configured providers
-            test_connection: If True, makes a test API call to verify connectivity
-                           (default: False, only checks configuration)
+            providers: List of provider names to validate.
+                Validates all if not specified.
+            test_connection: Whether to test API connectivity (default: False).
 
         Returns:
             {
