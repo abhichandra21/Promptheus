@@ -183,8 +183,9 @@ jobs:
 
       - name: Test web API - Submit prompt
         run: |
-          PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}"
-          MODEL="${PROMPTHEUS_MODEL:-claude-haiku-4-5}"
+          # Use hardcoded test defaults (works with both act and GitHub Actions)
+          PROVIDER="anthropic"
+          MODEL="claude-haiku-4-5"
           RESPONSE=$(curl -s -X POST http://localhost:8000/api/prompt/submit \
             -H "Content-Type: application/json" \
             -d "$(jq -nc --arg p "Explain quantum computing" --arg prov "$PROVIDER" --arg m "$MODEL" '{
@@ -219,9 +220,9 @@ jobs:
 
       - name: Test web API - Stream endpoint
         run: |
-          PROVIDER="${PROMPTHEUS_PROVIDER:-anthropic}"
-          MODEL_Q=""
-          if [ -n "${PROMPTHEUS_MODEL}" ]; then MODEL_Q="&model=${PROMPTHEUS_MODEL}"; fi
+          # Use hardcoded test defaults (works with both act and GitHub Actions)
+          PROVIDER="anthropic"
+          MODEL_Q="&model=claude-haiku-4-5"
 
           # Test streaming endpoint with retry logic (up to 3 attempts)
           MAX_ATTEMPTS=3
