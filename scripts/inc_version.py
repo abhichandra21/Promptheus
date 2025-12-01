@@ -18,6 +18,7 @@ from datetime import datetime
 # Get project root (2 levels up from this script)
 PROJECT_ROOT = Path(__file__).parent.parent
 CONSTANTS_FILE = PROJECT_ROOT / "src" / "promptheus" / "constants.py"
+PYPROJECT_FILE = PROJECT_ROOT / "pyproject.toml"
 
 
 def get_current_version():
@@ -30,9 +31,9 @@ def get_current_version():
 
 
 def update_version(new_version):
-    """Update version in constants.py."""
+    """Update version in both constants.py and pyproject.toml."""
+    # Update constants.py
     content = CONSTANTS_FILE.read_text()
-    # Replace VERSION line
     new_content = re.sub(
         r'^(VERSION\s*=\s*["\'])([^"\']+)(["\'])',
         r'\g<1>{}\g<3>'.format(new_version),
@@ -41,6 +42,17 @@ def update_version(new_version):
     )
     CONSTANTS_FILE.write_text(new_content)
     print(f"Updated {CONSTANTS_FILE}: VERSION = '{new_version}'")
+
+    # Update pyproject.toml
+    pyproject_content = PYPROJECT_FILE.read_text()
+    new_pyproject_content = re.sub(
+        r'^(version\s*=\s*["\'])([^"\']+)(["\'])',
+        r'\g<1>{}\g<3>'.format(new_version),
+        pyproject_content,
+        flags=re.MULTILINE
+    )
+    PYPROJECT_FILE.write_text(new_pyproject_content)
+    print(f"Updated {PYPROJECT_FILE}: version = '{new_version}'")
 
 
 def increment_version(version, bump_type):
@@ -72,9 +84,9 @@ def increment_version(version, bump_type):
 def commit_version_change(old_version, new_version, build_type):
     """Commit the version change to git."""
     try:
-        # Add constants.py to git
+        # Add both version files to git
         subprocess.run(
-            ["git", "add", "src/promptheus/constants.py"],
+            ["git", "add", "src/promptheus/constants.py", "pyproject.toml"],
             cwd=PROJECT_ROOT,
             check=True,
             capture_output=True
