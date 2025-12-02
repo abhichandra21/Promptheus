@@ -1,11 +1,12 @@
 """History API router for Promptheus Web UI."""
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from promptheus.config import Config
 from promptheus.history import get_history
+from promptheus.web.user_logging import log_user_action
 
 router = APIRouter()
 
@@ -53,7 +54,7 @@ async def get_history_entries(limit: int = 50, offset: int = 0):
 
 
 @router.delete("/history/{timestamp}")
-async def delete_history_entry(timestamp: str):
+async def delete_history_entry(timestamp: str, request: Request):
     """Delete a specific history entry by timestamp."""
     try:
         app_config = Config()
@@ -61,22 +62,63 @@ async def delete_history_entry(timestamp: str):
         success = history.delete_by_timestamp(timestamp)
 
         if not success:
+            # Log failed user action
+            log_user_action(
+                request=request,
+                action="history_delete",
+                details={"timestamp": timestamp},
+                success=False,
+                error="History entry not found"
+            )
             raise HTTPException(status_code=404, detail="History entry not found")
+
+        # Log successful user action
+        log_user_action(
+            request=request,
+            action="history_delete",
+            details={"timestamp": timestamp},
+            success=True
+        )
 
         return {"message": "History entry deleted successfully"}
     except HTTPException:
         raise
     except Exception as e:
+        # Log failed user action
+        log_user_action(
+            request=request,
+            action="history_delete",
+            details={"timestamp": timestamp},
+            success=False,
+            error=str(e)
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/history")
-async def clear_history():
+async def clear_history(request: Request):
     """Clear all history entries."""
     try:
         app_config = Config()
         history = get_history(app_config)
         history.clear()
+
+        # Log successful user action
+        log_user_action(
+            request=request,
+            action="history_clear",
+            details={},
+            success=True
+        )
+
         return {"message": "History cleared successfully"}
     except Exception as e:
+        # Log failed user action
+        log_user_action(
+            request=request,
+            action="history_clear",
+            details={},
+            success=False,
+            error=str(e)
+        )
         raise HTTPException(status_code=500, detail=str(e))
