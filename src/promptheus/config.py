@@ -68,6 +68,7 @@ SUPPORTED_PROVIDER_IDS = (
     "groq",
     "qwen",
     "glm",
+    "openrouter",
 )
 
 
@@ -397,6 +398,11 @@ class Config:
             return (
                 "To use GLM (Zhipu), add ZHIPUAI_API_KEY to your .env file.\n"
                 "Optionally set ZHIPUAI_BASE_URL for self-hosted gateways."
+            )
+        if self.provider == "openrouter":
+            return (
+                "To use OpenRouter, add OPENROUTER_API_KEY to your .env file.\n"
+                "Get your API key at: https://openrouter.ai/keys"
             )
         return "Set the appropriate API key for the selected provider."
 

@@ -13,11 +13,12 @@ from promptheus.providers import (
     GroqProvider,
     QwenProvider,
     GLMProvider,
+    OpenRouterProvider,
     get_provider,
     _parse_question_payload,
     _append_json_instruction,
     _build_chat_messages,
-    _coerce_message_content
+    _coerce_message_content,
 )
 from promptheus.config import Config
 
@@ -299,3 +300,190 @@ def test_coerce_message_content_various_types():
     # Test numeric input
     result = _coerce_message_content(123)
     assert result == "123"
+
+
+# ========================
+# OpenRouter Provider Tests
+# ========================
+
+
+def _make_httpx_response(status_code=200, text="", json_data=None):
+    """Helper to build a minimal httpx-like response object for OpenRouter tests."""
+
+    class DummyResponse:
+        def __init__(self, code, body, data):
+            self.status_code = code
+            self.text = body
+            self._data = data
+
+        def json(self):
+            if isinstance(self._data, Exception):
+                raise self._data
+            return self._data
+
+    return DummyResponse(status_code, text, json_data)
+
+
+def test_openrouter_text_success(monkeypatch):
+    """OpenRouterProvider should return text when API responds with choices."""
+    import httpx
+
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        data = {
+            "choices": [
+                {"message": {"content": "hello from openrouter"}},
+            ]
+        }
+        return _make_httpx_response(status_code=200, text="", json_data=data)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+    result = provider._generate_text("prompt", "system", json_mode=False, max_tokens=32)
+
+    assert result == "hello from openrouter"
+    assert len(calls) == 1
+    assert calls[0]["json"]["model"] == "openrouter/auto"
+
+
+def test_openrouter_uses_fallback_model_when_no_providers(monkeypatch):
+    """OpenRouterProvider should fall back to OPENROUTER_FALLBACK_MODEL when platform returns 404 with No allowed providers."""
+    import httpx
+
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append(json["model"])
+        if len(calls) == 1:
+            # First call: auto-routing model with no allowed providers
+            return _make_httpx_response(
+                status_code=404,
+                text="No allowed providers for this key",
+                json_data={"error": "No allowed providers"},
+            )
+        # Second call: fallback model succeeds
+        data = {
+            "choices": [
+                {"message": {"content": "fallback response"}},
+            ]
+        }
+        return _make_httpx_response(status_code=200, text="", json_data=data)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setenv("OPENROUTER_FALLBACK_MODEL", "fallback/model")
+
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+    result = provider._generate_text("prompt", "system", json_mode=False, max_tokens=16)
+
+    assert result == "fallback response"
+    # First call should use openrouter/auto, second the fallback
+    assert calls == ["openrouter/auto", "fallback/model"]
+
+
+def test_openrouter_non_200_raises_provider_error(monkeypatch):
+    """Non-200 responses should raise ProviderAPIError with sanitized message."""
+    import httpx
+    from promptheus.exceptions import ProviderAPIError
+
+    def fake_post(url, headers, json, timeout):
+        return _make_httpx_response(status_code=500, text="Internal server error", json_data={})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+
+    with pytest.raises(ProviderAPIError) as excinfo:
+        provider._generate_text("prompt", "system")
+
+    message = str(excinfo.value)
+    assert "API call failed" in message
+    assert "Status 500" in message
+
+
+def test_openrouter_invalid_json_raises_provider_error(monkeypatch):
+    """Invalid JSON from OpenRouter should raise ProviderAPIError."""
+    import httpx
+    from promptheus.exceptions import ProviderAPIError
+
+    def fake_post(url, headers, json, timeout):
+        # json() raises ValueError to simulate invalid JSON
+        return _make_httpx_response(status_code=200, text="not-json", json_data=ValueError("invalid json"))
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+
+    with pytest.raises(ProviderAPIError) as excinfo:
+        provider._generate_text("prompt", "system")
+
+    assert "Invalid JSON response from OpenRouter" in str(excinfo.value)
+
+
+def test_openrouter_missing_choices_raises_provider_error(monkeypatch):
+    """Responses without choices should raise ProviderAPIError."""
+    import httpx
+    from promptheus.exceptions import ProviderAPIError
+
+    def fake_post(url, headers, json, timeout):
+        # No 'choices' key
+        return _make_httpx_response(status_code=200, text="", json_data={"object": "chat.completion"})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+
+    with pytest.raises(ProviderAPIError) as excinfo:
+        provider._generate_text("prompt", "system")
+
+    assert "OpenRouter response missing choices" in str(excinfo.value)
+
+
+def test_openrouter_missing_text_raises_provider_error(monkeypatch):
+    """Responses with empty message content should raise ProviderAPIError."""
+    import httpx
+    from promptheus.exceptions import ProviderAPIError
+
+    def fake_post(url, headers, json, timeout):
+        data = {"choices": [{"message": {"content": ""}}]}
+        return _make_httpx_response(status_code=200, text="", json_data=data)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+
+    with pytest.raises(ProviderAPIError) as excinfo:
+        provider._generate_text("prompt", "system")
+
+    assert "OpenRouter response missing text output" in str(excinfo.value)
+
+
+def test_openrouter_error_payload_raises_provider_error(monkeypatch):
+    """JSON responses with an error field should raise ProviderAPIError."""
+    import httpx
+    from promptheus.exceptions import ProviderAPIError
+
+    def fake_post(url, headers, json, timeout):
+        data = {"error": "simulated platform error"}
+        return _make_httpx_response(status_code=200, text="", json_data=data)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+
+    with pytest.raises(ProviderAPIError) as excinfo:
+        provider._generate_text("prompt", "system")
+
+    message = str(excinfo.value)
+    assert "API call failed" in message
+    assert "simulated platform error" in message
+
+
+def test_openrouter_available_models_auto_only():
+    """get_available_models should return the curated auto-routing model list."""
+    provider = OpenRouterProvider(api_key="test-key", model_name="openrouter/auto")
+    models = provider.get_available_models()
+
+    assert models == ["openrouter/auto"]

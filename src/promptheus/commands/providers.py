@@ -18,7 +18,26 @@ logger = logging.getLogger(__name__)
 
 
 def get_provider_models(provider_name: str, config: Config, filter_text_only: bool = True) -> Tuple[List[str], Optional[str]]:
-    """Get models for a specific provider using models.dev service."""
+    """Get models for a specific provider.
+
+    For most providers, uses models.dev service for comprehensive model listings.
+    For OpenRouter, queries the provider's API directly since:
+    - OpenRouter is an aggregator with hundreds of models from multiple providers
+    - Model availability is API-key specific (not all users can access all models)
+    - models.dev doesn't have OpenRouter's dynamic, user-specific model catalog
+    """
+    # Special handling for OpenRouter: query the provider's API directly
+    if provider_name == "openrouter":
+        try:
+            provider = get_provider(provider_name, config)
+            models = provider.get_available_models()
+            logger.debug("Provider %s returned %d models from API", provider_name, len(models))
+            return models, None
+        except Exception as exc:
+            error_msg = sanitize_error_message(str(exc))
+            return [], f"Error fetching models from OpenRouter API: {error_msg}"
+
+    # For other providers, use models.dev service
     try:
         models = get_sync_models_for_provider(provider_name, filter_text_only)
         logger.debug("Provider %s returned %d models from models.dev (filtered: %s)", provider_name, len(models), filter_text_only)
@@ -84,6 +103,14 @@ def list_models(config: Config, console: Console, providers: Optional[List[str]]
                 provider_table.add_row(
                     "-",
                     f"[dim]Showing text-generation models only (use --include-nontext to see all models)[/dim]",
+                )
+
+            # Add special note for OpenRouter
+            if provider_name == "openrouter":
+                provider_table.add_row(
+                    "ℹ",
+                    "[cyan]OpenRouter recommendation: Use 'openrouter/auto' for intelligent routing.\n"
+                    "You can manually specify any model from https://openrouter.ai/models if you have access.[/cyan]",
                 )
 
         console.print(provider_table)

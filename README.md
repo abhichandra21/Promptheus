@@ -45,6 +45,11 @@ Promptheus analyzes your prompts and refines them with:
 | **Groq** | llama-3.3-70b, mixtral-8x7b | [Console](https://console.groq.com) |
 | **Alibaba Qwen** | qwen-max, qwen-plus | [DashScope](https://dashscope.aliyun.com) |
 | **Zhipu GLM** | glm-4-plus, glm-4-air | [Console](https://open.bigmodel.cn) |
+| **OpenRouter** | openrouter/auto (auto-routing) | [Dashboard](https://openrouter.ai) |
+
+OpenRouter integration in Promptheus is optimized around the `openrouter/auto` routing model:
+- Model listing is intentionally minimal: Promptheus does not expose your full OpenRouter account catalog.
+- You can still specify a concrete model manually with `OPENROUTER_MODEL` or `--model` if your key has access.
 
 ## Core Features
 
