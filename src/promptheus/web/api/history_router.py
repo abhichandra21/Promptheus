@@ -1,4 +1,5 @@
 """History API router for Promptheus Web UI."""
+import logging
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Request
@@ -6,9 +7,10 @@ from pydantic import BaseModel
 
 from promptheus.config import Config
 from promptheus.history import get_history
-from promptheus.web.user_logging import log_user_action
+from promptheus.utils import get_user_email
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class HistoryEntry(BaseModel):
     timestamp: str
@@ -63,21 +65,26 @@ async def delete_history_entry(timestamp: str, request: Request):
 
         if not success:
             # Log failed user action
-            log_user_action(
-                request=request,
-                action="history_delete",
-                details={"timestamp": timestamp},
-                success=False,
-                error="History entry not found"
+            logger.warning(
+                "User failed to delete history entry - not found",
+                extra={
+                    "user": get_user_email(request),
+                    "action": "history_delete",
+                    "timestamp": timestamp,
+                    "success": False,
+                }
             )
             raise HTTPException(status_code=404, detail="History entry not found")
 
         # Log successful user action
-        log_user_action(
-            request=request,
-            action="history_delete",
-            details={"timestamp": timestamp},
-            success=True
+        logger.info(
+            "User deleted history entry",
+            extra={
+                "user": get_user_email(request),
+                "action": "history_delete",
+                "timestamp": timestamp,
+                "success": True,
+            }
         )
 
         return {"message": "History entry deleted successfully"}
@@ -85,12 +92,15 @@ async def delete_history_entry(timestamp: str, request: Request):
         raise
     except Exception as e:
         # Log failed user action
-        log_user_action(
-            request=request,
-            action="history_delete",
-            details={"timestamp": timestamp},
-            success=False,
-            error=str(e)
+        logger.error(
+            "User history delete failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "history_delete",
+                "timestamp": timestamp,
+                "success": False,
+            },
+            exc_info=True
         )
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -104,21 +114,25 @@ async def clear_history(request: Request):
         history.clear()
 
         # Log successful user action
-        log_user_action(
-            request=request,
-            action="history_clear",
-            details={},
-            success=True
+        logger.info(
+            "User cleared history",
+            extra={
+                "user": get_user_email(request),
+                "action": "history_clear",
+                "success": True,
+            }
         )
 
         return {"message": "History cleared successfully"}
     except Exception as e:
         # Log failed user action
-        log_user_action(
-            request=request,
-            action="history_clear",
-            details={},
-            success=False,
-            error=str(e)
+        logger.error(
+            "User history clear failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "history_clear",
+                "success": False,
+            },
+            exc_info=True
         )
         raise HTTPException(status_code=500, detail=str(e))

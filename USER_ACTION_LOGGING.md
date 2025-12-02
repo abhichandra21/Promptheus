@@ -4,18 +4,17 @@ This document describes the user action logging feature that captures which Clou
 
 ## Overview
 
-When the Promptheus web application is deployed behind Cloudflare Zero Trust (formerly Cloudflare Access), all user actions are automatically logged with the authenticated user's identity. This provides audit trails and accountability without requiring any built-in session management in the application.
+When the Promptheus web application is deployed behind Cloudflare Zero Trust (formerly Cloudflare Access), all user actions are automatically logged with the authenticated user's identity using Python's standard logging framework.
 
 ## How It Works
 
 ### Cloudflare Authentication Headers
 
-When a user authenticates through Cloudflare Zero Trust, Cloudflare automatically adds the following headers to every request:
+When a user authenticates through Cloudflare Zero Trust, Cloudflare automatically adds headers to every request:
 
 - `Cf-Access-Authenticated-User-Email`: The email address of the authenticated user
-- `Cf-Access-Jwt-Assertion`: JWT token containing user details
 
-The Promptheus application extracts the user's email from these headers and includes it in all action logs.
+The Promptheus application extracts the user's email from this header and includes it in all action logs.
 
 ### Logged Actions
 
@@ -42,59 +41,56 @@ The following user actions are logged:
 
 ### Log Format
 
-All user action logs are written in structured JSON format with the following fields:
+All user action logs are written using Python's standard logging with extra fields:
 
-```json
-{
-  "timestamp": "2025-12-02T10:30:45.123456",
-  "user": "user@example.com",
-  "action": "prompt_submit",
-  "path": "/api/prompt/submit",
-  "method": "POST",
-  "success": true,
-  "ip_address": "192.168.1.100",
-  "details": {
-    "provider": "google",
-    "model": "gemini-2.0-flash-exp",
-    "task_type": "analysis",
-    "prompt_length": 150,
-    "skip_questions": false,
-    "refine": false
-  }
-}
+```python
+logger.info(
+    "User submitted prompt",
+    extra={
+        "user": "user@example.com",
+        "action": "prompt_submit",
+        "provider": "google",
+        "model": "gemini-2.0-flash-exp",
+        "task_type": "analysis",
+        "prompt_length": 150,
+        "skip_questions": False,
+        "refine": False,
+        "success": True,
+    }
+)
 ```
 
 For failed actions:
 
-```json
-{
-  "timestamp": "2025-12-02T10:35:20.789012",
-  "user": "user@example.com",
-  "action": "prompt_submit",
-  "path": "/api/prompt/submit",
-  "method": "POST",
-  "success": false,
-  "ip_address": "192.168.1.100",
-  "error": "No provider configured",
-  "details": {
-    "provider": "unknown",
-    "prompt_length": 150
-  }
-}
+```python
+logger.error(
+    "User prompt submission failed",
+    extra={
+        "user": "user@example.com",
+        "action": "prompt_submit",
+        "provider": "unknown",
+        "prompt_length": 150,
+        "success": False,
+    },
+    exc_info=True
+)
 ```
 
 ## Configuration
 
 ### Environment Variables
 
-To enable user action logging, set the following environment variable:
+To enable logging to a file, set the standard logging environment variable:
 
 ```bash
-# Path to the user action log file
-export PROMPTHEUS_USER_ACTION_LOG_FILE="/var/log/promptheus/user_actions.log"
+# Path to the application log file
+export PROMPTHEUS_LOG_FILE="/var/log/promptheus/app.log"
+
+# Optional: Use JSON format for structured logging
+export PROMPTHEUS_LOG_FORMAT="json"
 ```
 
-If this environment variable is not set, user actions will still be logged to the standard application log (if configured), but they won't be written to a separate file.
+User actions will be logged to the same file as other application logs, with the `user` field in the extra data.
 
 ### Cloudflare Zero Trust Setup
 
@@ -117,21 +113,27 @@ If this environment variable is not set, user actions will still be logged to th
 
 When logging settings updates, API keys are automatically masked in the logs. Only the last 4 characters of the API key are shown:
 
-```json
-{
-  "action": "settings_update",
-  "details": {
-    "key": "GOOGLE_API_KEY",
-    "value": "●●●●●●●●●●●●●●●●1234"
-  }
-}
+```python
+# API key value is masked before logging
+masked_value = "●" * (len(update.value) - 4) + update.value[-4:] if len(update.value) > 4 else "●" * len(update.value)
+
+logger.info(
+    "User updated settings",
+    extra={
+        "user": get_user_email(request),
+        "action": "settings_update",
+        "key": "GOOGLE_API_KEY",
+        "value": "●●●●●●●●●●●●●●●●1234",
+        "success": True,
+    }
+)
 ```
 
 This prevents sensitive API keys from being exposed in log files.
 
 ### Log File Permissions
 
-Ensure that the user action log file has appropriate permissions:
+Ensure that the log file has appropriate permissions:
 
 ```bash
 # Create the log directory
@@ -142,7 +144,7 @@ sudo chown promptheus-user:promptheus-group /var/log/promptheus
 
 # Set restrictive permissions
 sudo chmod 750 /var/log/promptheus
-sudo chmod 640 /var/log/promptheus/user_actions.log
+sudo chmod 640 /var/log/promptheus/app.log
 ```
 
 ### No Session Management Required
@@ -158,42 +160,30 @@ This logging approach has several security benefits:
 
 ### Example Queries
 
-To analyze user action logs, you can use standard JSON log processing tools:
+To analyze user action logs, you can use standard log processing tools. If using JSON format:
 
 **1. View all actions by a specific user:**
 ```bash
-grep '"user": "user@example.com"' /var/log/promptheus/user_actions.log | jq .
+grep '"user": "user@example.com"' /var/log/promptheus/app.log | jq .
 ```
 
 **2. View failed actions:**
 ```bash
-grep '"success": false' /var/log/promptheus/user_actions.log | jq .
+grep '"success": false' /var/log/promptheus/app.log | jq .
 ```
 
-**3. Count actions by type:**
+**3. View specific action types:**
 ```bash
-jq -r '.action' /var/log/promptheus/user_actions.log | sort | uniq -c
-```
-
-**4. View recent API key validation attempts:**
-```bash
-grep '"action": "api_key_validation"' /var/log/promptheus/user_actions.log | jq .
-```
-
-**5. View all actions in the last hour:**
-```bash
-# Requires jq and date utilities
-HOUR_AGO=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S)
-jq -r "select(.timestamp > \"$HOUR_AGO\")" /var/log/promptheus/user_actions.log
+grep '"action": "prompt_submit"' /var/log/promptheus/app.log | jq .
 ```
 
 ### Log Rotation
 
-It's recommended to set up log rotation for the user action log file:
+It's recommended to set up log rotation for the application log file:
 
 ```bash
 # /etc/logrotate.d/promptheus
-/var/log/promptheus/user_actions.log {
+/var/log/promptheus/app.log {
     daily
     rotate 30
     compress
@@ -212,17 +202,7 @@ It's recommended to set up log rotation for the user action log file:
 
 ### Testing Without Cloudflare
 
-During development, when the application is not behind Cloudflare Zero Trust, the logs will show `user: unknown`:
-
-```json
-{
-  "timestamp": "2025-12-02T10:40:15.123456",
-  "user": "unknown",
-  "action": "prompt_submit",
-  "cloudflare_authenticated": false
-  ...
-}
-```
+During development, when the application is not behind Cloudflare Zero Trust, the logs will show `user: unknown`.
 
 ### Simulating Cloudflare Headers
 
@@ -239,34 +219,30 @@ curl -X POST http://localhost:8000/api/prompt/submit \
 
 ### Code Structure
 
-The user action logging feature is implemented in the following modules:
+The user action logging feature is implemented using Python's standard logging:
 
-1. **`src/promptheus/web/user_logging.py`**
-   - Core user logging functions
-   - Cloudflare header extraction
-   - User context management
+1. **`src/promptheus/utils.py`**
+   - `get_user_email()` function extracts user email from Cloudflare headers
 
-2. **`src/promptheus/logging_config.py`**
-   - Logging configuration setup
-   - User action logger configuration
-   - JSON log formatting
-
-3. **API Routers**
+2. **API Routers**
    - `src/promptheus/web/api/prompt_router.py`
    - `src/promptheus/web/api/history_router.py`
    - `src/promptheus/web/api/settings_router.py`
    - `src/promptheus/web/api/providers_router.py`
    - `src/promptheus/web/api/questions_router.py`
 
-Each router imports and uses the `log_user_action()` function to log actions.
+Each router uses `logger.info()` or `logger.error()` with extra fields to log user actions.
 
 ### Adding New Actions
 
 To add logging for new actions:
 
-1. Import the logging function:
+1. Import the necessary modules:
 ```python
-from promptheus.web.user_logging import log_user_action
+import logging
+from promptheus.utils import get_user_email
+
+logger = logging.getLogger(__name__)
 ```
 
 2. Add the `Request` parameter to your endpoint:
@@ -278,23 +254,29 @@ async def your_endpoint(data: YourModel, request: Request):
     ...
 ```
 
-3. Call `log_user_action()` after the action completes:
+3. Log actions using standard logging with extra fields:
 ```python
 # On success
-log_user_action(
-    request=request,
-    action="your_action_name",
-    details={"key": "value"},
-    success=True
+logger.info(
+    "User performed action",
+    extra={
+        "user": get_user_email(request),
+        "action": "your_action_name",
+        "success": True,
+        # ... other relevant fields
+    }
 )
 
 # On failure
-log_user_action(
-    request=request,
-    action="your_action_name",
-    details={"key": "value"},
-    success=False,
-    error=str(exception)
+logger.error(
+    "User action failed",
+    extra={
+        "user": get_user_email(request),
+        "action": "your_action_name",
+        "success": False,
+        # ... other relevant fields
+    },
+    exc_info=True
 )
 ```
 
@@ -312,7 +294,7 @@ If logs show `user: unknown` in production:
 
 If the log file is not being created:
 
-1. Check that `PROMPTHEUS_USER_ACTION_LOG_FILE` is set
+1. Check that `PROMPTHEUS_LOG_FILE` is set
 2. Verify the directory exists and has proper permissions
 3. Check application logs for errors related to file creation
 
@@ -321,33 +303,5 @@ If the log file is not being created:
 If some actions are not being logged:
 
 1. Check that the endpoint has been updated with the `Request` parameter
-2. Verify that `log_user_action()` is being called in both success and error paths
+2. Verify that logging calls are present in both success and error paths
 3. Check for exceptions that might be preventing log writes
-
-## Compliance and Privacy
-
-### GDPR Considerations
-
-User action logs contain personally identifiable information (email addresses). Ensure compliance with GDPR and other privacy regulations:
-
-1. **Data Retention**: Implement appropriate log retention policies
-2. **Right to Access**: Provide mechanisms for users to access their logs
-3. **Right to Erasure**: Implement procedures to remove user data from logs when requested
-4. **Disclosure**: Update your privacy policy to inform users about action logging
-
-### Audit Compliance
-
-This logging system can help meet various audit and compliance requirements:
-
-- **SOC 2**: Provides audit trails for user actions
-- **HIPAA**: Logs access to sensitive data (if applicable)
-- **ISO 27001**: Supports information security management
-- **PCI DSS**: Tracks access to systems handling payment data (if applicable)
-
-## Support
-
-For questions or issues related to user action logging, please:
-
-1. Check the troubleshooting section above
-2. Review the implementation in `src/promptheus/web/user_logging.py`
-3. Open an issue on the GitHub repository with log samples (redacted of sensitive information)

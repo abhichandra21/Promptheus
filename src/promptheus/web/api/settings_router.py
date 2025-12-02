@@ -1,4 +1,5 @@
 """Settings API router for Promptheus Web UI."""
+import logging
 import os
 from typing import Dict, List, Optional
 
@@ -7,9 +8,10 @@ from pydantic import BaseModel
 from dotenv import load_dotenv, set_key
 
 from promptheus.config import Config, find_and_load_dotenv
-from promptheus.web.user_logging import log_user_action
+from promptheus.utils import get_user_email
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class SettingMetadata(BaseModel):
     key: str
@@ -134,12 +136,14 @@ async def update_settings(update: SettingsUpdate, request: Request):
 
         if update.key not in valid_keys:
             # Log failed user action
-            log_user_action(
-                request=request,
-                action="settings_update",
-                details={"key": update.key},
-                success=False,
-                error=f"Invalid setting key: {update.key}"
+            logger.warning(
+                "User failed to update settings - invalid key",
+                extra={
+                    "user": get_user_email(request),
+                    "action": "settings_update",
+                    "key": update.key,
+                    "success": False,
+                }
             )
             raise HTTPException(status_code=400, detail=f"Invalid setting key: {update.key}")
 
@@ -164,14 +168,15 @@ async def update_settings(update: SettingsUpdate, request: Request):
         if "API_KEY" in update.key and update.value:
             masked_value = "●" * (len(update.value) - 4) + update.value[-4:] if len(update.value) > 4 else "●" * len(update.value)
 
-        log_user_action(
-            request=request,
-            action="settings_update",
-            details={
+        logger.info(
+            "User updated settings",
+            extra={
+                "user": get_user_email(request),
+                "action": "settings_update",
                 "key": update.key,
-                "value": masked_value
-            },
-            success=True
+                "value": masked_value,
+                "success": True,
+            }
         )
 
         return {"success": True, "key": update.key, "value": update.value}
@@ -179,12 +184,15 @@ async def update_settings(update: SettingsUpdate, request: Request):
         raise
     except Exception as e:
         # Log failed user action
-        log_user_action(
-            request=request,
-            action="settings_update",
-            details={"key": update.key},
-            success=False,
-            error=str(e)
+        logger.error(
+            "User settings update failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "settings_update",
+                "key": update.key,
+                "success": False,
+            },
+            exc_info=True
         )
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -271,11 +279,14 @@ async def validate_api_key(validation_request: ValidationRequest, request: Reque
                     response = httpx.get(models_url, headers=headers, timeout=10.0)
                     if response.status_code == 200:
                         # Log successful validation
-                        log_user_action(
-                            request=request,
-                            action="api_key_validation",
-                            details={"provider": provider_id},
-                            success=True
+                        logger.info(
+                            "User validated API key",
+                            extra={
+                                "user": get_user_email(request),
+                                "action": "api_key_validation",
+                                "provider": provider_id,
+                                "success": True,
+                            }
                         )
                         return ValidationResponse(
                             valid=True,
@@ -333,11 +344,14 @@ async def validate_api_key(validation_request: ValidationRequest, request: Reque
                     pass
 
                 # Log successful validation
-                log_user_action(
-                    request=request,
-                    action="api_key_validation",
-                    details={"provider": provider_id},
-                    success=True
+                logger.info(
+                    "User validated API key",
+                    extra={
+                        "user": get_user_email(request),
+                        "action": "api_key_validation",
+                        "provider": provider_id,
+                        "success": True,
+                    }
                 )
 
                 return ValidationResponse(
@@ -368,15 +382,15 @@ async def validate_api_key(validation_request: ValidationRequest, request: Reque
                     suggestion = f"Unable to reach {provider_id} servers. Check your internet connection"
 
                 # Log failed validation
-                log_user_action(
-                    request=request,
-                    action="api_key_validation",
-                    details={
+                logger.warning(
+                    "User API key validation failed",
+                    extra={
+                        "user": get_user_email(request),
+                        "action": "api_key_validation",
                         "provider": provider_id,
-                        "error_type": error_type
-                    },
-                    success=False,
-                    error=sanitized_error
+                        "error_type": error_type,
+                        "success": False,
+                    }
                 )
 
                 return ValidationResponse(
@@ -401,15 +415,19 @@ async def validate_api_key(validation_request: ValidationRequest, request: Reque
                 os.environ[original_provider_model_env] = original_provider_model
 
     except Exception as e:
+        from promptheus.utils import sanitize_error_message
         error_msg = sanitize_error_message(str(e))
 
         # Log failed validation
-        log_user_action(
-            request=request,
-            action="api_key_validation",
-            details={"provider": validation_request.provider},
-            success=False,
-            error=error_msg
+        logger.error(
+            "User API key validation error",
+            extra={
+                "user": get_user_email(request),
+                "action": "api_key_validation",
+                "provider": validation_request.provider,
+                "success": False,
+            },
+            exc_info=True
         )
 
         return ValidationResponse(

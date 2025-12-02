@@ -6,9 +6,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable, Optional, TYPE_CHECKING
 
 from promptheus.logging_config import setup_logging
+
+if TYPE_CHECKING:
+    from fastapi import Request
 
 try:
     import pyperclip
@@ -75,3 +78,26 @@ def copy_to_clipboard(text: str, console, notify: Optional[Callable[[str], None]
         else:
             console.print(msg)
         return False
+
+
+def get_user_email(request: "Request") -> str:
+    """
+    Extract user email from Cloudflare Access headers or future auth methods.
+
+    Returns the authenticated user's email, or "unknown" if not authenticated.
+    """
+    # Try Cloudflare Access header
+    user_email = request.headers.get("Cf-Access-Authenticated-User-Email")
+
+    if not user_email:
+        # Try case-insensitive search
+        for header_name in request.headers:
+            if header_name.lower() == "cf-access-authenticated-user-email":
+                user_email = request.headers.get(header_name)
+                break
+
+    # Future: Add custom auth extraction here
+    # if not user_email and hasattr(request.state, "user"):
+    #     user_email = request.state.user.email
+
+    return user_email or "unknown"

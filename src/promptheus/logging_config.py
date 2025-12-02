@@ -93,19 +93,3 @@ def setup_logging(default_level: int = logging.WARNING) -> None:
             if use_json:
                 handler.setFormatter(JsonFormatter())
 
-    # Configure user action logger
-    user_action_log_file = os.getenv("PROMPTHEUS_USER_ACTION_LOG_FILE")
-    if user_action_log_file:
-        # Create a dedicated logger for user actions
-        user_action_logger = logging.getLogger("promptheus.user_actions")
-        user_action_logger.setLevel(logging.INFO)
-        user_action_logger.propagate = False  # Don't propagate to root logger
-
-        # Add file handler for user actions
-        file_handler = logging.FileHandler(user_action_log_file)
-        file_handler.setLevel(logging.INFO)
-
-        # Use JSON format for user action logs for better structured logging
-        file_handler.setFormatter(JsonFormatter())
-
-        user_action_logger.addHandler(file_handler)

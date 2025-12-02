@@ -18,8 +18,7 @@ from promptheus.prompts import (
     GENERATION_SYSTEM_INSTRUCTION,
     TWEAK_SYSTEM_INSTRUCTION,
 )
-from promptheus.utils import sanitize_error_message
-from promptheus.web.user_logging import log_user_action, get_cloudflare_user_email
+from promptheus.utils import sanitize_error_message, get_user_email
 
 LOAD_ALL_MODELS_SENTINEL = "__load_all__"
 
@@ -221,18 +220,19 @@ async def submit_prompt(prompt_request: PromptRequest, request: Request):
         )
 
         # Log successful user action
-        log_user_action(
-            request=request,
-            action="prompt_submit",
-            details={
+        logger.info(
+            "User submitted prompt",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_submit",
                 "provider": provider_name,
                 "model": app_config.get_model(),
                 "task_type": task_type,
                 "prompt_length": len(prompt_request.prompt),
                 "skip_questions": prompt_request.skip_questions,
                 "refine": prompt_request.refine,
-            },
-            success=True
+                "success": True,
+            }
         )
 
         return PromptResponse(
@@ -256,15 +256,16 @@ async def submit_prompt(prompt_request: PromptRequest, request: Request):
             error_provider = prompt_request.provider or "unknown"
 
         # Log failed user action
-        log_user_action(
-            request=request,
-            action="prompt_submit",
-            details={
+        logger.error(
+            "User prompt submission failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_submit",
                 "provider": error_provider,
                 "prompt_length": len(prompt_request.prompt),
+                "success": False,
             },
-            success=False,
-            error=str(e)
+            exc_info=True
         )
 
         return PromptResponse(
@@ -309,16 +310,17 @@ async def tweak_prompt(tweak_request: TweakRequest, request: Request):
         )
 
         # Log successful user action
-        log_user_action(
-            request=request,
-            action="prompt_tweak",
-            details={
+        logger.info(
+            "User tweaked prompt",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_tweak",
                 "provider": provider_name,
                 "model": app_config.get_model(),
                 "tweak_instruction": tweak_request.tweak_instruction,
                 "prompt_length": len(tweak_request.current_prompt),
-            },
-            success=True
+                "success": True,
+            }
         )
 
         return {
@@ -329,15 +331,16 @@ async def tweak_prompt(tweak_request: TweakRequest, request: Request):
         }
     except Exception as e:
         # Log failed user action
-        log_user_action(
-            request=request,
-            action="prompt_tweak",
-            details={
+        logger.error(
+            "User prompt tweak failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_tweak",
                 "tweak_instruction": tweak_request.tweak_instruction,
                 "prompt_length": len(tweak_request.current_prompt),
+                "success": False,
             },
-            success=False,
-            error=str(e)
+            exc_info=True
         )
 
         return {

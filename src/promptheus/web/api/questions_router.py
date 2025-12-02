@@ -1,4 +1,5 @@
 """Questions API router for Promptheus Web UI."""
+import logging
 from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -6,9 +7,10 @@ from pydantic import BaseModel
 
 from promptheus.config import Config
 from promptheus.providers import get_provider
-from promptheus.web.user_logging import log_user_action
+from promptheus.utils import get_user_email
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class QuestionsRequest(BaseModel):
     prompt: str
@@ -60,15 +62,15 @@ async def generate_questions(questions_request: QuestionsRequest, request: Reque
 
         if result is None:
             # Log failed user action
-            log_user_action(
-                request=request,
-                action="questions_generate",
-                details={
+            logger.warning(
+                "User questions generation failed - no result",
+                extra={
+                    "user": get_user_email(request),
+                    "action": "questions_generate",
                     "provider": provider_name,
-                    "prompt_length": len(questions_request.prompt)
-                },
-                success=False,
-                error="Failed to generate questions"
+                    "prompt_length": len(questions_request.prompt),
+                    "success": False,
+                }
             )
             return QuestionsResponse(
                 success=False,
@@ -81,17 +83,18 @@ async def generate_questions(questions_request: QuestionsRequest, request: Reque
         questions = result.get("questions", [])
 
         # Log successful user action
-        log_user_action(
-            request=request,
-            action="questions_generate",
-            details={
+        logger.info(
+            "User generated questions",
+            extra={
+                "user": get_user_email(request),
+                "action": "questions_generate",
                 "provider": provider_name,
                 "model": app_config.get_model(),
                 "task_type": task_type,
                 "prompt_length": len(questions_request.prompt),
-                "questions_count": len(questions)
-            },
-            success=True
+                "questions_count": len(questions),
+                "success": True,
+            }
         )
 
         return QuestionsResponse(
@@ -101,14 +104,15 @@ async def generate_questions(questions_request: QuestionsRequest, request: Reque
         )
     except Exception as e:
         # Log failed user action
-        log_user_action(
-            request=request,
-            action="questions_generate",
-            details={
-                "prompt_length": len(questions_request.prompt)
+        logger.error(
+            "User questions generation failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "questions_generate",
+                "prompt_length": len(questions_request.prompt),
+                "success": False,
             },
-            success=False,
-            error=str(e)
+            exc_info=True
         )
         return QuestionsResponse(
             success=False,
