@@ -92,6 +92,92 @@ def list_models(config: Config, console: Console, providers: Optional[List[str]]
 
 
 
+def get_models_data(config: Config, providers: Optional[List[str]] = None, include_nontext: bool = False, limit: int = 20) -> dict:
+    """
+    Get models data for API/MCP usage (returns dict instead of printing).
+
+    Returns:
+        {
+            "provider_name": {
+                "available": bool,
+                "models": [str, ...],
+                "error": str (optional)
+            }
+        }
+    """
+    provider_config = config._ensure_provider_config()
+    all_providers = providers or sorted(provider_config.get("providers", {}).keys())
+
+    results = {}
+    for provider_name in all_providers:
+        models, error = get_provider_models(provider_name, config, filter_text_only=not include_nontext)
+
+        if error:
+            results[provider_name] = {
+                "available": False,
+                "error": error,
+                "models": []
+            }
+        else:
+            display_models = models if limit <= 0 else models[:limit]
+            results[provider_name] = {
+                "available": True,
+                "models": [{"id": m, "name": m} for m in display_models],
+                "total_count": len(models),
+                "showing": len(display_models)
+            }
+
+    return results
+
+
+def get_validation_data(config: Config, providers: Optional[List[str]] = None, test_connection: bool = False) -> dict:
+    """
+    Get validation data for API/MCP usage (returns dict instead of printing).
+
+    Returns:
+        {
+            "provider_name": {
+                "configured": bool,
+                "api_key_status": str,
+                "connection_test": str (if test_connection=True)
+            }
+        }
+    """
+    all_provider_data = config._ensure_provider_config().get("providers", {})
+
+    if providers:
+        provider_data = {p: all_provider_data[p] for p in providers if p in all_provider_data}
+    else:
+        provider_data = all_provider_data
+
+    results = {}
+
+    for name, info in provider_data.items():
+        api_key_env = info.get("api_key_env")
+        keys = api_key_env if isinstance(api_key_env, list) else [api_key_env]
+
+        key_found = any(os.getenv(key) for key in keys if key)
+
+        provider_result = {
+            "configured": key_found,
+            "api_key_status": "set" if key_found else f"missing_{keys[0] if keys else 'unknown'}"
+        }
+
+        if test_connection:
+            if not key_found:
+                provider_result["connection_test"] = "skipped"
+            else:
+                connected, error = _test_provider_connection(name, config)
+                if connected:
+                    provider_result["connection_test"] = "passed"
+                else:
+                    provider_result["connection_test"] = f"failed: {error}"
+
+        results[name] = provider_result
+
+    return results
+
+
 def validate_environment(config: Config, console: Console, test_connection: bool = False, providers: Optional[List[str]] = None) -> None:
     """Check environment for required API keys and optionally test connections."""
     console.print("[bold]Promptheus Environment Validator[/bold]")

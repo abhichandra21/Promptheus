@@ -586,3 +586,99 @@ promptheus web --no-browser
 - CORS restricted to local origins only
 - All API endpoints require same-origin requests
 - API keys are masked in the UI and never exposed in client-side code
+
+## MCP Server Integration
+
+Promptheus includes a **Model Context Protocol (MCP) server** that exposes prompt refinement capabilities as standardized tools for integration with MCP-compatible clients.
+
+### Starting the MCP Server
+
+```bash
+# Start the MCP server
+promptheus mcp
+
+# Or run directly with Python
+python -m promptheus.mcp_server
+```
+
+**Prerequisites:**
+- MCP package installed: `pip install mcp` (included in requirements.txt)
+- At least one provider API key configured (see [Authentication Management](#authentication-management))
+
+### Available MCP Tools
+
+The MCP server exposes five core tools:
+
+#### `refine_prompt`
+Intelligent prompt refinement with optional clarification questions.
+
+**Workflow:**
+1. Call with initial prompt: `refine_prompt("Write a blog post")`
+2. Handle response types:
+   - `{"type": "refined", "prompt": "..."}`: Success with refined prompt
+   - `{"type": "clarification_needed", "questions_for_ask_user_question": [...]}`: Questions needed
+   - `{"type": "error", "error_type": "...", "message": "..."}`: Error occurred
+3. If clarification needed, use AskUserQuestion tool with provided questions
+4. Call again with answers: `refine_prompt(prompt, answers={"q0": "answer"}, answer_mapping={...})`
+
+#### `tweak_prompt`
+Apply targeted modifications to existing prompts.
+
+**Usage:** `tweak_prompt(prompt, modification="make it shorter")`
+
+#### `list_models`
+Discover available models from configured providers.
+
+**Usage:** `list_models(providers=["google", "openai"], limit=10)`
+
+#### `list_providers`
+Check provider configuration status.
+
+**Usage:** `list_providers()` - Returns configuration status for all providers
+
+#### `validate_environment`
+Test environment configuration and API connectivity.
+
+**Usage:** `validate_environment(test_connection=True)` - Validates config and tests API connectivity
+
+### MCP Server Integration Patterns
+
+**Basic Refinement:**
+```bash
+# Client calls refine_prompt with basic prompt
+# Server returns either refined prompt or clarification questions
+# Client handles AskUserQuestion workflow if needed
+```
+
+**Pipeline Integration:**
+```bash
+# MCP server can be integrated into AI toolchains
+# Use refined prompts with other LLM providers
+# Maintain session state across multiple refinement operations
+```
+
+**Error Handling:**
+```bash
+# All MCP tools return structured error responses
+# Consistent error format across all operations
+# Detailed error messages for troubleshooting
+```
+
+### MCP Server Configuration
+
+**Environment Setup:**
+```bash
+# Ensure MCP package is available
+pip install mcp
+
+# Configure provider API keys
+promptheus auth google  # or any supported provider
+
+# Validate configuration
+promptheus validate --test-connection
+```
+
+**Integration Requirements:**
+- MCP-compatible client that supports tool calling
+- AskUserQuestion tool support for interactive clarification
+- JSON processing capabilities for structured responses

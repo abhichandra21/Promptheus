@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 COPY pyproject.toml poetry.lock README.md ./
 
 # Install poetry
-RUN pip install --no-cache-dir poetry==1.7.1
+RUN pip install --no-cache-dir poetry==2.2.1
 
 # Copy application code (needed before poetry install for local package)
 COPY src/ ./src/

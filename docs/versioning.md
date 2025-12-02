@@ -1,6 +1,24 @@
 # Version Management
 
-This document explains the version management system for Promptheus development.
+This document explains the version management and release process for Promptheus development.
+
+## Release Process Overview
+
+Promptheus uses semantic versioning (`MAJOR.MINOR.PATCH`) and treats `main` as the integration branch for upcoming releases.
+
+- Regular feature and bugfix PRs merge into `main` without changing the version number.
+- Version changes are made only when cutting a release.
+- Releases are identified by annotated git tags (`vX.Y.Z`) and the corresponding version constant in code.
+
+High-level flow:
+
+1. Create feature branches from `main`.
+2. Open PRs, get them reviewed, and merge into `main` without touching the version.
+3. When you are ready to ship, create a short-lived release branch from `main`.
+4. Bump the version using `scripts/inc_version.py` (see Release Workflow).
+5. Open a `Release X.Y.Z` PR from the release branch into `main`.
+6. After merging, create and push an annotated git tag (`vX.Y.Z`).
+7. Publish artifacts (PyPI, Docker image, etc.) from the tagged commit.
 
 ## Current Version Display
 
@@ -56,18 +74,18 @@ python scripts/inc_version.py patch release
 
 ## Development Workflow
 
-### For Small Changes (recommended)
+### Everyday Development
 
-```bash
-# After making changes
-python scripts/inc_version.py patch dev
-git push
-```
+During normal development:
 
-This will:
-1. Update version in `src/promptheus/constants.py`
-2. Create a git commit with version bump
-3. Web UI will show the new version with commit details
+- Create a feature branch from `main`.
+- Make changes and open a PR.
+- Do not modify the version for regular PRs.
+- Merge the PR into `main` after review and checks.
+
+The `main` branch can stay ahead of the last released version; this is expected.
+
+If you want to test a development build locally, you can optionally bump to a `-dev` version using the script, but this should not be done in every PR and should not be committed solely for local testing.
 
 ### Version Information in Web UI
 
@@ -92,19 +110,40 @@ The `/api/version` endpoint returns:
 
 ### Release Workflow
 
-```bash
-# Ensure working directory is clean
-git status
+The release workflow collects multiple merged PRs into a single versioned release.
 
-# Bump version for release
+```bash
+# Ensure working directory is clean and up to date
+git checkout main
+git pull
+
+# Create a release branch
+git checkout -b release/x.y.z
+
+# Bump version for release (choose patch/minor/major)
 python scripts/inc_version.py patch release
 
-# Create and push tag
+# Commit and push the release branch
+git push -u origin release/x.y.z
+```
+
+Then:
+
+1. Open a `Release x.y.z` PR from `release/x.y.z` into `main`.
+2. After tests pass and the PR is merged, create and push the tag from `main`:
+
+```bash
+git checkout main
+git pull
 git tag -a v0.2.1 -m "Release v0.2.1"
 git push origin v0.2.1
+```
 
-# After release, bump back to dev
+3. After the release is published, you can bump back to a development version if desired:
+
+```bash
 python scripts/inc_version.py patch dev
+git push
 ```
 
 ## File Locations
