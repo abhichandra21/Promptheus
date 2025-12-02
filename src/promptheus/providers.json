@@ -101,8 +101,8 @@
       "api_key_url": "https://openrouter.ai/keys",
       "capabilities": {
         "supports_json": true,
-        "supports_tools": true,
-        "supports_vision": true,
+        "supports_tools": false,
+        "supports_vision": false,
         "max_output_tokens": 8192
       }
     }

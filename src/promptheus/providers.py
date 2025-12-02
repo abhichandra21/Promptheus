@@ -618,6 +618,10 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
     def __init__(self, api_key: str, model_name: str = "openrouter/auto", base_url: Optional[str] = None) -> None:
+        # For OpenRouter, the OpenAI-compatible client created by the base class is kept for
+        # structural consistency (shared helpers and type expectations), but all text generation
+        # and model listing use the direct HTTP path implemented below rather than the OpenAI
+        # compatibility surface.
         self._api_key = api_key
         self._base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
         super().__init__(
@@ -670,13 +674,23 @@ class OpenRouterProvider(OpenAICompatibleProvider):
                 fallback_model = os.getenv("OPENROUTER_FALLBACK_MODEL", "mistralai/mistral-nemo")
                 response = _post_with_model(fallback_model)
         except httpx.TimeoutException as exc:
+            logger.warning("OpenRouter API call timed out")
             raise ProviderAPIError("API call failed: OpenRouter request timed out") from exc
         except Exception as exc:  # pragma: no cover - network failures
-            raise ProviderAPIError(f"API call failed: {sanitize_error_message(str(exc))}") from exc
+            sanitized_error = sanitize_error_message(str(exc))
+            logger.warning("OpenRouter API call failed: %s", sanitized_error)
+            raise ProviderAPIError(f"API call failed: {sanitized_error}") from exc
 
         if response.status_code != 200:
-            sanitized = sanitize_error_message(response.text or f"Status {response.status_code}")
-            raise ProviderAPIError(f"API call failed: Status {response.status_code} - {sanitized}")
+            sanitized_body = sanitize_error_message(response.text or f"Status {response.status_code}")
+            logger.warning("OpenRouter returned non-200 status %s: %s", response.status_code, sanitized_body)
+            # Provide basic guidance for common authentication and permission errors
+            if response.status_code in (401, 403):
+                logger.warning(
+                    "OpenRouter authentication or permission error detected. "
+                    "Check the OpenRouter dashboard, ensure the key is valid, and that at least one provider/model is enabled."
+                )
+            raise ProviderAPIError(f"API call failed: Status {response.status_code} - {sanitized_body}")
 
         try:
             data = response.json()
@@ -684,7 +698,9 @@ class OpenRouterProvider(OpenAICompatibleProvider):
             raise ProviderAPIError("API call failed: Invalid JSON response from OpenRouter") from exc
 
         if isinstance(data, dict) and "error" in data:
-            raise ProviderAPIError(f"API call failed: {sanitize_error_message(str(data.get('error')))}")
+            sanitized_error = sanitize_error_message(str(data.get("error")))
+            logger.warning("OpenRouter returned error payload: %s", sanitized_error)
+            raise ProviderAPIError(f"API call failed: {sanitized_error}")
 
         choices = data.get("choices") if isinstance(data, dict) else None
         if not choices:

@@ -97,13 +97,18 @@ async def get_providers():
 
         provider_infos = []
         for provider_id, provider_data in available_providers_data.items():
-            # Get models from models.dev
             provider_config = providers_config.get('providers', {}).get(provider_id, {})
-            try:
-                models = await service.get_models_for_provider(provider_id)
-            except Exception:
-                # If models.dev fails, use empty list
-                models = []
+
+            # For most providers, use models.dev for model listing. OpenRouter is handled
+            # separately since models.dev does not track its aggregated catalog.
+            if provider_id == "openrouter":
+                models = provider_config.get("example_models") or ["openrouter/auto"]
+            else:
+                try:
+                    models = await service.get_models_for_provider(provider_id)
+                except Exception:
+                    # If models.dev fails, use empty list
+                    models = []
 
             provider_infos.append(ProviderInfo(
                 id=provider_id,
