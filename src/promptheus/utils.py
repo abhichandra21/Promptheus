@@ -118,16 +118,30 @@ def get_device_category(request: "Request") -> str:
     """
     user_agent = request.headers.get("User-Agent", "").lower()
 
+    if not user_agent:
+        return "unknown"
+
     # Privacy-safe: Only detect basic device category
     # Avoid detailed fingerprinting, browser versions, or specific models
-    mobile_indicators = ["mobile", "android", "iphone", "ipod", "windows phone"]
-    tablet_indicators = ["ipad", "android 3", "tablet", "kindle", "silk"]
 
+    # Mobile indicators (check first for specificity)
+    mobile_indicators = ["mobile", "iphone", "ipod", "windows phone", "android"]
+
+    # Tablet indicators (checked after confirming not mobile)
+    tablet_indicators = ["ipad", "tablet", "kindle", "silk", "tab", "nexus", "sm-t", "gt-"]
+
+    # Check for tablet-specific patterns first
+    # iPads and explicit tablet indicators
+    if "ipad" in user_agent or "tablet" in user_agent:
+        return "tablet"
+
+    # Android tablets (Android without "mobile")
+    if "android" in user_agent and "mobile" not in user_agent:
+        return "tablet"
+
+    # Check for mobile indicators
     if any(indicator in user_agent for indicator in mobile_indicators):
         return "mobile"
-    elif any(indicator in user_agent for indicator in tablet_indicators):
-        return "tablet"
-    elif user_agent:  # Has User-Agent but doesn't match mobile/tablet
-        return "desktop"
-    else:
-        return "unknown"
+
+    # Fallback to desktop for any other User-Agent
+    return "desktop"
