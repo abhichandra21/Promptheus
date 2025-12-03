@@ -1,14 +1,17 @@
 """Settings API router for Promptheus Web UI."""
+import logging
 import os
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from dotenv import load_dotenv, set_key
 
 from promptheus.config import Config, find_and_load_dotenv
+from promptheus.utils import get_user_email, get_device_category
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class SettingMetadata(BaseModel):
     key: str
@@ -121,7 +124,7 @@ async def get_settings():
 
 
 @router.post("/settings")
-async def update_settings(update: SettingsUpdate):
+async def update_settings(update: SettingsUpdate, request: Request):
     """Update a setting in the environment."""
     try:
         # Validate the setting key
@@ -130,10 +133,20 @@ async def update_settings(update: SettingsUpdate):
             "GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
             "GROQ_API_KEY", "DASHSCOPE_API_KEY", "ZHIPUAI_API_KEY", "OPENROUTER_API_KEY"
         ]
-        
+
         if update.key not in valid_keys:
+            # Log failed user action
+            logger.warning(
+                "User failed to update settings - invalid key",
+                extra={
+                    "user": get_user_email(request),
+                    "action": "settings_update",
+                    "key": update.key,
+                    "success": False,
+                }
+            )
             raise HTTPException(status_code=400, detail=f"Invalid setting key: {update.key}")
-        
+
         # Update the .env file (if present) and reload environment variables
         env_path = find_and_load_dotenv()
         if env_path:
@@ -142,27 +155,57 @@ async def update_settings(update: SettingsUpdate):
 
         # Ensure the running process sees the updated value immediately
         os.environ[update.key] = update.value
-        
+
         # If updating provider or model, update config as well
         app_config = Config()
         if update.key == "PROMPTHEUS_PROVIDER":
             app_config.set_provider(update.value)
         elif update.key == "PROMPTHEUS_MODEL":
             app_config.set_model(update.value)
-        
+
+        # Log successful user action (mask API key values for security)
+        masked_value = update.value
+        if "API_KEY" in update.key and update.value:
+            masked_value = "●" * (len(update.value) - 4) + update.value[-4:] if len(update.value) > 4 else "●" * len(update.value)
+
+        logger.info(
+            "User updated settings",
+            extra={
+                "user": get_user_email(request),
+                "action": "settings_update",
+                "key": update.key,
+                "value": masked_value,
+                "device_category": get_device_category(request),
+                "success": True,
+            }
+        )
+
         return {"success": True, "key": update.key, "value": update.value}
+    except HTTPException:
+        raise
     except Exception as e:
+        # Log failed user action
+        logger.error(
+            "User settings update failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "settings_update",
+                "key": update.key,
+                "success": False,
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/settings/validate", response_model=ValidationResponse)
-async def validate_api_key(request: ValidationRequest):
+async def validate_api_key(validation_request: ValidationRequest, request: Request):
     """Validate an API key by testing connection to the provider."""
     try:
         from promptheus.providers import get_provider
         from promptheus.utils import sanitize_error_message
 
-        provider_id = request.provider.lower()
+        provider_id = validation_request.provider.lower()
         # Normalize legacy aliases
         if provider_id == "dashscope":
             provider_id = "qwen"
@@ -170,7 +213,7 @@ async def validate_api_key(request: ValidationRequest):
             provider_id = "google"
         if provider_id in {"zai", "zhipuai"}:
             provider_id = "glm"
-        api_key = request.api_key
+        api_key = validation_request.api_key
 
         # Temporarily set the API key in environment for validation
         env_key_map = {
@@ -236,6 +279,17 @@ async def validate_api_key(request: ValidationRequest):
                 try:
                     response = httpx.get(models_url, headers=headers, timeout=10.0)
                     if response.status_code == 200:
+                        # Log successful validation
+                        logger.info(
+                            "User validated API key",
+                            extra={
+                                "user": get_user_email(request),
+                                "action": "api_key_validation",
+                                "provider": provider_id,
+                                "device_category": get_device_category(request),
+                                "success": True,
+                            }
+                        )
                         return ValidationResponse(
                             valid=True,
                             provider=provider_id,
@@ -291,6 +345,17 @@ async def validate_api_key(request: ValidationRequest):
                     # Not all providers support this, so just continue
                     pass
 
+                # Log successful validation
+                logger.info(
+                    "User validated API key",
+                    extra={
+                        "user": get_user_email(request),
+                        "action": "api_key_validation",
+                        "provider": provider_id,
+                        "success": True,
+                    }
+                )
+
                 return ValidationResponse(
                     valid=True,
                     provider=provider_id,
@@ -318,6 +383,18 @@ async def validate_api_key(request: ValidationRequest):
                     error_type = "network_error"
                     suggestion = f"Unable to reach {provider_id} servers. Check your internet connection"
 
+                # Log failed validation
+                logger.warning(
+                    "User API key validation failed",
+                    extra={
+                        "user": get_user_email(request),
+                        "action": "api_key_validation",
+                        "provider": provider_id,
+                        "error_type": error_type,
+                        "success": False,
+                    }
+                )
+
                 return ValidationResponse(
                     valid=False,
                     provider=provider_id,
@@ -340,10 +417,24 @@ async def validate_api_key(request: ValidationRequest):
                 os.environ[original_provider_model_env] = original_provider_model
 
     except Exception as e:
+        from promptheus.utils import sanitize_error_message
         error_msg = sanitize_error_message(str(e))
+
+        # Log failed validation
+        logger.error(
+            "User API key validation error",
+            extra={
+                "user": get_user_email(request),
+                "action": "api_key_validation",
+                "provider": validation_request.provider,
+                "success": False,
+            },
+            exc_info=True
+        )
+
         return ValidationResponse(
             valid=False,
-            provider=request.provider,
+            provider=validation_request.provider,
             error=error_msg,
             error_type="validation_error",
             suggestion="An unexpected error occurred during validation"

@@ -1,19 +1,21 @@
 """Providers API router for Promptheus Web UI."""
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from promptheus.config import Config
 from promptheus.providers import get_available_providers, validate_provider, get_provider
 from promptheus.models_dev_service import get_service
-from promptheus.utils import sanitize_error_message
+from promptheus.utils import sanitize_error_message, get_user_email, get_device_category
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class ProviderInfo(BaseModel):
     id: str
@@ -133,7 +135,7 @@ async def get_providers():
 
 
 @router.post("/providers/select")
-async def select_provider(selection: ProviderSelection):
+async def select_provider(selection: ProviderSelection, request: Request):
     """Select a provider as the current default."""
     try:
         app_config = Config()
@@ -157,6 +159,20 @@ async def select_provider(selection: ProviderSelection):
             # Auto-detect the provider again
             app_config.reset()
             detected_provider = app_config.provider or "google"
+
+            # Log successful user action
+            logger.info(
+                "User selected auto provider",
+                extra={
+                    "user": get_user_email(request),
+                    "action": "provider_select",
+                    "provider": "auto",
+                    "detected_provider": detected_provider,
+                    "device_category": get_device_category(request),
+                    "success": True,
+                }
+            )
+
             return {"current_provider": detected_provider}
 
         # Update the configuration
@@ -195,8 +211,34 @@ async def select_provider(selection: ProviderSelection):
                 os.environ["PROMPTHEUS_MODEL"] = default_model
 
         available = validate_provider(selection.provider_id, app_config)
+
+        # Log successful user action
+        logger.info(
+            "User selected provider",
+            extra={
+                "user": get_user_email(request),
+                "action": "provider_select",
+                "provider": selection.provider_id,
+                "available": available,
+                "default_model": default_model,
+                "device_category": get_device_category(request),
+                "success": True,
+            }
+        )
+
         return {"current_provider": selection.provider_id, "available": available}
     except Exception as e:
+        # Log failed user action
+        logger.error(
+            "User provider selection failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "provider_select",
+                "provider": selection.provider_id,
+                "success": False,
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -360,7 +402,7 @@ async def preflight_providers():
 
 
 @router.post("/providers/select-model")
-async def select_model(selection: ModelSelection):
+async def select_model(selection: ModelSelection, request: Request):
     """Select a model for a specific provider."""
     try:
         app_config = Config()
@@ -415,6 +457,19 @@ async def select_model(selection: ModelSelection):
             os.environ[model_env_key] = selection.model
         os.environ["PROMPTHEUS_MODEL"] = selection.model
 
+        # Log successful user action
+        logger.info(
+            "User selected model",
+            extra={
+                "user": get_user_email(request),
+                "action": "model_select",
+                "provider": selection.provider_id,
+                "model": selection.model,
+                "device_category": get_device_category(request),
+                "success": True,
+            }
+        )
+
         return {
             "provider_id": selection.provider_id,
             "current_model": selection.model
@@ -422,4 +477,16 @@ async def select_model(selection: ModelSelection):
     except HTTPException:
         raise
     except Exception as e:
+        # Log failed user action
+        logger.error(
+            "User model selection failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "model_select",
+                "provider": selection.provider_id,
+                "model": selection.model,
+                "success": False,
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))

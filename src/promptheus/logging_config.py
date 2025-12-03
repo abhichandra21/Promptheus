@@ -26,11 +26,49 @@ class JsonFormatter(logging.Formatter):
             "name": record.name,
             "message": record.getMessage(),
         }
+
+        # Include extra fields from structured logging
+        # These are fields added via logger.info(..., extra={...})
+        for key, value in record.__dict__.items():
+            if key not in {
+                "name", "msg", "args", "created", "filename", "funcName",
+                "levelname", "levelno", "lineno", "module", "msecs",
+                "message", "pathname", "process", "processName", "relativeCreated",
+                "thread", "threadName", "exc_info", "exc_text", "stack_info",
+                "taskName", "getMessage", "asctime"
+            }:
+                payload[key] = value
+
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         if record.stack_info:
             payload["stack"] = record.stack_info
         return json.dumps(payload, ensure_ascii=False)
+
+
+class StructuredFormatter(logging.Formatter):
+    """Formatter that includes structured logging fields in standard format."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Format the base message
+        base_msg = super().format(record)
+
+        # Collect extra fields
+        extra_fields = []
+        for key, value in record.__dict__.items():
+            if key not in {
+                "name", "msg", "args", "created", "filename", "funcName",
+                "levelname", "levelno", "lineno", "module", "msecs",
+                "message", "pathname", "process", "processName", "relativeCreated",
+                "thread", "threadName", "exc_info", "exc_text", "stack_info",
+                "taskName", "getMessage", "asctime"
+            }:
+                extra_fields.append(f"{key}={value}")
+
+        # Append extra fields if present
+        if extra_fields:
+            return f"{base_msg} | {' '.join(extra_fields)}"
+        return base_msg
 
 
 def setup_logging(default_level: int = logging.WARNING) -> None:
@@ -45,6 +83,7 @@ def setup_logging(default_level: int = logging.WARNING) -> None:
       - PROMPTHEUS_LOG_LEVEL: override log level (INFO, WARNING, etc.)
       - PROMPTHEUS_LOG_FORMAT: "json" for JSON, otherwise format string
       - PROMPTHEUS_LOG_FILE: path to a log file (optional)
+      - PROMPTHEUS_USER_ACTION_LOG_FILE: path to a separate log file for user actions (optional)
     """
     debug_flag = os.getenv(PROMPTHEUS_DEBUG_ENV, "").lower()
     is_debug = debug_flag in {"1", "true", "yes", "on"}
@@ -84,10 +123,13 @@ def setup_logging(default_level: int = logging.WARNING) -> None:
             if use_json:
                 handler.setFormatter(JsonFormatter())
             else:
-                handler.setFormatter(logging.Formatter(raw_format))
+                handler.setFormatter(StructuredFormatter(raw_format))
     else:
         logging.getLogger().setLevel(level)
         for handler in logging.getLogger().handlers:
             handler.setLevel(level)
             if use_json:
                 handler.setFormatter(JsonFormatter())
+            else:
+                handler.setFormatter(StructuredFormatter(raw_format))
+

@@ -3,7 +3,7 @@ import asyncio
 import json
 from typing import Dict, Any, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -18,7 +18,7 @@ from promptheus.prompts import (
     GENERATION_SYSTEM_INSTRUCTION,
     TWEAK_SYSTEM_INSTRUCTION,
 )
-from promptheus.utils import sanitize_error_message
+from promptheus.utils import sanitize_error_message, get_user_email, get_device_category
 
 LOAD_ALL_MODELS_SENTINEL = "__load_all__"
 
@@ -143,7 +143,7 @@ class PromptResponse(BaseModel):
 
 
 @router.post("/prompt/submit", response_model=PromptResponse)
-async def submit_prompt(request: PromptRequest):
+async def submit_prompt(prompt_request: PromptRequest, request: Request):
     """Submit a prompt for processing."""
     import logging
     logger = logging.getLogger(__name__)
@@ -152,15 +152,15 @@ async def submit_prompt(request: PromptRequest):
         # Create configuration
         app_config = Config()
         logger.debug(f"[submit_prompt] Initial provider from config: {app_config.provider}")
-        logger.debug(f"[submit_prompt] Request provider: {request.provider}")
-        logger.debug(f"[submit_prompt] Request model: {request.model}")
+        logger.debug(f"[submit_prompt] Request provider: {prompt_request.provider}")
+        logger.debug(f"[submit_prompt] Request model: {prompt_request.model}")
 
-        if request.provider:
-            app_config.set_provider(request.provider)
-            logger.debug(f"[submit_prompt] Set provider from request: {request.provider}")
-        if request.model and request.model != LOAD_ALL_MODELS_SENTINEL:
-            app_config.set_model(request.model)
-            logger.debug(f"[submit_prompt] Set model from request: {request.model}")
+        if prompt_request.provider:
+            app_config.set_provider(prompt_request.provider)
+            logger.debug(f"[submit_prompt] Set provider from request: {prompt_request.provider}")
+        if prompt_request.model and prompt_request.model != LOAD_ALL_MODELS_SENTINEL:
+            app_config.set_model(prompt_request.model)
+            logger.debug(f"[submit_prompt] Set model from request: {prompt_request.model}")
 
         # Create provider instance - use detected provider, no hardcoded fallback
         provider_name = app_config.provider
@@ -174,54 +174,71 @@ async def submit_prompt(request: PromptRequest):
         # Create an argument-like object to pass to the processing function
         class Args:
             def __init__(self):
-                self.skip_questions = request.skip_questions
-                self.refine = request.refine
-                self.copy = request.copy_to_clipboard
-                self.output_format = request.output_format
+                self.skip_questions = prompt_request.skip_questions
+                self.refine = prompt_request.refine
+                self.copy = prompt_request.copy_to_clipboard
+                self.output_format = prompt_request.output_format
                 # Add other attributes that might be accessed
                 self.file = None
-                self.provider = request.provider
-                self.model = request.model
+                self.provider = prompt_request.provider
+                self.model = prompt_request.model
                 self.version = False
                 self.verbose = False
-        
+
         args = Args()
-        
+
         # Create IO context for web (quiet mode to avoid terminal output)
         io = IOContext.create()
         io.quiet_output = True  # Don't output to terminal in web mode
-        
+
         # Create a simple mapping from answers keys to question text (in real usage, this would come from the questions generation)
         # For now, if we have answers, we'll just use the keys as is
-        mapping = request.question_mapping or {}
-        if not mapping and request.answers:
-            mapping = {key: key for key in request.answers.keys()}
+        mapping = prompt_request.question_mapping or {}
+        if not mapping and prompt_request.answers:
+            mapping = {key: key for key in prompt_request.answers.keys()}
 
         # Process the prompt using the web-compatible function
         final_prompt, task_type = await process_prompt_web(
             provider=provider,
-            initial_prompt=request.prompt,
-            answers=request.answers,
+            initial_prompt=prompt_request.prompt,
+            answers=prompt_request.answers,
             mapping=mapping,
-            skip_questions=request.skip_questions,
-            refine=request.refine,
+            skip_questions=prompt_request.skip_questions,
+            refine=prompt_request.refine,
             app_config=app_config,
-            style=request.style,
+            style=prompt_request.style,
         )
-        
+
         # Save to history
         history = get_history(app_config)
         history.save_entry(
-            original_prompt=request.prompt,
+            original_prompt=prompt_request.prompt,
             refined_prompt=final_prompt,
             task_type=task_type,
             provider=provider_name,
             model=app_config.get_model()
         )
 
+        # Log successful user action
+        logger.info(
+            "User submitted prompt",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_submit",
+                "provider": provider_name,
+                "model": app_config.get_model(),
+                "task_type": task_type,
+                "prompt_length": len(prompt_request.prompt),
+                "skip_questions": prompt_request.skip_questions,
+                "refine": prompt_request.refine,
+                "device_category": get_device_category(request),
+                "success": True,
+            }
+        )
+
         return PromptResponse(
             success=True,
-            original_prompt=request.prompt,
+            original_prompt=prompt_request.prompt,
             refined_prompt=final_prompt,
             task_type=task_type,
             provider=provider_name,
@@ -235,13 +252,27 @@ async def submit_prompt(request: PromptRequest):
         error_provider = "unknown"
         try:
             temp_config = Config()
-            error_provider = temp_config.provider or request.provider or "unknown"
+            error_provider = temp_config.provider or prompt_request.provider or "unknown"
         except:
-            error_provider = request.provider or "unknown"
+            error_provider = prompt_request.provider or "unknown"
+
+        # Log failed user action
+        logger.error(
+            "User prompt submission failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_submit",
+                "provider": error_provider,
+                "prompt_length": len(prompt_request.prompt),
+                "device_category": get_device_category(request),
+                "success": False,
+            },
+            exc_info=True
+        )
 
         return PromptResponse(
             success=False,
-            original_prompt=request.prompt,
+            original_prompt=prompt_request.prompt,
             refined_prompt="",
             task_type="",
             provider=error_provider,
@@ -253,7 +284,7 @@ async def submit_prompt(request: PromptRequest):
 
 
 @router.post("/prompt/tweak")
-async def tweak_prompt(request: TweakRequest):
+async def tweak_prompt(tweak_request: TweakRequest, request: Request):
     """Tweak/refine an existing prompt based on user instructions."""
     import logging
     logger = logging.getLogger(__name__)
@@ -261,8 +292,8 @@ async def tweak_prompt(request: TweakRequest):
     try:
         # Create configuration
         app_config = Config()
-        if request.provider:
-            app_config.set_provider(request.provider)
+        if tweak_request.provider:
+            app_config.set_provider(tweak_request.provider)
 
         # Create provider instance - use detected provider, no hardcoded fallback
         provider_name = app_config.provider
@@ -275,18 +306,47 @@ async def tweak_prompt(request: TweakRequest):
 
         # Tweak the prompt
         tweaked_prompt = provider.tweak_prompt(
-            request.current_prompt,
-            request.tweak_instruction,
+            tweak_request.current_prompt,
+            tweak_request.tweak_instruction,
             TWEAK_SYSTEM_INSTRUCTION
+        )
+
+        # Log successful user action
+        logger.info(
+            "User tweaked prompt",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_tweak",
+                "provider": provider_name,
+                "model": app_config.get_model(),
+                "tweak_instruction": tweak_request.tweak_instruction,
+                "prompt_length": len(tweak_request.current_prompt),
+                "device_category": get_device_category(request),
+                "success": True,
+            }
         )
 
         return {
             "success": True,
-            "original_prompt": request.current_prompt,
+            "original_prompt": tweak_request.current_prompt,
             "tweaked_prompt": tweaked_prompt,
-            "tweak_instruction": request.tweak_instruction
+            "tweak_instruction": tweak_request.tweak_instruction
         }
     except Exception as e:
+        # Log failed user action
+        logger.error(
+            "User prompt tweak failed",
+            extra={
+                "user": get_user_email(request),
+                "action": "prompt_tweak",
+                "tweak_instruction": tweak_request.tweak_instruction,
+                "prompt_length": len(tweak_request.current_prompt),
+                "device_category": get_device_category(request),
+                "success": False,
+            },
+            exc_info=True
+        )
+
         return {
             "success": False,
             "error": str(e)
