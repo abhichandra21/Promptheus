@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from promptheus.config import Config
 from promptheus.providers import get_provider
-from promptheus.utils import get_user_email
+from promptheus.utils import get_user_email, get_device_category
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -93,6 +93,7 @@ async def generate_questions(questions_request: QuestionsRequest, request: Reque
                 "task_type": task_type,
                 "prompt_length": len(questions_request.prompt),
                 "questions_count": len(questions),
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )

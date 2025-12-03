@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from promptheus.config import Config
 from promptheus.providers import get_available_providers, validate_provider, get_provider
 from promptheus.models_dev_service import get_service
-from promptheus.utils import sanitize_error_message, get_user_email
+from promptheus.utils import sanitize_error_message, get_user_email, get_device_category
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -168,6 +168,7 @@ async def select_provider(selection: ProviderSelection, request: Request):
                     "action": "provider_select",
                     "provider": "auto",
                     "detected_provider": detected_provider,
+                    "device_category": get_device_category(request),
                     "success": True,
                 }
             )
@@ -220,6 +221,7 @@ async def select_provider(selection: ProviderSelection, request: Request):
                 "provider": selection.provider_id,
                 "available": available,
                 "default_model": default_model,
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )
@@ -463,6 +465,7 @@ async def select_model(selection: ModelSelection, request: Request):
                 "action": "model_select",
                 "provider": selection.provider_id,
                 "model": selection.model,
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )

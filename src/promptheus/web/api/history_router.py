@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from promptheus.config import Config
 from promptheus.history import get_history
-from promptheus.utils import get_user_email
+from promptheus.utils import get_user_email, get_device_category
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -83,6 +83,7 @@ async def delete_history_entry(timestamp: str, request: Request):
                 "user": get_user_email(request),
                 "action": "history_delete",
                 "timestamp": timestamp,
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )
@@ -119,6 +120,7 @@ async def clear_history(request: Request):
             extra={
                 "user": get_user_email(request),
                 "action": "history_clear",
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )

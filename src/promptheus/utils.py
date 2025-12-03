@@ -86,18 +86,48 @@ def get_user_email(request: "Request") -> str:
 
     Returns the authenticated user's email, or "unknown" if not authenticated.
     """
-    # Try Cloudflare Access header
-    user_email = request.headers.get("Cf-Access-Authenticated-User-Email")
+    # Option 1: Try specific email header first (correct case)
+    user_email = request.headers.get("CF-Access-Authenticated-User-Email")
 
     if not user_email:
-        # Try case-insensitive search
+        # Option 2: Try case-insensitive search for safety
         for header_name in request.headers:
             if header_name.lower() == "cf-access-authenticated-user-email":
                 user_email = request.headers.get(header_name)
                 break
+
+    # Option 3: Fallback to subject if no email (contains provider:identifier format)
+    if not user_email:
+        subject = request.headers.get("CF-Access-Subject")
+        if subject and "@" in subject:  # If subject looks like an email
+            user_email = subject
 
     # Future: Add custom auth extraction here
     # if not user_email and hasattr(request.state, "user"):
     #     user_email = request.state.user.email
 
     return user_email or "unknown"
+
+
+def get_device_category(request: "Request") -> str:
+    """
+    Extract basic device category from User-Agent header for privacy-safe logging.
+
+    Returns: "mobile", "tablet", "desktop", or "unknown".
+    Only extracts category, NOT detailed fingerprinting information.
+    """
+    user_agent = request.headers.get("User-Agent", "").lower()
+
+    # Privacy-safe: Only detect basic device category
+    # Avoid detailed fingerprinting, browser versions, or specific models
+    mobile_indicators = ["mobile", "android", "iphone", "ipod", "windows phone"]
+    tablet_indicators = ["ipad", "android 3", "tablet", "kindle", "silk"]
+
+    if any(indicator in user_agent for indicator in mobile_indicators):
+        return "mobile"
+    elif any(indicator in user_agent for indicator in tablet_indicators):
+        return "tablet"
+    elif user_agent:  # Has User-Agent but doesn't match mobile/tablet
+        return "desktop"
+    else:
+        return "unknown"

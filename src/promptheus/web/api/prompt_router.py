@@ -18,7 +18,7 @@ from promptheus.prompts import (
     GENERATION_SYSTEM_INSTRUCTION,
     TWEAK_SYSTEM_INSTRUCTION,
 )
-from promptheus.utils import sanitize_error_message, get_user_email
+from promptheus.utils import sanitize_error_message, get_user_email, get_device_category
 
 LOAD_ALL_MODELS_SENTINEL = "__load_all__"
 
@@ -231,6 +231,7 @@ async def submit_prompt(prompt_request: PromptRequest, request: Request):
                 "prompt_length": len(prompt_request.prompt),
                 "skip_questions": prompt_request.skip_questions,
                 "refine": prompt_request.refine,
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )
@@ -263,6 +264,7 @@ async def submit_prompt(prompt_request: PromptRequest, request: Request):
                 "action": "prompt_submit",
                 "provider": error_provider,
                 "prompt_length": len(prompt_request.prompt),
+                "device_category": get_device_category(request),
                 "success": False,
             },
             exc_info=True
@@ -319,6 +321,7 @@ async def tweak_prompt(tweak_request: TweakRequest, request: Request):
                 "model": app_config.get_model(),
                 "tweak_instruction": tweak_request.tweak_instruction,
                 "prompt_length": len(tweak_request.current_prompt),
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )
@@ -338,6 +341,7 @@ async def tweak_prompt(tweak_request: TweakRequest, request: Request):
                 "action": "prompt_tweak",
                 "tweak_instruction": tweak_request.tweak_instruction,
                 "prompt_length": len(tweak_request.current_prompt),
+                "device_category": get_device_category(request),
                 "success": False,
             },
             exc_info=True

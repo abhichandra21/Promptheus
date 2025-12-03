@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv, set_key
 
 from promptheus.config import Config, find_and_load_dotenv
-from promptheus.utils import get_user_email
+from promptheus.utils import get_user_email, get_device_category
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -175,6 +175,7 @@ async def update_settings(update: SettingsUpdate, request: Request):
                 "action": "settings_update",
                 "key": update.key,
                 "value": masked_value,
+                "device_category": get_device_category(request),
                 "success": True,
             }
         )
@@ -285,6 +286,7 @@ async def validate_api_key(validation_request: ValidationRequest, request: Reque
                                 "user": get_user_email(request),
                                 "action": "api_key_validation",
                                 "provider": provider_id,
+                                "device_category": get_device_category(request),
                                 "success": True,
                             }
                         )
