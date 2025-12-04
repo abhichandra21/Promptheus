@@ -110,6 +110,10 @@ async def process_prompt_web(
                     total_run_latency_sec = end_time - start_time
                     refine_llm_latency_sec = llm_end_time - llm_start_time
                     llm_latency_sec = questions_llm_latency_sec + refine_llm_latency_sec
+
+                    input_tokens = getattr(provider, "last_input_tokens", None)
+                    output_tokens = getattr(provider, "last_output_tokens", None)
+                    total_tokens = getattr(provider, "last_total_tokens", None)
                     
                     # Record successful telemetry
                     record_prompt_run_event(
@@ -133,6 +137,9 @@ async def process_prompt_web(
                         python_version=sys.version.split()[0],
                         platform=sys.platform,
                         interface="web",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
                     )
                     
                     # Record clarifying questions summary
@@ -156,6 +163,10 @@ async def process_prompt_web(
                     end_time = time.time()
                     total_run_latency_sec = end_time - start_time
                     llm_latency_sec = llm_end_time - llm_start_time
+
+                    input_tokens = getattr(provider, "last_input_tokens", None)
+                    output_tokens = getattr(provider, "last_output_tokens", None)
+                    total_tokens = getattr(provider, "last_total_tokens", None)
                     
                     # Record successful telemetry
                     record_prompt_run_event(
@@ -179,6 +190,9 @@ async def process_prompt_web(
                         python_version=sys.version.split()[0],
                         platform=sys.platform,
                         interface="web",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
                     )
                     
                     return final_prompt, task_type
@@ -194,6 +208,10 @@ async def process_prompt_web(
                     end_time = time.time()
                     total_run_latency_sec = end_time - start_time
                     llm_latency_sec = llm_end_time - llm_start_time
+
+                    input_tokens = getattr(provider, "last_input_tokens", None)
+                    output_tokens = getattr(provider, "last_output_tokens", None)
+                    total_tokens = getattr(provider, "last_total_tokens", None)
                     
                     # Record successful telemetry
                     record_prompt_run_event(
@@ -217,6 +235,9 @@ async def process_prompt_web(
                         python_version=sys.version.split()[0],
                         platform=sys.platform,
                         interface="web",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
                     )
                     
                     return final_prompt, task_type
@@ -235,6 +256,10 @@ async def process_prompt_web(
                 end_time = time.time()
                 total_run_latency_sec = end_time - start_time
                 llm_latency_sec = llm_end_time - llm_start_time
+
+                input_tokens = getattr(provider, "last_input_tokens", None)
+                output_tokens = getattr(provider, "last_output_tokens", None)
+                total_tokens = getattr(provider, "last_total_tokens", None)
                 
                 # Record successful telemetry
                 record_prompt_run_event(
@@ -258,6 +283,9 @@ async def process_prompt_web(
                     python_version=sys.version.split()[0],
                     platform=sys.platform,
                     interface="web",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
                 )
                 
                 return final_prompt, "analysis"
@@ -288,6 +316,10 @@ async def process_prompt_web(
         end_time = time.time()
         total_run_latency_sec = end_time - start_time
         llm_latency_sec = llm_end_time - llm_start_time
+
+        input_tokens = getattr(provider, "last_input_tokens", None)
+        output_tokens = getattr(provider, "last_output_tokens", None)
+        total_tokens = getattr(provider, "last_total_tokens", None)
         
         # Record successful telemetry
         record_prompt_run_event(
@@ -311,6 +343,9 @@ async def process_prompt_web(
             python_version=sys.version.split()[0],
             platform=sys.platform,
             interface="web",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
         )
         
         return final_prompt, "analysis"

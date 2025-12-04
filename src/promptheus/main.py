@@ -502,6 +502,9 @@ def process_single_prompt(
                     python_version=sys.version.split()[0],
                     platform=sys.platform,
                     interface="cli",
+                    input_tokens=None,
+                    output_tokens=None,
+                    total_tokens=None,
                 )
                 return None
             
@@ -546,6 +549,11 @@ def process_single_prompt(
         model_name = 'unknown'
         task_type_value = 'unknown'
     
+    # Best-effort token usage from the last provider call
+    input_tokens = getattr(provider, "last_input_tokens", None)
+    output_tokens = getattr(provider, "last_output_tokens", None)
+    total_tokens = getattr(provider, "last_total_tokens", None)
+
     record_prompt_run_event(
         source="cli",
         provider=provider_name,
@@ -567,6 +575,9 @@ def process_single_prompt(
         python_version=sys.version.split()[0],
         platform=sys.platform,
         interface="cli",
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
     )
     
     # Record clarifying questions summary (privacy guard handles history_enabled=False)

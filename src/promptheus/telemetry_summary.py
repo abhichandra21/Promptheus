@@ -34,6 +34,9 @@ class RunMetrics:
     llm_latencies: List[float] = None
     input_chars: List[int] = None
     output_chars: List[int] = None
+    input_tokens: List[int] = None
+    output_tokens: List[int] = None
+    total_tokens: List[int] = None
 
     def __post_init__(self):
         if self.total_latencies is None:
@@ -44,6 +47,12 @@ class RunMetrics:
             self.input_chars = []
         if self.output_chars is None:
             self.output_chars = []
+        if self.input_tokens is None:
+            self.input_tokens = []
+        if self.output_tokens is None:
+            self.output_tokens = []
+        if self.total_tokens is None:
+            self.total_tokens = []
 
     @property
     def success_rate(self) -> float:
@@ -79,6 +88,22 @@ class RunMetrics:
     def avg_output_chars(self) -> Optional[float]:
         """Average output characters."""
         return statistics.mean(self.output_chars) if self.output_chars else None
+
+    # Token aggregation
+    def avg_input_tokens(self) -> Optional[float]:
+        """Average input tokens."""
+        valid = [v for v in self.input_tokens if isinstance(v, (int, float)) and v > 0]
+        return statistics.mean(valid) if valid else None
+
+    def avg_output_tokens(self) -> Optional[float]:
+        """Average output tokens."""
+        valid = [v for v in self.output_tokens if isinstance(v, (int, float)) and v > 0]
+        return statistics.mean(valid) if valid else None
+
+    def avg_total_tokens(self) -> Optional[float]:
+        """Average total tokens."""
+        valid = [v for v in self.total_tokens if isinstance(v, (int, float)) and v > 0]
+        return statistics.mean(valid) if valid else None
 
 
 @dataclass
@@ -215,14 +240,22 @@ def aggregate_metrics(events: List[dict]) -> Tuple[
             elif event.get("processing_latency_sec") is not None:
                 overall.total_latencies.append(event["processing_latency_sec"])
 
-            if event.get("llm_latency_sec") is not None:
-                overall.llm_latencies.append(event["llm_latency_sec"])
+        if event.get("llm_latency_sec") is not None:
+            overall.llm_latencies.append(event["llm_latency_sec"])
 
             # Character counts
-            if event.get("input_chars") is not None:
-                overall.input_chars.append(event["input_chars"])
-            if event.get("output_chars") is not None:
-                overall.output_chars.append(event["output_chars"])
+        if event.get("input_chars") is not None:
+            overall.input_chars.append(event["input_chars"])
+        if event.get("output_chars") is not None:
+            overall.output_chars.append(event["output_chars"])
+
+            # Token counts
+        if event.get("input_tokens") is not None:
+            overall.input_tokens.append(event["input_tokens"])
+        if event.get("output_tokens") is not None:
+            overall.output_tokens.append(event["output_tokens"])
+        if event.get("total_tokens") is not None:
+            overall.total_tokens.append(event["total_tokens"])
 
             # By interface
             interface = event.get("interface") or "unknown"
@@ -243,6 +276,13 @@ def aggregate_metrics(events: List[dict]) -> Tuple[
                 interface_metrics.input_chars.append(event["input_chars"])
             if event.get("output_chars") is not None:
                 interface_metrics.output_chars.append(event["output_chars"])
+
+            if event.get("input_tokens") is not None:
+                interface_metrics.input_tokens.append(event["input_tokens"])
+            if event.get("output_tokens") is not None:
+                interface_metrics.output_tokens.append(event["output_tokens"])
+            if event.get("total_tokens") is not None:
+                interface_metrics.total_tokens.append(event["total_tokens"])
 
             # Questions
             q_count = event.get("clarifying_questions_count", 0)
@@ -268,6 +308,13 @@ def aggregate_metrics(events: List[dict]) -> Tuple[
             if event.get("llm_latency_sec") is not None:
                 provider_metrics.llm_latencies.append(event["llm_latency_sec"])
 
+            if event.get("input_tokens") is not None:
+                provider_metrics.input_tokens.append(event["input_tokens"])
+            if event.get("output_tokens") is not None:
+                provider_metrics.output_tokens.append(event["output_tokens"])
+            if event.get("total_tokens") is not None:
+                provider_metrics.total_tokens.append(event["total_tokens"])
+
         elif event_type == "provider_error":
             # Error tracking
             sanitized_error = event.get("sanitized_error", "Unknown error")
@@ -290,6 +337,13 @@ def format_latency(value: Optional[float]) -> str:
 
 def format_chars(value: Optional[float]) -> str:
     """Format character count for display."""
+    if value is None:
+        return "n/a"
+    return f"{int(value)}"
+
+
+def format_tokens(value: Optional[float]) -> str:
+    """Format token count for display."""
     if value is None:
         return "n/a"
     return f"{int(value)}"
@@ -350,6 +404,12 @@ def print_telemetry_summary(console: Console, path: Optional[Path] = None) -> in
                            f"{format_latency(overall.avg_llm_latency())} (median: {format_latency(overall.median_llm_latency())})")
     overview_table.add_row("Avg Input", f"{format_chars(overall.avg_input_chars())} chars")
     overview_table.add_row("Avg Output", f"{format_chars(overall.avg_output_chars())} chars")
+    overview_table.add_row(
+        "Avg Tokens",
+        f"{format_tokens(overall.avg_total_tokens())} total "
+        f"(in: {format_tokens(overall.avg_input_tokens())}, "
+        f"out: {format_tokens(overall.avg_output_tokens())})",
+    )
 
     console.print(Panel(overview_table, title="[bold]Overview[/bold]", border_style="blue"))
 
@@ -361,6 +421,7 @@ def print_telemetry_summary(console: Console, path: Optional[Path] = None) -> in
         interface_table.add_column("Success", justify="right")
         interface_table.add_column("Avg Latency", justify="right")
         interface_table.add_column("Avg LLM", justify="right")
+        interface_table.add_column("Avg Tokens", justify="right")
 
         for interface in sorted(by_interface.keys()):
             metrics = by_interface[interface]
@@ -369,7 +430,8 @@ def print_telemetry_summary(console: Console, path: Optional[Path] = None) -> in
                 str(metrics.total_runs),
                 format_percentage(metrics.success_rate),
                 format_latency(metrics.avg_total_latency()),
-                format_latency(metrics.avg_llm_latency())
+                format_latency(metrics.avg_llm_latency()),
+                format_tokens(metrics.avg_total_tokens()),
             )
 
         console.print(Panel(interface_table, title="[bold]By Interface[/bold]", border_style="green"))
@@ -404,6 +466,7 @@ def print_telemetry_summary(console: Console, path: Optional[Path] = None) -> in
         provider_table.add_column("Runs", justify="right")
         provider_table.add_column("Success", justify="right")
         provider_table.add_column("Avg Latency", justify="right")
+        provider_table.add_column("Avg Tokens", justify="right")
 
         # Sort by number of runs (descending)
         sorted_providers = sorted(
@@ -418,7 +481,8 @@ def print_telemetry_summary(console: Console, path: Optional[Path] = None) -> in
                 model,
                 str(metrics.total_runs),
                 format_percentage(metrics.success_rate),
-                format_latency(metrics.avg_total_latency())
+                format_latency(metrics.avg_total_latency()),
+                format_tokens(metrics.avg_total_tokens()),
             )
 
         title = "[bold]Providers / Models[/bold]"

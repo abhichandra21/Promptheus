@@ -506,6 +506,9 @@ if mcp:
                 python_version=sys.version.split()[0],
                 platform=sys.platform,
                 interface="mcp",
+                input_tokens=None,
+                output_tokens=None,
+                total_tokens=None,
             )
             return validation_error
 
@@ -545,6 +548,9 @@ if mcp:
                 python_version=sys.version.split()[0],
                 platform=sys.platform,
                 interface="mcp",
+                input_tokens=None,
+                output_tokens=None,
+                total_tokens=None,
             )
             return provider_error
 
@@ -576,6 +582,10 @@ if mcp:
                 total_run_latency_sec = end_time - start_time
                 llm_latency_sec = llm_end_time - llm_start_time
                 
+                input_tokens = getattr(llm_provider, "last_input_tokens", None)
+                output_tokens = getattr(llm_provider, "last_output_tokens", None)
+                total_tokens = getattr(llm_provider, "last_total_tokens", None)
+
                 # Record successful telemetry
                 record_prompt_run_event(
                     source="mcp",
@@ -598,6 +608,9 @@ if mcp:
                     python_version=sys.version.split()[0],
                     platform=sys.platform,
                     interface="mcp",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
                 )
 
                 return _build_refined_response(refined)
@@ -625,6 +638,10 @@ if mcp:
                 total_run_latency_sec = end_time - start_time
                 refine_llm_latency_sec = llm_end_time - llm_start_time
                 llm_latency_sec = questions_llm_latency_sec + refine_llm_latency_sec
+
+                input_tokens = getattr(llm_provider, "last_input_tokens", None)
+                output_tokens = getattr(llm_provider, "last_output_tokens", None)
+                total_tokens = getattr(llm_provider, "last_total_tokens", None)
                 
                 # Record successful telemetry
                 record_prompt_run_event(
@@ -648,6 +665,9 @@ if mcp:
                     python_version=sys.version.split()[0],
                     platform=sys.platform,
                     interface="mcp",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
                 )
                 
                 return _build_refined_response(refined)
@@ -682,6 +702,10 @@ if mcp:
                     total_run_latency_sec = end_time - start_time
                     refine_llm_latency_sec = llm_end_time - llm_start_time
                     llm_latency_sec = questions_llm_latency_sec + refine_llm_latency_sec
+
+                    input_tokens = getattr(llm_provider, "last_input_tokens", None)
+                    output_tokens = getattr(llm_provider, "last_output_tokens", None)
+                    total_tokens = getattr(llm_provider, "last_total_tokens", None)
                     
                     # Record successful telemetry
                     record_prompt_run_event(
@@ -705,6 +729,9 @@ if mcp:
                         python_version=sys.version.split()[0],
                         platform=sys.platform,
                         interface="mcp",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
                     )
                     
                     # Record clarifying questions summary
@@ -733,6 +760,10 @@ if mcp:
             end_time = time.time()
             total_run_latency_sec = end_time - start_time
             llm_latency_sec = llm_end_time - llm_start_time
+
+            input_tokens = getattr(llm_provider, "last_input_tokens", None)
+            output_tokens = getattr(llm_provider, "last_output_tokens", None)
+            total_tokens = getattr(llm_provider, "last_total_tokens", None)
             
             # Record successful telemetry
             record_prompt_run_event(
@@ -756,6 +787,9 @@ if mcp:
                 python_version=sys.version.split()[0],
                 platform=sys.platform,
                 interface="mcp",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
             )
             
             return _build_refined_response(refined)
@@ -801,6 +835,9 @@ if mcp:
                 python_version=sys.version.split()[0],
                 platform=sys.platform,
                 interface="mcp",
+                input_tokens=None,
+                output_tokens=None,
+                total_tokens=None,
             )
             
             return {

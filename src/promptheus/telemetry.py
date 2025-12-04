@@ -55,6 +55,11 @@ class TelemetryEvent:
     llm_latency_sec: Optional[float] = None
     total_run_latency_sec: Optional[float] = None
 
+    # Token usage metrics (when reported by provider)
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+
     # Feature flags and environment
     quiet_mode: Optional[bool] = None
     history_enabled: Optional[bool] = None
@@ -182,6 +187,9 @@ def record_prompt_run_event(
     output_chars: Optional[int] = None,
     llm_latency_sec: Optional[float] = None,
     total_run_latency_sec: Optional[float] = None,
+    input_tokens: Optional[int] = None,
+    output_tokens: Optional[int] = None,
+    total_tokens: Optional[int] = None,
     quiet_mode: Optional[bool] = None,
     history_enabled: Optional[bool] = None,
     python_version: Optional[str] = None,
@@ -212,6 +220,9 @@ def record_prompt_run_event(
         output_chars=output_chars,
         llm_latency_sec=llm_latency_sec,
         total_run_latency_sec=total_run_latency_sec,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
         quiet_mode=quiet_mode,
         history_enabled=history_enabled,
         python_version=python_version,
@@ -330,4 +341,7 @@ def record_prompt_event(
         python_version=None,
         platform=None,
         interface=None,
+        input_tokens=None,
+        output_tokens=None,
+        total_tokens=None,
     )
