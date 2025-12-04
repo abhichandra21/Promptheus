@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import time
+import uuid
 from argparse import Namespace
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -24,6 +26,11 @@ from promptheus.constants import PROMPTHEUS_DEBUG_ENV, VERSION
 from promptheus.history import get_history
 from promptheus.io_context import IOContext
 from promptheus.question_prompter import create_prompter
+from promptheus.telemetry import (
+    record_prompt_run_event,
+    record_clarifying_questions_summary,
+    record_provider_error,
+)
 from promptheus.prompts import (
     ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION,
     CLARIFICATION_SYSTEM_INSTRUCTION,
@@ -40,6 +47,14 @@ import promptheus.commands.auth as auth_commands
 
 console = Console()
 logger = logging.getLogger(__name__)
+
+# Session ID for telemetry - generated once per process
+SESSION_ID = str(uuid.uuid4())
+
+
+def measure_time():
+    """Return current time for timing measurements."""
+    return time.time()
 
 MessageSink = Callable[[str], None]
 
@@ -397,6 +412,28 @@ def process_single_prompt(
     Returns:
         Tuple of (final_prompt, task_type) if successful, None otherwise
     """
+    # Generate run_id for this specific prompt processing
+    run_id = str(uuid.uuid4())
+    
+    # Track timing metrics
+    start_time = measure_time()
+    llm_start_time = None
+    llm_end_time = None
+    clarifying_questions_count = 0
+    success = False
+    
+    # Safely extract quiet_mode value
+    try:
+        quiet_mode = bool(getattr(io, 'quiet_output', False))
+    except (AttributeError, TypeError):
+        quiet_mode = False
+    
+    # Safely extract history_enabled value
+    try:
+        history_enabled = bool(getattr(app_config, 'history_enabled', True))
+    except (AttributeError, TypeError):
+        history_enabled = True
+    
     try:
         plan = determine_question_plan(provider, initial_prompt, args, debug_enabled, io, app_config)
 
@@ -410,17 +447,29 @@ def process_single_prompt(
             try:
                 if not io.quiet_output:
                     with io.console_err.status("[bold blue]⚡ Performing light refinement...", spinner="simpleDots"):
+                        llm_start_time = measure_time()
                         final_prompt = provider.light_refine(
                             initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
                         )
+                        llm_end_time = measure_time()
                 else:
+                    llm_start_time = measure_time()
                     final_prompt = provider.light_refine(
                         initial_prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
                     )
+                    llm_end_time = measure_time()
                 is_refined = True
             except KeyboardInterrupt as exc:
                 raise PromptCancelled("Light refinement cancelled") from exc
             except Exception as exc:
+                # Record provider error for telemetry
+                record_provider_error(
+                    provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+                    model=app_config.get_model(),
+                    session_id=SESSION_ID,
+                    run_id=run_id,
+                    error_message=str(exc),
+                )
                 logger.warning("Light refinement failed: %s", sanitize_error_message(str(exc)))
                 io.notify("[yellow]Warning: Light refinement failed. Using original prompt.[/yellow]")
                 final_prompt = initial_prompt
@@ -429,10 +478,41 @@ def process_single_prompt(
             # The standard flow: ask questions if needed, then generate
             answers = ask_clarifying_questions(plan, io)
             if answers is None:
+                # Record failure telemetry before returning
+                end_time = measure_time()
+                total_run_latency_sec = end_time - start_time
+                record_prompt_run_event(
+                    source="cli",
+                    provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+                    model=app_config.get_model(),
+                    task_type=plan.task_type,
+                    processing_latency_sec=total_run_latency_sec,
+                    clarifying_questions_count=0,
+                    skip_questions=getattr(args, "skip_questions", False),
+                    refine_mode=True,
+                    success=False,
+                    session_id=SESSION_ID,
+                    run_id=run_id,
+                    input_chars=len(initial_prompt),
+                    output_chars=len(initial_prompt),  # No refinement, return original
+                    llm_latency_sec=None,
+                    total_run_latency_sec=total_run_latency_sec,
+                    quiet_mode=quiet_mode,
+                    history_enabled=history_enabled,
+                    python_version=sys.version.split()[0],
+                    platform=sys.platform,
+                    interface="cli",
+                )
                 return None
+            
+            # Count clarifying questions for telemetry
+            clarifying_questions_count = len(plan.questions) if plan.questions else 0
+            
+            llm_start_time = measure_time()
             final_prompt, is_refined = generate_final_prompt(
                 provider, initial_prompt, answers, plan.mapping, io
             )
+            llm_end_time = measure_time()
 
     except Exception as exc:
         sanitized = sanitize_error_message(str(exc))
@@ -440,7 +520,62 @@ def process_single_prompt(
         if not debug_enabled:
             io.notify(f"[dim]Enable --verbose for full error details[/dim]")
         logger.exception("Failed to process prompt")
+        
+        # Record provider error for telemetry
+        record_provider_error(
+            provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+            model=app_config.get_model(),
+            session_id=SESSION_ID,
+            run_id=run_id,
+            error_message=str(exc),
+        )
         return None
+
+    # Calculate timing metrics
+    end_time = measure_time()
+    total_run_latency_sec = end_time - start_time
+    llm_latency_sec = (llm_end_time - llm_start_time) if llm_start_time and llm_end_time else None
+    
+    # Record successful prompt run telemetry
+    try:
+        provider_name = provider.name if hasattr(provider, 'name') else getattr(app_config, 'provider', 'unknown')
+        model_name = app_config.get_model() if hasattr(app_config, 'get_model') else getattr(app_config, 'model', 'unknown')
+        task_type_value = getattr(plan, 'task_type', 'unknown')
+    except (AttributeError, TypeError):
+        provider_name = 'unknown'
+        model_name = 'unknown'
+        task_type_value = 'unknown'
+    
+    record_prompt_run_event(
+        source="cli",
+        provider=provider_name,
+        model=model_name,
+        task_type=task_type_value,
+        processing_latency_sec=total_run_latency_sec,
+        clarifying_questions_count=clarifying_questions_count,
+        skip_questions=getattr(args, "skip_questions", False),
+        refine_mode=not is_light_refinement,  # True for full refinement, False for light refinement
+        success=True,
+        session_id=SESSION_ID,
+        run_id=run_id,
+        input_chars=len(initial_prompt),
+        output_chars=len(final_prompt),
+        llm_latency_sec=llm_latency_sec,
+        total_run_latency_sec=total_run_latency_sec,
+        quiet_mode=quiet_mode,
+        history_enabled=history_enabled,
+        python_version=sys.version.split()[0],
+        platform=sys.platform,
+        interface="cli",
+    )
+    
+    # Record clarifying questions summary (privacy guard handles history_enabled=False)
+    record_clarifying_questions_summary(
+        session_id=SESSION_ID,
+        run_id=run_id,
+        total_questions=clarifying_questions_count,
+        history_enabled=history_enabled,
+    )
 
     display_output(final_prompt, io, is_refined=is_refined)
 
@@ -476,6 +611,7 @@ def process_single_prompt(
         if getattr(args, "copy", False):
             copy_to_clipboard(final_prompt, io.notify)
 
+    success = True  # Mark as successful
     return final_prompt, plan.task_type
 
 
@@ -592,6 +728,11 @@ def main() -> None:
             io.notify(f"[red]✗[/red] {exc}")
             io.notify("[dim]Install the 'mcp' package to use the MCP server: pip install mcp[/dim]")
             sys.exit(1)
+
+    if getattr(args, "command", None) == "telemetry":
+        from promptheus.telemetry_summary import print_telemetry_summary
+        exit_code = print_telemetry_summary(io.console_err)
+        sys.exit(exit_code)
 
     # Show provider status in a friendly way
     for message in app_config.consume_status_messages():

@@ -27,11 +27,6 @@ def test_history_entry_serialization():
         "task_type": "generation",
         "provider": None,
         "model": None,
-        "processing_latency_sec": None,
-        "clarifying_questions_count": None,
-        "source": None,
-        "skip_questions": None,
-        "refine_mode": None,
     }
     assert data == expected
     

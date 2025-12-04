@@ -1,6 +1,9 @@
 """Prompt API router for Promptheus Web UI."""
 import asyncio
 import json
+import time
+import uuid
+import sys
 from typing import Dict, Any, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
@@ -19,6 +22,11 @@ from promptheus.prompts import (
     TWEAK_SYSTEM_INSTRUCTION,
 )
 from promptheus.utils import sanitize_error_message, get_user_email, get_device_category
+from promptheus.telemetry import (
+    record_prompt_run_event,
+    record_clarifying_questions_summary,
+    record_provider_error,
+)
 
 LOAD_ALL_MODELS_SENTINEL = "__load_all__"
 
@@ -33,6 +41,9 @@ STYLE_INSTRUCTIONS = {
 
 
 router = APIRouter()
+
+# Session ID for telemetry - generated once per web process
+SESSION_ID = str(uuid.uuid4())
 
 
 async def process_prompt_web(
@@ -49,6 +60,16 @@ async def process_prompt_web(
     Web-compatible prompt processing function that replicates the main logic
     but without CLI-specific features like terminal I/O.
     """
+    # Generate run_id for this specific web request
+    run_id = str(uuid.uuid4())
+    
+    # Track timing metrics
+    start_time = time.time()
+    llm_start_time = None
+    llm_end_time = None
+    clarifying_questions_count = 0
+    success = False
+    
     def _apply_style(system_instruction: str) -> str:
         suffix = STYLE_INSTRUCTIONS.get(style or "default", "")
         if not suffix:
@@ -65,50 +86,233 @@ async def process_prompt_web(
     if should_ask_questions:
         # Generate questions first to determine task type
         try:
+            llm_start_time = time.time()
             result = provider.generate_questions(initial_prompt, CLARIFICATION_SYSTEM_INSTRUCTION)
+            llm_end_time = time.time()
+            questions_llm_latency_sec = llm_end_time - llm_start_time
             
             if result is not None:
                 task_type = result.get("task_type", "generation")
                 questions_json = result.get("questions", [])
+                clarifying_questions_count = len(questions_json)
                 
                 # If we have answers, use them for refinement
                 if answers and mapping:
                     # Refine using the answers
+                    llm_start_time = time.time()
                     final_prompt = provider.refine_from_answers(
                         initial_prompt, answers, mapping, _apply_style(GENERATION_SYSTEM_INSTRUCTION)
                     )
+                    llm_end_time = time.time()
+                    
+                    # Calculate timing metrics
+                    end_time = time.time()
+                    total_run_latency_sec = end_time - start_time
+                    refine_llm_latency_sec = llm_end_time - llm_start_time
+                    llm_latency_sec = questions_llm_latency_sec + refine_llm_latency_sec
+                    
+                    # Record successful telemetry
+                    record_prompt_run_event(
+                        source="web",
+                        provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+                        model=app_config.get_model(),
+                        task_type=task_type,
+                        processing_latency_sec=total_run_latency_sec,
+                        clarifying_questions_count=clarifying_questions_count,
+                        skip_questions=skip_questions,
+                        refine_mode=True,
+                        success=True,
+                        session_id=SESSION_ID,
+                        run_id=run_id,
+                        input_chars=len(initial_prompt),
+                        output_chars=len(final_prompt),
+                        llm_latency_sec=llm_latency_sec,
+                        total_run_latency_sec=total_run_latency_sec,
+                        quiet_mode=True,  # Web is always quiet mode
+                        history_enabled=app_config.history_enabled,
+                        python_version=sys.version.split()[0],
+                        platform=sys.platform,
+                        interface="web",
+                    )
+                    
+                    # Record clarifying questions summary
+                    record_clarifying_questions_summary(
+                        session_id=SESSION_ID,
+                        run_id=run_id,
+                        total_questions=clarifying_questions_count,
+                        history_enabled=app_config.history_enabled,
+                    )
+                    
                     return final_prompt, task_type
                 elif not questions_json:
                     # No questions needed, apply light refinement
+                    llm_start_time = time.time()
                     final_prompt = provider.light_refine(
                         initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
                     )
+                    llm_end_time = time.time()
+                    
+                    # Calculate timing metrics
+                    end_time = time.time()
+                    total_run_latency_sec = end_time - start_time
+                    llm_latency_sec = llm_end_time - llm_start_time
+                    
+                    # Record successful telemetry
+                    record_prompt_run_event(
+                        source="web",
+                        provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+                        model=app_config.get_model(),
+                        task_type=task_type,
+                        processing_latency_sec=total_run_latency_sec,
+                        clarifying_questions_count=clarifying_questions_count,
+                        skip_questions=skip_questions,
+                        refine_mode=False,  # Light refinement
+                        success=True,
+                        session_id=SESSION_ID,
+                        run_id=run_id,
+                        input_chars=len(initial_prompt),
+                        output_chars=len(final_prompt),
+                        llm_latency_sec=llm_latency_sec,
+                        total_run_latency_sec=total_run_latency_sec,
+                        quiet_mode=True,
+                        history_enabled=app_config.history_enabled,
+                        python_version=sys.version.split()[0],
+                        platform=sys.platform,
+                        interface="web",
+                    )
+                    
                     return final_prompt, task_type
                 elif task_type == "analysis":
                     # Analysis task, apply light refinement
+                    llm_start_time = time.time()
                     final_prompt = provider.light_refine(
                         initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
                     )
+                    llm_end_time = time.time()
+                    
+                    # Calculate timing metrics
+                    end_time = time.time()
+                    total_run_latency_sec = end_time - start_time
+                    llm_latency_sec = llm_end_time - llm_start_time
+                    
+                    # Record successful telemetry
+                    record_prompt_run_event(
+                        source="web",
+                        provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+                        model=app_config.get_model(),
+                        task_type=task_type,
+                        processing_latency_sec=total_run_latency_sec,
+                        clarifying_questions_count=clarifying_questions_count,
+                        skip_questions=skip_questions,
+                        refine_mode=False,  # Light refinement
+                        success=True,
+                        session_id=SESSION_ID,
+                        run_id=run_id,
+                        input_chars=len(initial_prompt),
+                        output_chars=len(final_prompt),
+                        llm_latency_sec=llm_latency_sec,
+                        total_run_latency_sec=total_run_latency_sec,
+                        quiet_mode=True,
+                        history_enabled=app_config.history_enabled,
+                        python_version=sys.version.split()[0],
+                        platform=sys.platform,
+                        interface="web",
+                    )
+                    
                     return final_prompt, task_type
                 else:
                     # Task type is generation but no answers provided, return task info
                     raise HTTPException(status_code=400, detail="Answers required for clarifying questions")
             else:
                 # Fallback to light refinement if no result from API
+                llm_start_time = time.time()
                 final_prompt = provider.light_refine(
                     initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
                 )
+                llm_end_time = time.time()
+                
+                # Calculate timing metrics
+                end_time = time.time()
+                total_run_latency_sec = end_time - start_time
+                llm_latency_sec = llm_end_time - llm_start_time
+                
+                # Record successful telemetry
+                record_prompt_run_event(
+                    source="web",
+                    provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+                    model=app_config.get_model(),
+                    task_type="analysis",
+                    processing_latency_sec=total_run_latency_sec,
+                    clarifying_questions_count=0,
+                    skip_questions=skip_questions,
+                    refine_mode=False,  # Light refinement
+                    success=True,
+                    session_id=SESSION_ID,
+                    run_id=run_id,
+                    input_chars=len(initial_prompt),
+                    output_chars=len(final_prompt),
+                    llm_latency_sec=llm_latency_sec,
+                    total_run_latency_sec=total_run_latency_sec,
+                    quiet_mode=True,
+                    history_enabled=app_config.history_enabled,
+                    python_version=sys.version.split()[0],
+                    platform=sys.platform,
+                    interface="web",
+                )
+                
                 return final_prompt, "analysis"
         except Exception as exc:
             sanitized = sanitize_error_message(str(exc))
+            
+            # Record provider error telemetry
+            record_provider_error(
+                provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+                model=app_config.get_model(),
+                session_id=SESSION_ID,
+                run_id=run_id,
+                error_message=str(exc),
+            )
+            
             if _is_rate_limit_error(sanitized):
                 raise HTTPException(status_code=429, detail=f"Rate limit encountered: {sanitized}")
             raise HTTPException(status_code=500, detail=f"Failed to generate questions: {sanitized}")
     else:
         # Skip questions mode - apply light refinement
+        llm_start_time = time.time()
         final_prompt = provider.light_refine(
             initial_prompt, _apply_style(ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION)
         )
+        llm_end_time = time.time()
+        
+        # Calculate timing metrics
+        end_time = time.time()
+        total_run_latency_sec = end_time - start_time
+        llm_latency_sec = llm_end_time - llm_start_time
+        
+        # Record successful telemetry
+        record_prompt_run_event(
+            source="web",
+            provider=provider.name if hasattr(provider, 'name') else app_config.provider,
+            model=app_config.get_model(),
+            task_type="analysis",
+            processing_latency_sec=total_run_latency_sec,
+            clarifying_questions_count=0,
+            skip_questions=skip_questions,
+            refine_mode=False,  # Light refinement
+            success=True,
+            session_id=SESSION_ID,
+            run_id=run_id,
+            input_chars=len(initial_prompt),
+            output_chars=len(final_prompt),
+            llm_latency_sec=llm_latency_sec,
+            total_run_latency_sec=total_run_latency_sec,
+            quiet_mode=True,
+            history_enabled=app_config.history_enabled,
+            python_version=sys.version.split()[0],
+            platform=sys.platform,
+            interface="web",
+        )
+        
         return final_prompt, "analysis"
 
 class PromptRequest(BaseModel):
