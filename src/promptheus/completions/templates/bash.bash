@@ -55,7 +55,7 @@ _promptheus_complete() {
     local in_subcommand=""
     local i
     for (( i=0; i < cword; i++ )); do
-        if [[ "${words[i]}" =~ ^(history|list-models|validate|template|completion|web|auth)$ ]]; then
+        if [[ "${words[i]}" =~ ^(history|list-models|validate|template|completion|web|auth|mcp|telemetry)$ ]]; then
             in_subcommand="${words[i]}"
             break
         fi
@@ -64,32 +64,42 @@ _promptheus_complete() {
     if [[ -n "$in_subcommand" ]]; then
         case "$in_subcommand" in
             history)
-                local history_opts="--clear --limit --verbose --help"
+                local history_opts="--clear --limit --verbose --help --version"
                 COMPREPLY=( $(compgen -W "${history_opts}" -- "${cur}") )
                 return 0
                 ;;
             list-models)
-                local list_models_opts="--providers --limit --include-nontext --verbose --help"
+                local list_models_opts="--providers --limit --include-nontext --verbose --help --version"
                 COMPREPLY=( $(compgen -W "${list_models_opts}" -- "${cur}") )
                 return 0
                 ;;
             validate)
-                local validate_opts="--test-connection --providers --verbose --help"
+                local validate_opts="--test-connection --providers --verbose --help --version"
                 COMPREPLY=( $(compgen -W "${validate_opts}" -- "${cur}") )
                 return 0
                 ;;
             template)
-                local template_opts="--providers --verbose --help"
+                local template_opts="--providers --verbose --help --version"
                 COMPREPLY=( $(compgen -W "${template_opts}" -- "${cur}") )
                 return 0
                 ;;
             web)
-                local web_opts="--port --host --no-browser --verbose --help"
+                local web_opts="--port --host --no-browser --verbose --help --version"
                 COMPREPLY=( $(compgen -W "${web_opts}" -- "${cur}") )
                 return 0
                 ;;
             auth)
-                local auth_opts="--skip-validation --verbose --help"
+                local auth_opts="--skip-validation --verbose --help --version"
+                COMPREPLY=( $(compgen -W "${auth_opts}" -- "${cur}") )
+                return 0
+                ;;
+            mcp)
+                local mcp_opts="--verbose --help --version"
+                COMPREPLY=( $(compgen -W "${mcp_opts}" -- "${cur}") )
+                return 0
+                ;;
+            telemetry)
+                local telemetry_opts="summary --verbose --help --version"
                 COMPREPLY=( $(compgen -W "${auth_opts}" -- "${cur}") )
                 return 0
                 ;;
@@ -99,12 +109,12 @@ _promptheus_complete() {
 
     # Static completions for main command
     if [[ "${cur}" == -* ]]; then
-        local main_opts="--provider --model --skip-questions --refine --output-format --copy --file --verbose --help"
+        local main_opts="--provider --model --skip-questions --refine --output-format --copy --file --verbose --help --version"
         COMPREPLY=( $(compgen -W "${main_opts}" -- "${cur}") )
         return 0
     fi
 
-    local subcommands="history list-models validate template completion web auth"
+    local subcommands="history list-models validate template completion web auth mcp telemetry"
     COMPREPLY=( $(compgen -W "${subcommands}" -- "${cur}") )
     return 0
 }
