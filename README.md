@@ -65,6 +65,9 @@ Works seamlessly in Unix pipelines and shell scripts
 **🔄 Session Management**
 Track, load, and reuse past prompts automatically
 
+**📊 Telemetry & Analytics**
+Anonymous usage and performance metrics tracking for insights (local storage only, can be disabled)
+
 **🌐 Web Interface**
 Beautiful UI for interactive prompt refinement and history management
 
@@ -114,6 +117,18 @@ cat prompts.txt | while read line; do promptheus "$line"; done
 ```
 
 **Testing & Examples**: See [sample_prompts.md](sample_prompts.md) for test prompts demonstrating adaptive task detection (analysis vs generation).
+
+**Telemetry & Analytics**
+```bash
+# View telemetry summary (anonymous metrics about usage and performance)
+promptheus telemetry summary
+
+# Disable telemetry if desired
+export PROMPTHEUS_TELEMETRY_ENABLED=0
+
+# Customize history storage location
+export PROMPTHEUS_HISTORY_DIR=~/.custom_promptheus
+```
 
 ## MCP Server
 

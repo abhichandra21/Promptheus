@@ -29,6 +29,7 @@ _promptheus() {
     _arguments -C \
         '(- *)'{-h,--help}'[Show help message]' \
         '(- *)'{-v,--verbose}'[Enable verbose debug output]' \
+        '(- *)'--version'[Show version information]' \
         '1: :->cmds' \
         '*::arg:->args' && return 0
 
@@ -42,7 +43,9 @@ _promptheus() {
                 'template:Generate a .env file template'
                 'completion:Generate shell completion script'
                 'web:Start the web UI server'
+                'mcp:Start the MCP server'
                 'auth:Authentication management'
+                'telemetry:View telemetry summary'
             )
             _describe 'command' commands
 
@@ -92,7 +95,8 @@ _promptheus() {
                         '--clear[Clear all history]' \
                         '--limit[Number of entries to display]:limit:' \
                         '(- *)'{-h,--help}'[Show help message]' \
-                        '(- *)'{-v,--verbose}'[Enable verbose output]'
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]'
                     ;;
                 list-models)
                     _arguments \
@@ -100,26 +104,30 @@ _promptheus() {
                         '--limit[Number of models to display]:limit:' \
                         '--include-nontext[Include non-text models]' \
                         '(- *)'{-h,--help}'[Show help message]' \
-                        '(- *)'{-v,--verbose}'[Enable verbose output]'
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]'
                     ;;
                 validate)
                     _arguments \
                         '--test-connection[Test API connection]' \
                         '--providers[Comma-separated list of providers]:providers:($providers)' \
                         '(- *)'{-h,--help}'[Show help message]' \
-                        '(- *)'{-v,--verbose}'[Enable verbose output]'
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]'
                     ;;
                 template)
                     _arguments \
                         '--providers[Comma-separated list of providers]:providers:($providers)' \
                         '(- *)'{-h,--help}'[Show help message]' \
-                        '(- *)'{-v,--verbose}'[Enable verbose output]'
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]'
                     ;;
                 completion)
                     _arguments -s \
                         '--install[Automatically install completion]' \
                         '(- *)'{-h,--help}'[Show help message]' \
                         '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]' \
                         '*: :(bash zsh)'
                     ;;
                 web)
@@ -128,14 +136,29 @@ _promptheus() {
                         '--host[Host to bind the web server to]:host:(127.0.0.1 0.0.0.0 localhost)' \
                         '--no-browser[Don'\''t automatically open browser]' \
                         '(- *)'{-h,--help}'[Show help message]' \
-                        '(- *)'{-v,--verbose}'[Enable verbose output]'
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]'
                     ;;
                 auth)
                     _arguments \
                         '--skip-validation[Skip API key validation test]' \
                         '(- *)'{-h,--help}'[Show help message]' \
                         '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]' \
                         '*: :(google anthropic openai groq qwen glm)'
+                    ;;
+                mcp)
+                    _arguments \
+                        '(- *)'{-h,--help}'[Show help message]' \
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]'
+                    ;;
+                telemetry)
+                    _arguments \
+                        'summary[Display telemetry summary]' \
+                        '(- *)'{-h,--help}'[Show help message]' \
+                        '(- *)'{-v,--verbose}'[Enable verbose output]' \
+                        '(- *)'--version'[Show version information]'
                     ;;
             esac
             ;;

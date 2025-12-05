@@ -120,6 +120,8 @@ python -m mypy src/promptheus/
 - `src/promptheus/core.py`: Core AI response function for demo/testing purposes
 - `src/promptheus/exceptions.py`: Custom exception types (e.g., `PromptCancelled`)
 - `src/promptheus/cli.py`: Argument parsing and CLI interface
+- `src/promptheus/telemetry.py`: Anonymous usage and performance metrics tracking
+- `src/promptheus/telemetry_summary.py`: Telemetry data analysis and reporting
 
 **Environment Validation**
 - Integrated validation through `promptheus validate` subcommand
@@ -182,6 +184,23 @@ The REPL uses a Textual-based TUI with:
 Prompt history is automatically saved for each refinement and can be accessed via:
 - CLI: `promptheus history`, `promptheus history --limit 50`, `promptheus history --clear`
 - Interactive: `/history`, `/load <n>`, `/clear-history`
+
+**Telemetry System**
+Lightweight, privacy-preserving usage and performance metrics tracking.
+- Telemetry data is stored locally in JSONL format (separate from history)
+- Records anonymized metrics: performance latencies, token usage, task types, success rates
+- Does NOT store prompts, API keys, or sensitive data
+- Enabled by default, can be disabled with `PROMPTHEUS_TELEMETRY_ENABLED=0`
+- Access telemetry summary via `promptheus telemetry summary`
+- Environment variable overrides: `PROMPTHEUS_TELEMETRY_FILE`, `PROMPTHEUS_TELEMETRY_SAMPLE_RATE`
+- History directory can be customized with `PROMPTHEUS_HISTORY_DIR`
+
+**Provider Token Tracking**
+All providers implement token usage tracking for performance analysis:
+- `last_input_tokens`: Input token count from most recent API call
+- `last_output_tokens`: Output token count from most recent API call
+- `last_total_tokens`: Total token count from most recent API call
+- Token tracking is best-effort and handles provider-specific response formats
 
 ## Development Notes
 

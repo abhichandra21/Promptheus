@@ -21,11 +21,18 @@ def get_default_history_dir() -> Path:
     """
     Get the default history directory based on platform.
 
+    Can be overridden with PROMPTHEUS_HISTORY_DIR environment variable.
+
     Returns:
         Path: Platform-appropriate history directory
             - Unix/Linux/Mac: ~/.promptheus
             - Windows: %APPDATA%/promptheus
     """
+    # Check for environment variable override
+    override = os.getenv("PROMPTHEUS_HISTORY_DIR")
+    if override:
+        return Path(override).expanduser()
+
     if sys.platform == "win32":
         # On Windows, use AppData/Roaming
         appdata = os.environ.get("APPDATA")

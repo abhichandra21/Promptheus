@@ -255,6 +255,10 @@ class AnthropicProvider(LLMProvider):
         json_mode: bool = False,  # noqa: ARG002 - unused for Anthropic
         max_tokens: Optional[int] = None,
     ) -> str:
+        # Reset token usage for this call
+        self.last_input_tokens = None  # type: ignore[attr-defined]
+        self.last_output_tokens = None  # type: ignore[attr-defined]
+        self.last_total_tokens = None  # type: ignore[attr-defined]
         try:
             response = self.client.messages.create(
                 model=self.model_name,
@@ -266,6 +270,24 @@ class AnthropicProvider(LLMProvider):
             sanitized = sanitize_error_message(str(exc))
             logger.warning("Anthropic API call failed: %s", sanitized)
             raise ProviderAPIError(f"API call failed: {sanitized}") from exc
+
+        # Capture token usage when available
+        try:
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                input_tokens = getattr(usage, "input_tokens", None)
+                output_tokens = getattr(usage, "output_tokens", None)
+                total_tokens = getattr(usage, "total_tokens", None)
+                if total_tokens is None and isinstance(input_tokens, int) and isinstance(output_tokens, int):
+                    total_tokens = input_tokens + output_tokens
+                self.last_input_tokens = input_tokens  # type: ignore[attr-defined]
+                self.last_output_tokens = output_tokens  # type: ignore[attr-defined]
+                self.last_total_tokens = total_tokens  # type: ignore[attr-defined]
+        except Exception:
+            # Token accounting is best-effort only
+            self.last_input_tokens = None  # type: ignore[attr-defined]
+            self.last_output_tokens = None  # type: ignore[attr-defined]
+            self.last_total_tokens = None  # type: ignore[attr-defined]
 
         if not response.content:
             raise RuntimeError("Anthropic API returned no content")
@@ -368,6 +390,11 @@ class GeminiProvider(LLMProvider):
         from google.genai import types
 
         try:
+            # Reset token usage for this call
+            self.last_input_tokens = None  # type: ignore[attr-defined]
+            self.last_output_tokens = None  # type: ignore[attr-defined]
+            self.last_total_tokens = None  # type: ignore[attr-defined]
+
             config_params: Dict[str, Any] = {
                 "system_instruction": system_instruction,
             }
@@ -384,7 +411,40 @@ class GeminiProvider(LLMProvider):
                 config=config,
             )
 
-            if hasattr(response, 'text') and response.text:
+            # Capture token usage when available (field names vary by SDK version)
+            try:
+                usage = getattr(response, "usage_metadata", None)
+                if usage is None and isinstance(response, dict):
+                    usage = response.get("usage_metadata")
+                if usage is not None:
+                    def _get(name_candidates):
+                        if isinstance(usage, dict):
+                            for name in name_candidates:
+                                value = usage.get(name)
+                                if isinstance(value, (int, float)):
+                                    return int(value)
+                        else:
+                            for name in name_candidates:
+                                value = getattr(usage, name, None)
+                                if isinstance(value, (int, float)):
+                                    return int(value)
+                        return None
+
+                    input_tokens = _get(["input_tokens", "prompt_tokens", "prompt_token_count"])
+                    output_tokens = _get(["output_tokens", "candidates_token_count", "completion_tokens"])
+                    total_tokens = _get(["total_tokens", "total_token_count"])
+                    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+                        total_tokens = input_tokens + output_tokens
+
+                    self.last_input_tokens = input_tokens  # type: ignore[attr-defined]
+                    self.last_output_tokens = output_tokens  # type: ignore[attr-defined]
+                    self.last_total_tokens = total_tokens  # type: ignore[attr-defined]
+            except Exception:
+                self.last_input_tokens = None  # type: ignore[attr-defined]
+                self.last_output_tokens = None  # type: ignore[attr-defined]
+                self.last_total_tokens = None  # type: ignore[attr-defined]
+
+            if hasattr(response, "text") and response.text:
                 return str(response.text)
             raise RuntimeError("Gemini response did not include text content")
 
@@ -489,6 +549,11 @@ class OpenAICompatibleProvider(LLMProvider):
         json_mode: bool = False,
         max_tokens: Optional[int] = None,
     ) -> str:
+        # Reset token usage for this call
+        self.last_input_tokens = None  # type: ignore[attr-defined]
+        self.last_output_tokens = None  # type: ignore[attr-defined]
+        self.last_total_tokens = None  # type: ignore[attr-defined]
+
         messages = _build_chat_messages(
             system_instruction,
             _append_json_instruction(prompt) if json_mode else prompt,
@@ -507,6 +572,27 @@ class OpenAICompatibleProvider(LLMProvider):
             sanitized = sanitize_error_message(str(exc))
             logger.warning("%s API call failed: %s", self._provider_label, sanitized)
             raise ProviderAPIError(f"API call failed: {sanitized}") from exc
+
+        # Capture token usage when available
+        try:
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                input_tokens = getattr(usage, "prompt_tokens", None)
+                if input_tokens is None:
+                    input_tokens = getattr(usage, "input_tokens", None)
+                output_tokens = getattr(usage, "completion_tokens", None)
+                if output_tokens is None:
+                    output_tokens = getattr(usage, "output_tokens", None)
+                total_tokens = getattr(usage, "total_tokens", None)
+                if total_tokens is None and isinstance(input_tokens, int) and isinstance(output_tokens, int):
+                    total_tokens = input_tokens + output_tokens
+                self.last_input_tokens = input_tokens  # type: ignore[attr-defined]
+                self.last_output_tokens = output_tokens  # type: ignore[attr-defined]
+                self.last_total_tokens = total_tokens  # type: ignore[attr-defined]
+        except Exception:
+            self.last_input_tokens = None  # type: ignore[attr-defined]
+            self.last_output_tokens = None  # type: ignore[attr-defined]
+            self.last_total_tokens = None  # type: ignore[attr-defined]
 
         if not response.choices:
             raise RuntimeError(f"{self._provider_label} API returned no choices")
@@ -655,6 +741,11 @@ class OpenRouterProvider(OpenAICompatibleProvider):
 
         url = f"{self._base_url}/chat/completions"
 
+        # Reset token usage for this call
+        self.last_input_tokens = None  # type: ignore[attr-defined]
+        self.last_output_tokens = None  # type: ignore[attr-defined]
+        self.last_total_tokens = None  # type: ignore[attr-defined]
+
         def _post_with_model(model_name: str) -> httpx.Response:
             payload: Dict[str, Any] = {
                 "model": model_name,
@@ -701,6 +792,24 @@ class OpenRouterProvider(OpenAICompatibleProvider):
             sanitized_error = sanitize_error_message(str(data.get("error")))
             logger.warning("OpenRouter returned error payload: %s", sanitized_error)
             raise ProviderAPIError(f"API call failed: {sanitized_error}")
+
+        # Capture token usage when available
+        try:
+            if isinstance(data, dict):
+                usage = data.get("usage")
+                if isinstance(usage, dict):
+                    input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens")
+                    output_tokens = usage.get("output_tokens") or usage.get("completion_tokens")
+                    total_tokens = usage.get("total_tokens")
+                    if total_tokens is None and isinstance(input_tokens, int) and isinstance(output_tokens, int):
+                        total_tokens = input_tokens + output_tokens
+                    self.last_input_tokens = input_tokens  # type: ignore[attr-defined]
+                    self.last_output_tokens = output_tokens  # type: ignore[attr-defined]
+                    self.last_total_tokens = total_tokens  # type: ignore[attr-defined]
+        except Exception:
+            self.last_input_tokens = None  # type: ignore[attr-defined]
+            self.last_output_tokens = None  # type: ignore[attr-defined]
+            self.last_total_tokens = None  # type: ignore[attr-defined]
 
         choices = data.get("choices") if isinstance(data, dict) else None
         if not choices:
