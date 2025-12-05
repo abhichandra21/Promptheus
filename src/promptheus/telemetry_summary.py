@@ -240,22 +240,22 @@ def aggregate_metrics(events: List[dict]) -> Tuple[
             elif event.get("processing_latency_sec") is not None:
                 overall.total_latencies.append(event["processing_latency_sec"])
 
-        if event.get("llm_latency_sec") is not None:
-            overall.llm_latencies.append(event["llm_latency_sec"])
+            if event.get("llm_latency_sec") is not None:
+                overall.llm_latencies.append(event["llm_latency_sec"])
 
             # Character counts
-        if event.get("input_chars") is not None:
-            overall.input_chars.append(event["input_chars"])
-        if event.get("output_chars") is not None:
-            overall.output_chars.append(event["output_chars"])
+            if event.get("input_chars") is not None:
+                overall.input_chars.append(event["input_chars"])
+            if event.get("output_chars") is not None:
+                overall.output_chars.append(event["output_chars"])
 
             # Token counts
-        if event.get("input_tokens") is not None:
-            overall.input_tokens.append(event["input_tokens"])
-        if event.get("output_tokens") is not None:
-            overall.output_tokens.append(event["output_tokens"])
-        if event.get("total_tokens") is not None:
-            overall.total_tokens.append(event["total_tokens"])
+            if event.get("input_tokens") is not None:
+                overall.input_tokens.append(event["input_tokens"])
+            if event.get("output_tokens") is not None:
+                overall.output_tokens.append(event["output_tokens"])
+            if event.get("total_tokens") is not None:
+                overall.total_tokens.append(event["total_tokens"])
 
             # By interface
             interface = event.get("interface") or "unknown"
