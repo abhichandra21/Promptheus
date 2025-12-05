@@ -27,6 +27,8 @@ Response Format:
 """
 import logging
 import sys
+import time
+import uuid
 from typing import Optional, Dict, Any, List, Union, Tuple
 
 # FastMCP import with graceful fallback
@@ -39,6 +41,11 @@ except ImportError:
 from promptheus.config import Config
 from promptheus.providers import get_provider
 from promptheus.utils import sanitize_error_message
+from promptheus.telemetry import (
+    record_prompt_run_event,
+    record_clarifying_questions_summary,
+    record_provider_error,
+)
 from promptheus.prompts import (
     CLARIFICATION_SYSTEM_INSTRUCTION,
     GENERATION_SYSTEM_INSTRUCTION,
@@ -47,6 +54,9 @@ from promptheus.prompts import (
 )
 
 logger = logging.getLogger("promptheus.mcp")
+
+# Session ID for telemetry - generated once per MCP process
+SESSION_ID = str(uuid.uuid4())
 
 # Initialize FastMCP
 if FastMCP:
@@ -453,6 +463,16 @@ if mcp:
             )
             # Returns: {"type": "refined", "prompt": "..."}
         """
+        # Generate run_id for this specific tool invocation
+        run_id = str(uuid.uuid4())
+        
+        # Track timing metrics
+        start_time = time.time()
+        llm_start_time = None
+        llm_end_time = None
+        clarifying_questions_count = 0
+        success = False
+        
         logger.info(
             f"refine_prompt called: prompt_len={len(prompt)}, "
             f"has_answers={bool(answers)}, provider={provider}, model={model}"
@@ -461,17 +481,89 @@ if mcp:
         # Validate input
         validation_error = _validate_prompt(prompt)
         if validation_error:
+            # Record failure telemetry
+            end_time = time.time()
+            total_run_latency_sec = end_time - start_time
+            
+            record_prompt_run_event(
+                source="mcp",
+                provider=provider or "unknown",
+                model=model or "unknown",
+                task_type="unknown",
+                processing_latency_sec=total_run_latency_sec,
+                clarifying_questions_count=0,
+                skip_questions=False,
+                refine_mode=True,
+                success=False,
+                session_id=SESSION_ID,
+                run_id=run_id,
+                input_chars=len(prompt),
+                output_chars=len(prompt),  # No refinement, return original
+                llm_latency_sec=None,
+                total_run_latency_sec=total_run_latency_sec,
+                quiet_mode=False,  # MCP doesn't have quiet mode
+                history_enabled=None,  # Will be set when we have config
+                python_version=sys.version.split()[0],
+                platform=sys.platform,
+                interface="mcp",
+                input_tokens=None,
+                output_tokens=None,
+                total_tokens=None,
+            )
             return validation_error
 
         # Initialize provider
         llm_provider, provider_error = _initialize_provider(provider, model)
         if provider_error:
+            # Record provider error telemetry
+            end_time = time.time()
+            total_run_latency_sec = end_time - start_time
+            
+            record_provider_error(
+                provider=provider or "unknown",
+                model=model or "unknown",
+                session_id=SESSION_ID,
+                run_id=run_id,
+                error_message=provider_error.get("message", "Unknown provider error"),
+            )
+            
+            record_prompt_run_event(
+                source="mcp",
+                provider=provider or "unknown",
+                model=model or "unknown",
+                task_type="unknown",
+                processing_latency_sec=total_run_latency_sec,
+                clarifying_questions_count=0,
+                skip_questions=False,
+                refine_mode=True,
+                success=False,
+                session_id=SESSION_ID,
+                run_id=run_id,
+                input_chars=len(prompt),
+                output_chars=len(prompt),
+                llm_latency_sec=None,
+                total_run_latency_sec=total_run_latency_sec,
+                quiet_mode=False,
+                history_enabled=None,
+                python_version=sys.version.split()[0],
+                platform=sys.platform,
+                interface="mcp",
+                input_tokens=None,
+                output_tokens=None,
+                total_tokens=None,
+            )
             return provider_error
 
         try:
+            # Get config for history_enabled setting
+            config = Config()
+            history_enabled = config.history_enabled
+            
             # Case 1: Answers provided -> Generate final refined prompt
             if answers:
                 logger.info(f"Refining with {len(answers)} answers")
+                clarifying_questions_count = 0  # No new questions asked
+                llm_start_time = time.time()
 
                 # Prefer caller-provided mapping so the provider can see the original
                 # question text; fall back to generic labels for backward compatibility.
@@ -483,26 +575,106 @@ if mcp:
                 refined = llm_provider.refine_from_answers(
                     prompt, answers, mapping, GENERATION_SYSTEM_INSTRUCTION
                 )
+                llm_end_time = time.time()
+                
+                # Calculate timing metrics
+                end_time = time.time()
+                total_run_latency_sec = end_time - start_time
+                llm_latency_sec = llm_end_time - llm_start_time
+                
+                input_tokens = getattr(llm_provider, "last_input_tokens", None)
+                output_tokens = getattr(llm_provider, "last_output_tokens", None)
+                total_tokens = getattr(llm_provider, "last_total_tokens", None)
+
+                # Record successful telemetry
+                record_prompt_run_event(
+                    source="mcp",
+                    provider=llm_provider.name if hasattr(llm_provider, 'name') else (provider or "unknown"),
+                    model=model or config.get_model(),
+                    task_type="generation",  # When answers are provided, it's generation
+                    processing_latency_sec=total_run_latency_sec,
+                    clarifying_questions_count=clarifying_questions_count,
+                    skip_questions=True,  # We already have answers
+                    refine_mode=True,
+                    success=True,
+                    session_id=SESSION_ID,
+                    run_id=run_id,
+                    input_chars=len(prompt),
+                    output_chars=len(refined),
+                    llm_latency_sec=llm_latency_sec,
+                    total_run_latency_sec=total_run_latency_sec,
+                    quiet_mode=False,
+                    history_enabled=history_enabled,
+                    python_version=sys.version.split()[0],
+                    platform=sys.platform,
+                    interface="mcp",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                )
 
                 return _build_refined_response(refined)
 
             # Case 2: No answers -> Determine if questions are needed
             logger.info("Analyzing prompt for clarification needs")
-
+            llm_start_time = time.time()
             analysis = llm_provider.generate_questions(
                 prompt, CLARIFICATION_SYSTEM_INSTRUCTION
             )
+            llm_end_time = time.time()
+            questions_llm_latency_sec = llm_end_time - llm_start_time
 
             if not analysis:
                 # Analysis failed, do light refinement
                 logger.warning("Question generation failed, doing light refinement")
+                llm_start_time = time.time()
                 refined = llm_provider.light_refine(
                     prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
                 )
+                llm_end_time = time.time()
+                
+                # Calculate timing metrics
+                end_time = time.time()
+                total_run_latency_sec = end_time - start_time
+                refine_llm_latency_sec = llm_end_time - llm_start_time
+                llm_latency_sec = questions_llm_latency_sec + refine_llm_latency_sec
+
+                input_tokens = getattr(llm_provider, "last_input_tokens", None)
+                output_tokens = getattr(llm_provider, "last_output_tokens", None)
+                total_tokens = getattr(llm_provider, "last_total_tokens", None)
+                
+                # Record successful telemetry
+                record_prompt_run_event(
+                    source="mcp",
+                    provider=llm_provider.name if hasattr(llm_provider, 'name') else (provider or "unknown"),
+                    model=model or config.get_model(),
+                    task_type="analysis",
+                    processing_latency_sec=total_run_latency_sec,
+                    clarifying_questions_count=0,
+                    skip_questions=False,
+                    refine_mode=False,  # Light refinement
+                    success=True,
+                    session_id=SESSION_ID,
+                    run_id=run_id,
+                    input_chars=len(prompt),
+                    output_chars=len(refined),
+                    llm_latency_sec=llm_latency_sec,
+                    total_run_latency_sec=total_run_latency_sec,
+                    quiet_mode=False,
+                    history_enabled=history_enabled,
+                    python_version=sys.version.split()[0],
+                    platform=sys.platform,
+                    interface="mcp",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                )
+                
                 return _build_refined_response(refined)
 
             task_type = analysis.get("task_type", "analysis")
             questions = analysis.get("questions", [])
+            clarifying_questions_count = len(questions)
 
             logger.info(f"Task type: {task_type}, questions: {len(questions)}")
 
@@ -516,12 +688,60 @@ if mcp:
                 if interactive_answers:
                     # Got answers interactively, refine immediately
                     logger.info("Interactive answers received, refining")
+                    llm_start_time = time.time()
                     refined = llm_provider.refine_from_answers(
                         prompt,
                         interactive_answers,
                         mapping,
                         GENERATION_SYSTEM_INSTRUCTION,
                     )
+                    llm_end_time = time.time()
+                    
+                    # Calculate timing metrics
+                    end_time = time.time()
+                    total_run_latency_sec = end_time - start_time
+                    refine_llm_latency_sec = llm_end_time - llm_start_time
+                    llm_latency_sec = questions_llm_latency_sec + refine_llm_latency_sec
+
+                    input_tokens = getattr(llm_provider, "last_input_tokens", None)
+                    output_tokens = getattr(llm_provider, "last_output_tokens", None)
+                    total_tokens = getattr(llm_provider, "last_total_tokens", None)
+                    
+                    # Record successful telemetry
+                    record_prompt_run_event(
+                        source="mcp",
+                        provider=llm_provider.name if hasattr(llm_provider, 'name') else (provider or "unknown"),
+                        model=model or config.get_model(),
+                        task_type=task_type,
+                        processing_latency_sec=total_run_latency_sec,
+                        clarifying_questions_count=clarifying_questions_count,
+                        skip_questions=False,
+                        refine_mode=True,
+                        success=True,
+                        session_id=SESSION_ID,
+                        run_id=run_id,
+                        input_chars=len(prompt),
+                        output_chars=len(refined),
+                        llm_latency_sec=llm_latency_sec,
+                        total_run_latency_sec=total_run_latency_sec,
+                        quiet_mode=False,
+                        history_enabled=history_enabled,
+                        python_version=sys.version.split()[0],
+                        platform=sys.platform,
+                        interface="mcp",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
+                    )
+                    
+                    # Record clarifying questions summary
+                    record_clarifying_questions_summary(
+                        session_id=SESSION_ID,
+                        run_id=run_id,
+                        total_questions=clarifying_questions_count,
+                        history_enabled=history_enabled,
+                    )
+                    
                     return _build_refined_response(refined)
 
                 # Interactive mode unavailable or failed, return structured response
@@ -530,13 +750,96 @@ if mcp:
 
             # No questions needed, do light refinement
             logger.info("No questions needed, doing light refinement")
+            llm_start_time = time.time()
             refined = llm_provider.light_refine(
                 prompt, ANALYSIS_REFINEMENT_SYSTEM_INSTRUCTION
             )
+            llm_end_time = time.time()
+            
+            # Calculate timing metrics
+            end_time = time.time()
+            total_run_latency_sec = end_time - start_time
+            llm_latency_sec = llm_end_time - llm_start_time
+
+            input_tokens = getattr(llm_provider, "last_input_tokens", None)
+            output_tokens = getattr(llm_provider, "last_output_tokens", None)
+            total_tokens = getattr(llm_provider, "last_total_tokens", None)
+            
+            # Record successful telemetry
+            record_prompt_run_event(
+                source="mcp",
+                provider=llm_provider.name if hasattr(llm_provider, 'name') else (provider or "unknown"),
+                model=model or config.get_model(),
+                task_type=task_type,
+                processing_latency_sec=total_run_latency_sec,
+                clarifying_questions_count=0,
+                skip_questions=False,
+                refine_mode=False,  # Light refinement
+                success=True,
+                session_id=SESSION_ID,
+                run_id=run_id,
+                input_chars=len(prompt),
+                output_chars=len(refined),
+                llm_latency_sec=llm_latency_sec,
+                total_run_latency_sec=total_run_latency_sec,
+                quiet_mode=False,
+                history_enabled=history_enabled,
+                python_version=sys.version.split()[0],
+                platform=sys.platform,
+                interface="mcp",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+            )
+            
             return _build_refined_response(refined)
 
         except Exception as e:
             logger.exception("Error during prompt refinement")
+            
+            # Get config for history_enabled setting
+            config = Config()
+            history_enabled = config.history_enabled
+            
+            # Record provider error telemetry
+            end_time = time.time()
+            total_run_latency_sec = end_time - start_time
+            
+            record_provider_error(
+                provider=provider or "unknown",
+                model=model or config.get_model(),
+                session_id=SESSION_ID,
+                run_id=run_id,
+                error_message=str(e),
+            )
+            
+            # Record failed prompt run telemetry
+            record_prompt_run_event(
+                source="mcp",
+                provider=provider or "unknown",
+                model=model or config.get_model(),
+                task_type="unknown",
+                processing_latency_sec=total_run_latency_sec,
+                clarifying_questions_count=clarifying_questions_count,
+                skip_questions=False,
+                refine_mode=True,
+                success=False,
+                session_id=SESSION_ID,
+                run_id=run_id,
+                input_chars=len(prompt),
+                output_chars=len(prompt),  # No refinement, return original
+                llm_latency_sec=None,
+                total_run_latency_sec=total_run_latency_sec,
+                quiet_mode=False,
+                history_enabled=history_enabled,
+                python_version=sys.version.split()[0],
+                platform=sys.platform,
+                interface="mcp",
+                input_tokens=None,
+                output_tokens=None,
+                total_tokens=None,
+            )
+            
             return {
                 "type": "error",
                 "error_type": type(e).__name__,

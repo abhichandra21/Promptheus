@@ -59,6 +59,7 @@ def mock_config():
     config.validate.return_value = True
     config.consume_status_messages.return_value = []
     config.consume_error_messages.return_value = []
+    config.history_enabled = True  # Add missing attribute for telemetry
     return config
 
 

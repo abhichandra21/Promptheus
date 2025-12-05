@@ -258,8 +258,21 @@ Interactive Mode Commands (available when running without arguments):
             description="Start the Model Context Protocol (MCP) server.",
         )
 
+        # telemetry subcommand
+        telemetry_parser = subparsers.add_parser(
+            "telemetry",
+            help="View telemetry summary",
+            description="View aggregate telemetry statistics (no sensitive data stored).",
+        )
+        telemetry_subparsers = telemetry_parser.add_subparsers(dest="telemetry_command")
+        summary_parser = telemetry_subparsers.add_parser(
+            "summary",
+            help="Display telemetry summary",
+            description="Display aggregate statistics from telemetry data.",
+        )
+
         # Add verbose and version flags to all subcommands for convenience
-        for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser, auth_parser, web_parser, mcp_parser]:
+        for sub in [history_parser, list_models_parser, validate_parser, template_parser, completion_parser, auth_parser, web_parser, mcp_parser, telemetry_parser]:
             sub.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug output")
             sub.add_argument("--version", action="store_true", help="Show version information and exit")
 
@@ -270,7 +283,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     """Parse CLI arguments, building the correct parser for the context."""
     argv_list = sys.argv[1:] if argv is None else list(argv)
 
-    known_subcommands = {"history", "list-models", "validate", "template", "completion", "__complete", "auth", "web", "mcp"}
+    known_subcommands = {"history", "list-models", "validate", "template", "completion", "__complete", "auth", "web", "mcp", "telemetry"}
     
     # If no args, or the first arg is a known subcommand or help, use the full parser.
     if not argv_list or argv_list[0] in known_subcommands or any(arg in {"-h", "--help"} for arg in argv_list):

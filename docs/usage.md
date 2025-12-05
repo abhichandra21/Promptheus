@@ -243,6 +243,26 @@ promptheus history --limit 50
 promptheus history --clear
 ```
 
+### Telemetry & Analytics
+```bash
+# Display telemetry summary (aggregate metrics only, no sensitive data)
+promptheus telemetry summary
+```
+
+**Telemetry Data Collected:**
+- Performance metrics: processing latency, LLM latency, total run time
+- Usage patterns: task types (analysis/generation), question counts, skip/refine modes
+- Provider metrics: provider name, model, token usage (when available)
+- Environment: Python version, platform, interface type (cli/web/mcp)
+- Success rates and error types (sanitized)
+
+**Privacy Features:**
+- No prompts, API keys, or sensitive data stored
+- Local JSONL storage only (default: same directory as history)
+- Can be disabled: `export PROMPTHEUS_TELEMETRY_ENABLED=0`
+- Custom storage location: `export PROMPTHEUS_TELEMETRY_FILE=/path/to/file.jsonl`
+- Sampling rate control: `export PROMPTHEUS_TELEMETRY_SAMPLE_RATE=0.5` (50% of runs)
+
 ### Shell Completion Installation
 ```bash
 # Bash completion script generation
@@ -405,6 +425,8 @@ The web interface provides enhanced history management capabilities:
 - Metadata includes timestamps, task classifications, provider, model, original and refined versions
 - Local storage with no external transmission
 - JSONL format for efficient append-only operations
+- Default location: `~/.promptheus` (Unix/Mac) or `%APPDATA%/promptheus` (Windows)
+- Customizable location: `export PROMPTHEUS_HISTORY_DIR=/custom/path`
 
 ## Iterative Refinement Interface
 
