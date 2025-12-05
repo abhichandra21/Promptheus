@@ -2,6 +2,58 @@
 
 All notable changes to Promptheus are documented in this file.
 
+## [0.3.0] - 2025-12-05
+
+### Added
+- **Telemetry System**: Anonymous usage and performance metrics tracking
+  - Token usage tracking across all providers
+  - Performance latency metrics for API calls
+  - Task type classification metrics (analysis vs generation)
+  - Local JSONL storage with configurable sampling
+  - Summary reporting via `promptheus telemetry summary`
+  - Privacy-preserving design (no prompts or API keys stored)
+  - Telemetry data visualization and analytics
+- **MCP Server Enhancements**: Extended question handling in `refine_prompt` tool
+  - Improved clarification workflow with better answer mapping
+  - Enhanced error handling and response formatting
+- **Shell Completions**: Added `mcp` and `telemetry` subcommands to bash/zsh completions
+- **Web API Token Tracking**: Prompt refinement endpoint now returns token usage statistics
+- **Test Coverage**: Comprehensive telemetry test suite
+  - End-to-end telemetry tests (`test_telemetry_e2e.py`)
+  - Extended telemetry unit tests (`test_telemetry_extended.py`)
+  - Summary generation tests (`test_telemetry_summary.py`)
+  - Telemetry testing script (`scripts/test-telemetry.sh`)
+
+### Changed
+- **Provider Token Tracking**: All providers now report input/output/total token usage
+  - Added `last_input_tokens`, `last_output_tokens`, `last_total_tokens` attributes
+  - Best-effort token tracking with graceful fallbacks for providers without usage data
+- **History Management**: Added telemetry directory configuration support
+  - `PROMPTHEUS_HISTORY_DIR` environment variable for custom location
+  - Unified history and telemetry file management
+- **MCP Server**: Enhanced `refine_prompt` tool with better question/answer workflow
+- **Documentation**:
+  - Updated CLAUDE.md with telemetry architecture details
+  - Enhanced usage.md with telemetry commands and configuration
+  - Added telemetry test script documentation
+
+### Fixed
+- Token counting for providers with inconsistent response formats
+- Provider error handling for missing token usage metadata
+
+### Environment Variables
+- `PROMPTHEUS_TELEMETRY_ENABLED`: Enable/disable telemetry (default: 1)
+- `PROMPTHEUS_TELEMETRY_FILE`: Custom telemetry file path (optional)
+- `PROMPTHEUS_TELEMETRY_SAMPLE_RATE`: Sampling rate 0.0-1.0 (default: 1.0)
+- `PROMPTHEUS_HISTORY_DIR`: Custom history directory location (optional)
+
+### Technical Details
+- Telemetry events stored in platform-specific directories
+- JSONL format for efficient append-only logging
+- Atomic file writes with file locking
+- Comprehensive event schema with timestamps and metadata
+- Provider-agnostic token tracking implementation
+
 ## [0.2.4] - 2025-11-25
 
 ### Added
