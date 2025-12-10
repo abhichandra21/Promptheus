@@ -1,0 +1,101 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
+  "name": "io.github.abhichandra21/promptheus",
+  "title": "Promptheus",
+  "description": "AI-powered prompt refinement tool with adaptive questioning and multi-provider support. Intelligently refines prompts through clarifying questions, supports 6+ AI providers (Google Gemini, Anthropic Claude, OpenAI, Groq, Alibaba Qwen, Zhipu GLM), and provides comprehensive prompt engineering capabilities via MCP.",
+  "version": "0.3.0",
+  "repository": {
+    "type": "github",
+    "url": "https://github.com/abhichandra21/Promptheus"
+  },
+  "websiteUrl": "https://github.com/abhichandra21/Promptheus",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "promptheus",
+      "version": "0.3.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [],
+      "runtimeArguments": [
+        "python",
+        "-m",
+        "promptheus.mcp_server"
+      ],
+      "environmentVariables": {
+        "GOOGLE_API_KEY": {
+          "description": "Google Gemini API key (optional, at least one provider required)",
+          "required": false
+        },
+        "ANTHROPIC_API_KEY": {
+          "description": "Anthropic Claude API key (optional, at least one provider required)",
+          "required": false
+        },
+        "OPENAI_API_KEY": {
+          "description": "OpenAI API key (optional, at least one provider required)",
+          "required": false
+        },
+        "GROQ_API_KEY": {
+          "description": "Groq API key (optional, at least one provider required)",
+          "required": false
+        },
+        "QWEN_API_KEY": {
+          "description": "Alibaba Qwen API key (optional, at least one provider required)",
+          "required": false
+        },
+        "GLM_API_KEY": {
+          "description": "Zhipu GLM API key (optional, at least one provider required)",
+          "required": false
+        },
+        "PROMPTHEUS_PROVIDER": {
+          "description": "Override provider selection (gemini, anthropic, openai, groq, qwen, glm)",
+          "required": false
+        },
+        "PROMPTHEUS_MODEL": {
+          "description": "Override model selection for the chosen provider",
+          "required": false
+        }
+      }
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "tools": [
+        {
+          "name": "refine_prompt",
+          "description": "Intelligently refine prompts with adaptive questioning workflow"
+        },
+        {
+          "name": "tweak_prompt",
+          "description": "Make surgical modifications to existing prompts"
+        },
+        {
+          "name": "list_models",
+          "description": "Discover available models for each AI provider"
+        },
+        {
+          "name": "list_providers",
+          "description": "Check provider configuration status"
+        },
+        {
+          "name": "validate_environment",
+          "description": "Validate API keys and test provider connections"
+        }
+      ],
+      "features": [
+        "Adaptive task detection (analysis vs generation)",
+        "Multi-provider support (6+ AI backends)",
+        "Interactive and structured question modes",
+        "Session history management",
+        "Privacy-preserving telemetry"
+      ],
+      "categories": [
+        "AI Tools",
+        "Developer Productivity",
+        "Prompt Engineering",
+        "LLM Utilities"
+      ]
+    }
+  }
+}
