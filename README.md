@@ -4,7 +4,7 @@
 
 <!-- mcp-name: io.github.abhichandra21/promptheus -->
 
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/downloads/) [![PyPI Version](https://img.shields.io/pypi/v/promptheus)](https://pypi.org/project/promptheus/) [![Release Version](https://img.shields.io/badge/release-v0.2.4-brightgreen)](CHANGELOG.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/abhichandra21/Promptheus?style=social)](https://github.com/abhichandra21/Promptheus)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/downloads/) [![PyPI Version](https://img.shields.io/pypi/v/promptheus)](https://pypi.org/project/promptheus/) [![Release Version](https://img.shields.io/badge/release-v0.3.1-brightgreen)](CHANGELOG.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/abhichandra21/Promptheus?style=social)](https://github.com/abhichandra21/Promptheus)
 
 [![Deploy GitHub Pages](https://github.com/abhichandra21/Promptheus/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/abhichandra21/Promptheus/actions/workflows/deploy-pages.yml) [![Docker Build & Test](https://github.com/abhichandra21/Promptheus/actions/workflows/docker-test.yml/badge.svg)](https://github.com/abhichandra21/Promptheus/actions/workflows/docker-test.yml) [![Publish Python Package](https://github.com/abhichandra21/Promptheus/actions/workflows/publish.yml/badge.svg)](https://github.com/abhichandra21/Promptheus/actions/workflows/publish.yml)
 
@@ -130,6 +130,236 @@ export PROMPTHEUS_TELEMETRY_ENABLED=0
 
 # Customize history storage location
 export PROMPTHEUS_HISTORY_DIR=~/.custom_promptheus
+```
+
+## Library Usage
+
+Promptheus can be used as a **Python library** in your own applications for programmatic prompt refinement.
+
+### Installation
+
+```bash
+pip install promptheus        # Includes CLI and library
+pip install promptheus[all]   # With all optional features (MCP, Web UI)
+```
+
+### Quick Start
+
+```python
+from promptheus import refine_prompt
+
+# Simple refinement
+result = refine_prompt("Write a blog post about AI")
+print(result['refined_prompt'])
+print(f"Task type: {result['task_type']}")
+```
+
+### Basic Examples
+
+**Light refinement (no questions)**
+```python
+from promptheus import refine_prompt
+
+result = refine_prompt(
+    "Explain Docker containers",
+    skip_questions=True  # Fast, direct refinement
+)
+print(result['refined_prompt'])
+```
+
+**Using specific provider and model**
+```python
+from promptheus import refine_prompt, Config
+
+config = Config(provider="openai", model="gpt-4o")
+result = refine_prompt(
+    "Create a REST API schema",
+    config=config,
+    skip_questions=True
+)
+print(result['refined_prompt'])
+```
+
+**Question-based refinement**
+```python
+from promptheus import generate_questions, refine_with_answers
+
+# Step 1: Generate clarifying questions
+questions_result = generate_questions("Write a blog post about AI")
+
+print(f"Task type: {questions_result['task_type']}")
+for q in questions_result['questions']:
+    print(f"- {q['question']} ({q['type']})")
+
+# Step 2: Provide answers (from user input, database, etc.)
+answers = {
+    'q0': 'Technical developers',
+    'q1': '1500 words',
+    'q2': ['Code examples', 'Best practices']
+}
+
+# Step 3: Refine with answers
+final_result = refine_with_answers(
+    "Write a blog post about AI",
+    answers,
+    questions_result['question_mapping']
+)
+print(final_result['refined_prompt'])
+```
+
+**Iterative tweaking**
+```python
+from promptheus import refine_prompt, tweak_prompt
+
+# Initial refinement
+result = refine_prompt("Write a technical guide", skip_questions=True)
+prompt = result['refined_prompt']
+
+# Apply specific tweaks
+tweaked = tweak_prompt(prompt, "make it more concise")
+prompt = tweaked['tweaked_prompt']
+
+tweaked = tweak_prompt(prompt, "add more code examples")
+prompt = tweaked['tweaked_prompt']
+
+print(prompt)
+```
+
+### Advanced Usage
+
+**Provider discovery**
+```python
+from promptheus import list_available_providers, list_available_models
+
+# List configured providers
+providers = list_available_providers()
+print(f"Available: {', '.join(providers)}")
+
+# List models for a provider
+models = list_available_models(provider='openai')
+print(f"OpenAI models: {models['openai']}")
+
+# List all models
+all_models = list_available_models()
+for provider, model_list in all_models.items():
+    print(f"{provider}: {len(model_list)} models")
+```
+
+**Error handling**
+```python
+from promptheus import refine_prompt, ProviderAPIError, InvalidProviderError
+
+try:
+    result = refine_prompt("Write a story", provider="openai")
+    print(result['refined_prompt'])
+except ProviderAPIError as e:
+    print(f"Provider error: {e}")
+except InvalidProviderError as e:
+    print(f"Invalid provider: {e}")
+except ValueError as e:
+    print(f"Configuration error: {e}")
+```
+
+**Custom configuration**
+```python
+from promptheus import Config, get_provider, refine_prompt
+import os
+
+# Set up environment
+os.environ['ANTHROPIC_API_KEY'] = 'your-key-here'
+
+# Create custom configuration
+config = Config()
+config.set_provider('anthropic')
+config.set_model('claude-3-5-sonnet-20241022')
+
+# Use in refinement
+result = refine_prompt(
+    "Explain quantum computing",
+    config=config,
+    skip_questions=True
+)
+```
+
+### API Reference
+
+**Main Functions:**
+- `refine_prompt()` - Main refinement function (light or question-based)
+- `generate_questions()` - Generate clarifying questions only
+- `refine_with_answers()` - Refine using pre-provided answers
+- `tweak_prompt()` - Apply specific modifications to a prompt
+- `list_available_providers()` - List configured AI providers
+- `list_available_models()` - List available models per provider
+
+**Configuration:**
+- `Config` - Configuration class for providers and models
+- `get_provider()` - Get a provider instance directly
+
+**Exceptions:**
+- `ProviderAPIError` - AI provider API failures
+- `InvalidProviderError` - Unknown/invalid provider specified
+- `PromptCancelled` - User cancellation (CLI context)
+
+### Use Cases
+
+**Batch Processing**
+```python
+from promptheus import refine_prompt
+
+prompts = [
+    "Explain machine learning",
+    "Create a FastAPI tutorial",
+    "Review security best practices"
+]
+
+for original in prompts:
+    result = refine_prompt(original, skip_questions=True)
+    print(f"Original: {original}")
+    print(f"Refined: {result['refined_prompt']}\n")
+```
+
+**Web Application Integration**
+```python
+from fastapi import FastAPI
+from promptheus import refine_prompt, ProviderAPIError
+
+app = FastAPI()
+
+@app.post("/refine")
+async def refine_endpoint(prompt: str, provider: str = "google"):
+    try:
+        result = refine_prompt(prompt, provider=provider, skip_questions=True)
+        return {
+            "success": True,
+            "refined_prompt": result['refined_prompt'],
+            "task_type": result['task_type']
+        }
+    except ProviderAPIError as e:
+        return {"success": False, "error": str(e)}
+```
+
+**Custom Question Flow**
+```python
+from promptheus import generate_questions, refine_with_answers
+
+def interactive_refinement(prompt: str):
+    # Generate questions
+    q_result = generate_questions(prompt)
+
+    # Present questions to user (web form, CLI, etc.)
+    answers = {}
+    for idx, q in enumerate(q_result['questions']):
+        user_answer = input(f"{q['question']}: ")
+        answers[f"q{idx}"] = user_answer
+
+    # Refine with answers
+    final = refine_with_answers(
+        prompt,
+        answers,
+        q_result['question_mapping']
+    )
+
+    return final['refined_prompt']
 ```
 
 ## MCP Server
