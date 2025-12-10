@@ -2,6 +2,16 @@
 
 All notable changes to Promptheus are documented in this file.
 
+## [0.3.1] - 2025-12-10
+
+### Added
+- MCP registry metadata to README for PyPI validation
+- Updated server.json to latest schema (2025-10-17)
+
+### Fixed
+- Repository URL format for MCP registry compatibility
+- Environment variables format for MCP registry validation
+
 ## [0.3.0] - 2025-12-05
 
 ### Added
