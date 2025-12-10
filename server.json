@@ -1,12 +1,12 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "name": "io.github.abhichandra21/promptheus",
   "title": "Promptheus",
-  "description": "AI-powered prompt refinement tool with adaptive questioning and multi-provider support. Intelligently refines prompts through clarifying questions, supports 6+ AI providers (Google Gemini, Anthropic Claude, OpenAI, Groq, Alibaba Qwen, Zhipu GLM), and provides comprehensive prompt engineering capabilities via MCP.",
+  "description": "AI-powered prompt refinement with adaptive questioning and multi-provider support (6+ LLM backends)",
   "version": "0.3.0",
   "repository": {
-    "type": "github",
-    "url": "https://github.com/abhichandra21/Promptheus"
+    "url": "https://github.com/abhichandra21/Promptheus.git",
+    "source": "github"
   },
   "websiteUrl": "https://github.com/abhichandra21/Promptheus",
   "packages": [
@@ -14,49 +14,60 @@
       "registryType": "pypi",
       "identifier": "promptheus",
       "version": "0.3.0",
+      "runtimeHint": "python",
       "transport": {
         "type": "stdio"
       },
-      "packageArguments": [],
-      "runtimeArguments": [
-        "python",
-        "-m",
-        "promptheus.mcp_server"
-      ],
-      "environmentVariables": {
-        "GOOGLE_API_KEY": {
+      "environmentVariables": [
+        {
+          "name": "GOOGLE_API_KEY",
           "description": "Google Gemini API key (optional, at least one provider required)",
-          "required": false
+          "isRequired": false,
+          "isSecret": true
         },
-        "ANTHROPIC_API_KEY": {
+        {
+          "name": "ANTHROPIC_API_KEY",
           "description": "Anthropic Claude API key (optional, at least one provider required)",
-          "required": false
+          "isRequired": false,
+          "isSecret": true
         },
-        "OPENAI_API_KEY": {
+        {
+          "name": "OPENAI_API_KEY",
           "description": "OpenAI API key (optional, at least one provider required)",
-          "required": false
+          "isRequired": false,
+          "isSecret": true
         },
-        "GROQ_API_KEY": {
+        {
+          "name": "GROQ_API_KEY",
           "description": "Groq API key (optional, at least one provider required)",
-          "required": false
+          "isRequired": false,
+          "isSecret": true
         },
-        "QWEN_API_KEY": {
+        {
+          "name": "QWEN_API_KEY",
           "description": "Alibaba Qwen API key (optional, at least one provider required)",
-          "required": false
+          "isRequired": false,
+          "isSecret": true
         },
-        "GLM_API_KEY": {
+        {
+          "name": "GLM_API_KEY",
           "description": "Zhipu GLM API key (optional, at least one provider required)",
-          "required": false
+          "isRequired": false,
+          "isSecret": true
         },
-        "PROMPTHEUS_PROVIDER": {
+        {
+          "name": "PROMPTHEUS_PROVIDER",
           "description": "Override provider selection (gemini, anthropic, openai, groq, qwen, glm)",
-          "required": false
+          "isRequired": false,
+          "isSecret": false
         },
-        "PROMPTHEUS_MODEL": {
+        {
+          "name": "PROMPTHEUS_MODEL",
           "description": "Override model selection for the chosen provider",
-          "required": false
+          "isRequired": false,
+          "isSecret": false
         }
-      }
+      ]
     }
   ],
   "_meta": {
