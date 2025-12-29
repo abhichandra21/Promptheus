@@ -558,10 +558,15 @@ class OpenAICompatibleProvider(LLMProvider):
             system_instruction,
             _append_json_instruction(prompt) if json_mode else prompt,
         )
+
+        limit = max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS
+        normalized_model = self.model_name.lower()
+        # gpt-4.1 and o*-class models reject max_tokens; use max_output_tokens to avoid 400s
+        token_param_name = "max_output_tokens" if normalized_model.startswith(("gpt-4.1", "o1", "o3")) else "max_tokens"
         params: Dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
-            "max_tokens": max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
+            token_param_name: limit,
         }
         if json_mode:
             params["response_format"] = {"type": "json_object"}
