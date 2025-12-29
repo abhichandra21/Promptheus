@@ -591,9 +591,11 @@ class OpenAICompatibleProvider(LLMProvider):
             fallback_triggers = (
                 "responses api",
                 "max_output_tokens",
+                "max_tokens",
                 "unexpected keyword argument",
                 "use the responses api",
                 "unrecognized request argument",
+                "unsupported parameter",
             )
             if any(trigger in lower_msg for trigger in fallback_triggers):
                 logger.info("%s chat API rejected parameters; retrying via Responses API", self._provider_label)
