@@ -560,23 +560,53 @@ class OpenAICompatibleProvider(LLMProvider):
         )
 
         limit = max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS
-        normalized_model = self.model_name.lower()
-        # gpt-4.1 and o*-class models reject max_tokens; use max_output_tokens to avoid 400s
-        token_param_name = "max_output_tokens" if normalized_model.startswith(("gpt-4.1", "o1", "o3")) else "max_tokens"
-        params: Dict[str, Any] = {
-            "model": self.model_name,
-            "messages": messages,
-            token_param_name: limit,
-        }
-        if json_mode:
-            params["response_format"] = {"type": "json_object"}
+
+        response_mode = "chat"
+
+        def _call_chat() -> Any:
+            params: Dict[str, Any] = {
+                "model": self.model_name,
+                "messages": messages,
+                "max_tokens": limit,
+            }
+            if json_mode:
+                params["response_format"] = {"type": "json_object"}
+            return self.client.chat.completions.create(**params)
+
+        def _call_responses() -> Any:
+            params: Dict[str, Any] = {
+                "model": self.model_name,
+                "input": messages,
+                "max_output_tokens": limit,
+            }
+            if json_mode:
+                params["response_format"] = {"type": "json_object"}
+            return self.client.responses.create(**params)
 
         try:
-            response = self.client.chat.completions.create(**params)
+            response = _call_chat()
         except Exception as exc:  # pragma: no cover - network failures
-            sanitized = sanitize_error_message(str(exc))
-            logger.warning("%s API call failed: %s", self._provider_label, sanitized)
-            raise ProviderAPIError(f"API call failed: {sanitized}") from exc
+            sanitized_first = sanitize_error_message(str(exc))
+            lower_msg = sanitized_first.lower()
+            fallback_triggers = (
+                "responses api",
+                "max_output_tokens",
+                "unexpected keyword argument",
+                "use the responses api",
+                "unrecognized request argument",
+            )
+            if any(trigger in lower_msg for trigger in fallback_triggers):
+                logger.info("%s chat API rejected parameters; retrying via Responses API", self._provider_label)
+                try:
+                    response = _call_responses()
+                    response_mode = "responses"
+                except Exception as exc_responses:
+                    sanitized_second = sanitize_error_message(str(exc_responses))
+                    logger.warning("%s Responses API call failed after chat fallback: %s", self._provider_label, sanitized_second)
+                    raise ProviderAPIError(f"API call failed: {sanitized_second}") from exc_responses
+            else:
+                logger.warning("%s API call failed: %s", self._provider_label, sanitized_first)
+                raise ProviderAPIError(f"API call failed: {sanitized_first}") from exc
 
         # Capture token usage when available
         try:
@@ -599,11 +629,22 @@ class OpenAICompatibleProvider(LLMProvider):
             self.last_output_tokens = None  # type: ignore[attr-defined]
             self.last_total_tokens = None  # type: ignore[attr-defined]
 
-        if not response.choices:
-            raise RuntimeError(f"{self._provider_label} API returned no choices")
-        choice = response.choices[0]
-        message = getattr(choice, "message", None)
-        text = _coerce_message_content(getattr(message, "content", None))
+        if response_mode == "responses":
+            text = getattr(response, "output_text", None)
+            if not text:
+                output = getattr(response, "output", None) or getattr(response, "outputs", None)
+                if isinstance(output, list) and output:
+                    first_output = output[0]
+                    content = getattr(first_output, "content", None)
+                    if content is None and isinstance(first_output, dict):
+                        content = first_output.get("content")
+                    text = _coerce_message_content(content)
+        else:
+            if not response.choices:
+                raise RuntimeError(f"{self._provider_label} API returned no choices")
+            choice = response.choices[0]
+            message = getattr(choice, "message", None)
+            text = _coerce_message_content(getattr(message, "content", None))
         if not text:
             raise RuntimeError(f"{self._provider_label} API response did not include text output")
         return str(text)
