@@ -28,6 +28,10 @@ class TestTelemetryE2E:
 
         # Set up environment to isolate from user's actual data
         self.env = os.environ.copy()
+        repo_root = Path(__file__).resolve().parent.parent
+        bin_path = repo_root / "venv" / "bin"
+        if bin_path.exists():
+            self.env["PATH"] = f"{bin_path}:{self.env.get('PATH', '')}"
         self.env.update({
             "PROMPTHEUS_TELEMETRY_FILE": str(self.telemetry_file),
             "PROMPTHEUS_TELEMETRY_ENABLED": "1",
