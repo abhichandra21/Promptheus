@@ -581,7 +581,34 @@ class OpenAICompatibleProvider(LLMProvider):
             }
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
-            return self.client.responses.create(**params)
+
+            current_params = params
+            dropped_max = False
+            dropped_response_format = False
+            last_exc: Optional[BaseException] = None
+
+            for _ in range(3):
+                try:
+                    return self.client.responses.create(**current_params)
+                except TypeError as te:
+                    last_exc = te
+                    message = str(te)
+                    if "max_output_tokens" in message and not dropped_max:
+                        current_params = {k: v for k, v in current_params.items() if k != "max_output_tokens"}
+                        dropped_max = True
+                        continue
+                    if "response_format" in message and not dropped_response_format:
+                        current_params = {k: v for k, v in current_params.items() if k != "response_format"}
+                        dropped_response_format = True
+                        continue
+                    raise
+                except Exception as exc:  # pragma: no cover - network failures
+                    last_exc = exc
+                    break
+
+            if last_exc:
+                raise last_exc
+            raise RuntimeError("Failed to invoke Responses API with provided parameters")
 
         try:
             response = _call_chat()
