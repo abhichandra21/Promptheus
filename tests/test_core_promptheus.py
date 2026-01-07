@@ -3,6 +3,7 @@
 import os
 from io import StringIO
 from argparse import Namespace
+from types import SimpleNamespace
 from unittest.mock import Mock, patch, MagicMock
 
 import pytest
@@ -428,3 +429,93 @@ def test_main_mcp_subcommand_dispatches_and_handles_import_error(monkeypatch):
     # CLI should exit with non-zero status and emit a helpful message.
     assert excinfo.value.code == 1
     assert any("The 'mcp' package is not installed" in msg for msg in notifications)
+
+
+class DummyConsoleErr:
+    """Minimal console_err stub for iterative refinement tests."""
+
+    class _Status:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    def status(self, *args, **kwargs):
+        return self._Status()
+
+    def print(self, *args, **kwargs):
+        return None
+
+
+@patch("promptheus.main.display_output", return_value=None)
+def test_iterative_refinement_undo_reverts_previous(mock_display_output, monkeypatch):
+    """Undo should restore the prior prompt version."""
+    from promptheus.main import iterative_refinement
+
+    class UndoProvider(LLMProvider):
+        def generate_questions(self, initial_prompt: str, system_instruction: str):
+            return None
+
+        def get_available_models(self):
+            return []
+
+        def _generate_text(self, prompt: str, system_instruction: str, json_mode: bool = False, max_tokens=None):
+            return ""
+
+        def tweak_prompt(self, current_prompt: str, tweak_instruction: str, system_instruction: str) -> str:
+            return f"{current_prompt} + tweaked"
+
+    inputs = iter(["add detail", "undo", ""])
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
+
+    io = SimpleNamespace(
+        quiet_output=False,
+        notify=lambda *args, **kwargs: None,
+        console_err=DummyConsoleErr(),
+        stdin_is_tty=True,
+    )
+
+    final_prompt = iterative_refinement(UndoProvider(), "original prompt", io, plain_mode=True)
+
+    assert final_prompt == "original prompt"
+    mock_display_output.assert_called()
+
+
+@patch("promptheus.main.display_output", return_value=None)
+def test_iterative_refinement_rejects_unexpected_shrink(mock_display_output, monkeypatch):
+    """Guardrail should reject large unintended shrinkage."""
+    from promptheus.main import iterative_refinement
+
+    class ShrinkProvider(LLMProvider):
+        def generate_questions(self, initial_prompt: str, system_instruction: str):
+            return None
+
+        def get_available_models(self):
+            return []
+
+        def _generate_text(self, prompt: str, system_instruction: str, json_mode: bool = False, max_tokens=None):
+            return ""
+
+        def tweak_prompt(self, current_prompt: str, tweak_instruction: str, system_instruction: str) -> str:
+            return "short"  # intentionally much shorter
+
+    inputs = iter(["change tone", ""])
+    monkeypatch.setattr("builtins.input", lambda *args, **kwargs: next(inputs))
+
+    io = SimpleNamespace(
+        quiet_output=False,
+        notify=lambda *args, **kwargs: None,
+        console_err=DummyConsoleErr(),
+        stdin_is_tty=True,
+    )
+
+    final_prompt = iterative_refinement(
+        ShrinkProvider(),
+        "This is a long prompt that should be preserved.",
+        io,
+        plain_mode=True,
+    )
+
+    assert "long prompt" in final_prompt  # reverted to original
+    mock_display_output.assert_not_called()

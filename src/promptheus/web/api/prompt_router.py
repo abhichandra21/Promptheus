@@ -550,6 +550,42 @@ async def tweak_prompt(tweak_request: TweakRequest, request: Request):
             TWEAK_SYSTEM_INSTRUCTION
         )
 
+        shrink_requested = any(
+            keyword in tweak_request.tweak_instruction.lower()
+            for keyword in [
+                "short",
+                "shorter",
+                "summarize",
+                "concise",
+                "compress",
+                "reduce length",
+                "brief",
+            ]
+        )
+        if not shrink_requested and len(tweaked_prompt) < 0.8 * len(tweak_request.current_prompt):
+            logger.warning(
+                "[tweak_prompt] Rejected tweaked prompt due to unexpected shrinkage",
+                extra={
+                    "user": get_user_email(request),
+                    "action": "prompt_tweak",
+                    "provider": provider_name,
+                    "model": app_config.get_model(),
+                    "tweak_instruction": tweak_request.tweak_instruction,
+                    "original_length": len(tweak_request.current_prompt),
+                    "tweaked_length": len(tweaked_prompt),
+                    "device_category": get_device_category(request),
+                    "success": False,
+                },
+            )
+            return {
+                "success": False,
+                "error": "Tweak output is much shorter than the original; keeping the prior version.",
+                "tweaked_prompt": tweak_request.current_prompt,
+                "tweak_instruction": tweak_request.tweak_instruction,
+            }
+
+        tweaked_length = len(tweaked_prompt)
+
         # Log successful user action
         logger.info(
             "User tweaked prompt",
@@ -560,6 +596,8 @@ async def tweak_prompt(tweak_request: TweakRequest, request: Request):
                 "model": app_config.get_model(),
                 "tweak_instruction": tweak_request.tweak_instruction,
                 "prompt_length": len(tweak_request.current_prompt),
+                "tweaked_length": tweaked_length,
+                "shrink_requested": shrink_requested,
                 "device_category": get_device_category(request),
                 "success": True,
             }

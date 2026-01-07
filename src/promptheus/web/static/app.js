@@ -10,6 +10,7 @@ class PromptheusApp {
         this.streamingText = '';
         this.streamingInterval = null;
         this.currentOptimizedPrompt = ''; // Store current prompt
+        this.tweakHistory = []; // Keep short undo stack for tweaks
         this.cachedModels = {}; // Store fetched models by provider ID
         this.providerCapabilities = {}; // Store provider capability hints
         this.hasResults = false; // Track if we have results displayed
@@ -154,6 +155,24 @@ class PromptheusApp {
         document.getElementById('copy-btn').addEventListener('click', () => {
             this.copyOutputToClipboard();
         });
+
+        // Undo tweak button (create if missing in markup)
+        let undoBtn = document.getElementById('undo-btn');
+        if (!undoBtn) {
+            const outputActions = document.querySelector('.output-actions');
+            if (outputActions) {
+                undoBtn = document.createElement('button');
+                undoBtn.id = 'undo-btn';
+                undoBtn.className = 'btn btn-secondary hidden';
+                undoBtn.title = 'Undo last tweak';
+                undoBtn.setAttribute('aria-label', 'Undo last tweak');
+                undoBtn.innerHTML = '<span>↺</span><span>Undo</span>';
+                outputActions.appendChild(undoBtn);
+            }
+        }
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => this.handleUndoTweak());
+        }
 
         // Refresh models cache (in Settings panel)
         document.getElementById('refresh-models-cache-btn').addEventListener('click', () => {
@@ -724,8 +743,10 @@ class PromptheusApp {
                 cursorSpan.remove();
                 contentDiv.classList.remove('streaming');
                 this.currentOptimizedPrompt = this.streamingText; // Store for markdown toggle
+                this.tweakHistory = [this.currentOptimizedPrompt];
                 tweakBtn.classList.remove('hidden'); // Show tweak button
                 copyBtn.classList.remove('hidden'); // Show copy button
+                this.updateUndoVisibility();
                 this.showResultsState(); // Show contextual results state
                 this.loadHistory();
             } else if (data.type === 'error') {
@@ -769,9 +790,11 @@ class PromptheusApp {
 
         if (data.success) {
             this.currentOptimizedPrompt = data.refined_prompt;
+            this.tweakHistory = [this.currentOptimizedPrompt];
             this.renderOutput();
             tweakBtn.classList.remove('hidden'); // Show tweak button
             copyBtn.classList.remove('hidden'); // Show copy button
+            this.updateUndoVisibility();
             this.showResultsState(); // Show contextual results state
             this.loadHistory();
         } else {
@@ -2314,7 +2337,12 @@ class PromptheusApp {
             return;
         }
 
-        const currentPrompt = optimizedPromptDiv.textContent || optimizedPromptDiv.innerText;
+        let currentPrompt = this.extractTextWithNewlines(optimizedPromptDiv);
+        // Preserve prior tweak history across multiple tweak dialogs; reset only if empty or mismatched
+        if (!this.tweakHistory.length || this.tweakHistory[this.tweakHistory.length - 1] !== currentPrompt) {
+            this.tweakHistory = [currentPrompt];
+        }
+        this.updateUndoVisibility();
 
         // Show tweak input form
         let formHtml = '<div class="tweak-container">';
@@ -2347,6 +2375,7 @@ class PromptheusApp {
         const cancelBtn = document.getElementById('cancel-tweak-btn');
         const tweakBtn = document.getElementById('tweak-btn');
         const copyBtn = document.getElementById('copy-btn');
+        const undoBtn = document.getElementById('undo-btn');
 
         tweakBtn.classList.add('hidden'); // Hide tweak button while tweaking
         copyBtn.classList.add('hidden'); // Hide copy button while tweaking
@@ -2356,6 +2385,8 @@ class PromptheusApp {
             outputDiv.innerHTML = `<div class="optimized-prompt-content">${this.escapeHtml(currentPrompt)}</div>`;
             tweakBtn.classList.remove('hidden');
             copyBtn.classList.remove('hidden');
+            this.tweakHistory = [currentPrompt];
+            undoBtn.classList.add('hidden');
         });
 
         form.addEventListener('submit', async (e) => {
@@ -2387,9 +2418,17 @@ class PromptheusApp {
 
                 if (data.success) {
                     this.currentOptimizedPrompt = data.tweaked_prompt;
+                    this.tweakHistory.push(this.currentOptimizedPrompt);
+                    if (this.tweakHistory.length > 5) {
+                        this.tweakHistory.shift();
+                    }
+                    currentPrompt = this.currentOptimizedPrompt;
                     this.renderOutput();
                     tweakBtn.classList.remove('hidden');
                     copyBtn.classList.remove('hidden');
+                    if (this.tweakHistory.length > 1) {
+                        this.updateUndoVisibility();
+                    }
                 } else {
                     this.showMessage('error', data.error || 'Failed to tweak prompt');
                 }
@@ -2406,6 +2445,29 @@ class PromptheusApp {
     /* ===================================================================
        UI HELPERS
        =================================================================== */
+
+    handleUndoTweak() {
+        const undoBtn = document.getElementById('undo-btn');
+        if (this.tweakHistory.length > 1) {
+            this.tweakHistory.pop();
+            this.currentOptimizedPrompt = this.tweakHistory[this.tweakHistory.length - 1];
+            this.renderOutput();
+            this.showResultsState();
+        }
+        if (undoBtn && this.tweakHistory.length <= 1) {
+            undoBtn.classList.add('hidden');
+        }
+    }
+
+    updateUndoVisibility() {
+        const undoBtn = document.getElementById('undo-btn');
+        if (!undoBtn) return;
+        if (this.tweakHistory.length > 1) {
+            undoBtn.classList.remove('hidden');
+        } else {
+            undoBtn.classList.add('hidden');
+        }
+    }
 
     extractTextWithNewlines(node) {
         if (!node) return '';
