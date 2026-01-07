@@ -153,15 +153,19 @@ def iterative_refinement(
         return current_prompt
 
     iteration = 1
+    history = [current_prompt]
 
     while True:
         try:
+            prompt_text = (
+                "Tweak? (Enter to accept, 'undo' to revert, or describe your change) "
+                if len(history) > 1
+                else "Tweak? (Enter to accept, or describe your change) "
+            )
             if plain_mode:
-                tweak_instruction = input("Tweak? (Enter to accept, or describe your change) ").strip()
+                tweak_instruction = input(prompt_text).strip()
             else:
-                answer = questionary.text(
-                    "Tweak? (Enter to accept, or describe your change)"
-                ).ask()
+                answer = questionary.text(prompt_text).ask()
                 if answer is None:
                     io.notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
                     return current_prompt
@@ -169,6 +173,17 @@ def iterative_refinement(
         except (EOFError, KeyboardInterrupt):
             io.notify("\n[yellow]Cancelled tweaks.[/yellow]\n")
             return current_prompt
+
+        if tweak_instruction.lower() == "undo":
+            if len(history) > 1:
+                history.pop()
+                current_prompt = history[-1]
+                iteration = len(history)
+                io.notify("\n[blue]↺[/blue] Reverted to previous prompt.\n")
+                display_output(current_prompt, io, is_refined=True)
+            else:
+                io.notify("\n[yellow]No previous version to undo.[/yellow]\n")
+            continue
 
         if not tweak_instruction:
             io.notify("\n[green]✓[/green] Prompt accepted!\n")
@@ -180,10 +195,35 @@ def iterative_refinement(
 
         try:
             with io.console_err.status("[bold cyan]✨ Sprinkling some refinement magic...", spinner="bouncingBall"):
+                previous_prompt = current_prompt
                 current_prompt = provider.tweak_prompt(
                     current_prompt, tweak_instruction, TWEAK_SYSTEM_INSTRUCTION
                 )
 
+            # Guardrail: reject accidental shrinkage when the user did not ask to shorten
+            shrink_requested = any(
+                keyword in tweak_instruction.lower()
+                for keyword in [
+                    "short",
+                    "shorter",
+                    "summarize",
+                    "concise",
+                    "compress",
+                    "reduce length",
+                    "brief",
+                ]
+            )
+            if not shrink_requested and len(current_prompt) < 0.8 * len(previous_prompt):
+                io.notify("[bold red]Error:[/bold red] Tweak output is much shorter than the previous prompt; keeping the prior version.")
+                logger.warning(
+                    "Rejected tweaked prompt because it shrank unexpectedly (before=%s, after=%s)",
+                    len(previous_prompt),
+                    len(current_prompt),
+                )
+                current_prompt = previous_prompt
+                continue
+
+            history.append(current_prompt)
             display_output(current_prompt, io, is_refined=True)
 
         except KeyboardInterrupt:

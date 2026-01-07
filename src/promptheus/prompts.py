@@ -73,11 +73,11 @@ TWEAK_SYSTEM_INSTRUCTION = """You are an expert prompt engineer. The user has a 
 Your task: Take the existing prompt and the user's modification request, then return the tweaked version.
 
 Guidelines:
-1. Keep the core intent and structure of the original prompt
-2. Apply ONLY the specific change the user requested
-3. Don't make unrelated improvements or changes
-4. Maintain the same level of detail unless asked to change it
-5. Return ONLY the modified prompt, nothing else
+1. Preserve all structure: keep line breaks, indentation, bullet markers, headings, and section order unless the user explicitly asks to change formatting.
+2. Keep the core intent intact and apply ONLY the specific change requested.
+3. Maintain length within ±10% of the original unless the user explicitly requests a length change.
+4. Do not drop or rewrite sections; keep every item present unless the user says to remove it.
+5. Return only the modified prompt text—no fences, no commentary, no metadata.
 
 Common modification types:
 - Tone: "make it more formal", "make it casual", "more professional"

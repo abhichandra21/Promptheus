@@ -216,17 +216,36 @@ def test_format_tweak_payload():
     """Test formatting of tweak payload."""
     # Use the mock provider to test the concrete method
     provider = MockProvider()
-    
+
     payload = provider._format_tweak_payload(
         "Current prompt",
         "Make it more formal"
     )
-    
-    assert "Current Prompt:" in payload
+
+    assert "<<<CURRENT_PROMPT>>>" in payload
     assert "Current prompt" in payload
-    assert "User's Modification Request:" in payload
+    assert "<<<END_CURRENT_PROMPT>>>" in payload
+    assert "<<<TWEAK_REQUEST>>>" in payload
     assert "Make it more formal" in payload
-    assert "Return the tweaked prompt:" in payload
+    assert "<<<END_TWEAK_REQUEST>>>" in payload
+    assert "Now return the tweaked prompt:" in payload
+
+
+def test_format_tweak_payload_adds_guards_and_delimiters():
+    """Tweak payload should include delimiters and preservation instructions."""
+    provider = MockProvider()
+
+    payload = provider._format_tweak_payload(
+        "Line one\n- Bullet\nLine two",
+        "Keep format, change tone"
+    )
+
+    assert "Preserve all line breaks" in payload
+    assert "Keep length within ±10%" in payload
+    assert "<<<CURRENT_PROMPT>>>" in payload
+    assert "<<<END_CURRENT_PROMPT>>>" in payload
+    assert "<<<TWEAK_REQUEST>>>" in payload
+    assert "<<<END_TWEAK_REQUEST>>>" in payload
 
 
 def test_refine_from_answers():

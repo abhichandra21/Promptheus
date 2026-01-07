@@ -156,13 +156,19 @@ class LLMProvider(ABC):
     def _format_tweak_payload(self, current_prompt: str, tweak_instruction: str) -> str:
         return "\n".join(
             [
-                "Current Prompt:",
+                "Edit the prompt below. Preserve all line breaks, bullets, indentation, headings, and section order unless the user explicitly asks to change formatting.",
+                "Keep all sections; do not drop content. Keep length within ±10% unless the user requests a length change.",
+                "Return only the modified prompt text. No fences, no commentary.",
+                "",
+                "<<<CURRENT_PROMPT>>>",
                 current_prompt,
+                "<<<END_CURRENT_PROMPT>>>",
                 "",
-                "User's Modification Request:",
+                "<<<TWEAK_REQUEST>>>",
                 tweak_instruction,
+                "<<<END_TWEAK_REQUEST>>>",
                 "",
-                "Return the tweaked prompt:",
+                "Now return the tweaked prompt:",
             ]
         )
 
