@@ -2,6 +2,51 @@
 
 All notable changes to Promptheus are documented in this file.
 
+## [0.3.2] - 2026-01-07
+
+### Added
+- **Undo Functionality for Tweaks**: Users can now revert to previous prompt versions during iterative refinement
+  - CLI: Type `undo` to go back to previous version
+  - Web UI: Undo button appears when history is available
+  - Stack-based history (session-scoped, up to 5 entries in web UI)
+  - Dynamic prompt shows undo availability
+- **Shrink Guardrail**: Protection against accidental prompt truncation
+  - Detects when tweaked prompt is <80% of original length
+  - Keyword detection for legitimate shrinking requests
+  - Automatic revert on unexpected reduction
+  - Applied to both CLI and web API endpoints
+
+### Changed
+- **Enhanced Tweak System Instructions**: Improved formatting preservation
+  - Explicit instructions to preserve line breaks, indentation, bullets, and headings
+  - Added ±10% length constraint to prevent unintended truncation
+  - Emphasized section preservation to prevent content loss
+- **Improved Tweak Payload Format**: Better delimiter system for precise boundary detection
+  - Added clear delimiters (`<<<CURRENT_PROMPT>>>`, `<<<TWEAK_REQUEST>>>`)
+  - Reinforced preservation instructions at payload level
+  - Explicit "No fences, no commentary" instruction to prevent response pollution
+- **OpenAI Provider Improvements**: Better compatibility with latest models
+  - Expanded fallback triggers for parameter rejection detection
+  - Added retry logic for OpenAI Responses API
+  - Support for GPT-4.1 and O-class models via Responses API
+
+### Fixed
+- **Critical: Tweak Formatting Loss** - Fixed bug where tweaked prompts would lose markdown formatting (bullets, line breaks, headings) and sometimes compress to 1/3 of original length
+- **OpenAI Token Parameters**: Fixed `max_output_tokens` and `response_format` parameter handling
+- **Provider Error Handling**: Improved error recovery for unsupported parameters
+
+### Test Coverage
+- Added `test_iterative_refinement_undo_reverts_previous` for undo workflow
+- Added `test_iterative_refinement_rejects_unexpected_shrink` for guardrail
+- Added `test_format_tweak_payload_adds_guards_and_delimiters` for new payload format
+- Updated existing tests to match new delimiter format
+
+### Technical Details
+- Undo implementation uses simple stack-based history tracking
+- Shrink detection threshold: 20% reduction triggers guardrail
+- Keywords for allowed shrinking: short, shorter, summarize, concise, compress, reduce length, brief
+- Web UI history limit increased from 3 to 5 entries
+
 ## [0.3.1] - 2025-12-10
 
 ### Added
