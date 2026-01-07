@@ -4,7 +4,7 @@
 
 <!-- mcp-name: io.github.abhichandra21/promptheus -->
 
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/downloads/) [![PyPI Version](https://img.shields.io/pypi/v/promptheus)](https://pypi.org/project/promptheus/) [![Release Version](https://img.shields.io/badge/release-v0.3.1-brightgreen)](CHANGELOG.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/abhichandra21/Promptheus?style=social)](https://github.com/abhichandra21/Promptheus)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/downloads/) [![PyPI Version](https://img.shields.io/pypi/v/promptheus)](https://pypi.org/project/promptheus/) [![Release Version](https://img.shields.io/badge/release-v0.3.2-brightgreen)](CHANGELOG.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/abhichandra21/Promptheus?style=social)](https://github.com/abhichandra21/Promptheus)
 
 [![Deploy GitHub Pages](https://github.com/abhichandra21/Promptheus/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/abhichandra21/Promptheus/actions/workflows/deploy-pages.yml) [![Docker Build & Test](https://github.com/abhichandra21/Promptheus/actions/workflows/docker-test.yml/badge.svg)](https://github.com/abhichandra21/Promptheus/actions/workflows/docker-test.yml) [![Publish Python Package](https://github.com/abhichandra21/Promptheus/actions/workflows/publish.yml/badge.svg)](https://github.com/abhichandra21/Promptheus/actions/workflows/publish.yml)
 
