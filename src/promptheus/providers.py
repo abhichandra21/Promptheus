@@ -18,6 +18,7 @@ from promptheus.constants import (
     DEFAULT_PROVIDER_TIMEOUT,
     DEFAULT_REFINEMENT_MAX_TOKENS,
     DEFAULT_TWEAK_MAX_TOKENS,
+    RESPONSES_API_TIMEOUT,
 )
 from promptheus.config import SUPPORTED_PROVIDER_IDS
 from promptheus.utils import sanitize_error_message
@@ -517,6 +518,7 @@ class OpenAICompatibleProvider(LLMProvider):
     """Base provider for APIs that implement the OpenAI chat/completions surface."""
 
     PROVIDER_LABEL = "OpenAI"
+    RESPONSES_ONLY_PREFIXES = ("gpt-5", "o1-", "o3-")
 
     def __init__(
         self,
@@ -579,6 +581,8 @@ class OpenAICompatibleProvider(LLMProvider):
                 params["response_format"] = {"type": "json_object"}
             return self.client.chat.completions.create(**params)
 
+        use_responses_only = any(self.model_name.startswith(p) for p in self.RESPONSES_ONLY_PREFIXES)
+
         def _call_responses() -> Any:
             params: Dict[str, Any] = {
                 "model": self.model_name,
@@ -587,6 +591,8 @@ class OpenAICompatibleProvider(LLMProvider):
             }
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
+            if use_responses_only:
+                params["timeout"] = RESPONSES_API_TIMEOUT
 
             current_params = params
             dropped_max = False
@@ -598,14 +604,17 @@ class OpenAICompatibleProvider(LLMProvider):
                     return self.client.responses.create(**current_params)
                 except TypeError as te:
                     last_exc = te
-                    message = str(te)
-                    if "max_output_tokens" in message and not dropped_max:
+                    te_msg = str(te)
+                    if "max_output_tokens" in te_msg and not dropped_max:
                         current_params = {k: v for k, v in current_params.items() if k != "max_output_tokens"}
                         dropped_max = True
                         continue
-                    if "response_format" in message and not dropped_response_format:
+                    if "response_format" in te_msg and not dropped_response_format:
                         current_params = {k: v for k, v in current_params.items() if k != "response_format"}
                         dropped_response_format = True
+                        continue
+                    if "timeout" in te_msg:
+                        current_params = {k: v for k, v in current_params.items() if k != "timeout"}
                         continue
                     raise
                 except Exception as exc:  # pragma: no cover - network failures
@@ -616,32 +625,42 @@ class OpenAICompatibleProvider(LLMProvider):
                 raise last_exc
             raise RuntimeError("Failed to invoke Responses API with provided parameters")
 
-        try:
-            response = _call_chat()
-        except Exception as exc:  # pragma: no cover - network failures
-            sanitized_first = sanitize_error_message(str(exc))
-            lower_msg = sanitized_first.lower()
-            fallback_triggers = (
-                "responses api",
-                "max_output_tokens",
-                "max_tokens",
-                "unexpected keyword argument",
-                "use the responses api",
-                "unrecognized request argument",
-                "unsupported parameter",
-            )
-            if any(trigger in lower_msg for trigger in fallback_triggers):
-                logger.info("%s chat API rejected parameters; retrying via Responses API", self._provider_label)
-                try:
-                    response = _call_responses()
-                    response_mode = "responses"
-                except Exception as exc_responses:
-                    sanitized_second = sanitize_error_message(str(exc_responses))
-                    logger.warning("%s Responses API call failed after chat fallback: %s", self._provider_label, sanitized_second)
-                    raise ProviderAPIError(f"API call failed: {sanitized_second}") from exc_responses
-            else:
-                logger.warning("%s API call failed: %s", self._provider_label, sanitized_first)
-                raise ProviderAPIError(f"API call failed: {sanitized_first}") from exc
+        if use_responses_only:
+            logger.info("%s model %s is Responses-only; skipping Chat Completions API", self._provider_label, self.model_name)
+            try:
+                response = _call_responses()
+                response_mode = "responses"
+            except Exception as exc_responses:
+                sanitized = sanitize_error_message(str(exc_responses))
+                logger.warning("%s Responses API call failed: %s", self._provider_label, sanitized)
+                raise ProviderAPIError(f"API call failed: {sanitized}") from exc_responses
+        else:
+            try:
+                response = _call_chat()
+            except Exception as exc:  # pragma: no cover - network failures
+                sanitized_first = sanitize_error_message(str(exc))
+                lower_msg = sanitized_first.lower()
+                fallback_triggers = (
+                    "responses api",
+                    "max_output_tokens",
+                    "max_tokens",
+                    "unexpected keyword argument",
+                    "use the responses api",
+                    "unrecognized request argument",
+                    "unsupported parameter",
+                )
+                if any(trigger in lower_msg for trigger in fallback_triggers):
+                    logger.info("%s chat API rejected parameters; retrying via Responses API", self._provider_label)
+                    try:
+                        response = _call_responses()
+                        response_mode = "responses"
+                    except Exception as exc_responses:
+                        sanitized_second = sanitize_error_message(str(exc_responses))
+                        logger.warning("%s Responses API call failed after chat fallback: %s", self._provider_label, sanitized_second)
+                        raise ProviderAPIError(f"API call failed: {sanitized_second}") from exc_responses
+                else:
+                    logger.warning("%s API call failed: %s", self._provider_label, sanitized_first)
+                    raise ProviderAPIError(f"API call failed: {sanitized_first}") from exc
 
         # Capture token usage when available
         try:
