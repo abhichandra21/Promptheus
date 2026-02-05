@@ -303,7 +303,7 @@ async def process_prompt_web(
             
             if _is_rate_limit_error(sanitized):
                 raise HTTPException(status_code=429, detail=f"Rate limit encountered: {sanitized}")
-            raise HTTPException(status_code=500, detail=f"Failed to generate questions: {sanitized}")
+            raise HTTPException(status_code=500, detail=f"Prompt processing failed: {sanitized}")
     else:
         # Skip questions mode - apply light refinement
         llm_start_time = time.time()

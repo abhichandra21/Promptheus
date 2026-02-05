@@ -7,6 +7,7 @@ GITHUB_REPO = "https://github.com/abhichandra21/Promptheus"
 GITHUB_ISSUES = f"{GITHUB_REPO}/issues"
 
 DEFAULT_PROVIDER_TIMEOUT = 60  # seconds
+RESPONSES_API_TIMEOUT = 180  # seconds -- Responses-only models (e.g. gpt-5) are slower
 DEFAULT_CLARIFICATION_MAX_TOKENS = 2000
 DEFAULT_REFINEMENT_MAX_TOKENS = 4000
 DEFAULT_TWEAK_MAX_TOKENS = 2000
