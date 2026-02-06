@@ -132,7 +132,7 @@ async def get_providers():
             cache_last_updated=cache_last_updated
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error_message(str(e)))
 
 
 @router.post("/providers/select")
@@ -240,7 +240,7 @@ async def select_provider(selection: ProviderSelection, request: Request):
             },
             exc_info=True
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error_message(str(e)))
 
 
 @router.get("/providers/{provider_id}/models", response_model=ModelsResponseWithFilter)
@@ -299,7 +299,7 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
         try:
             all_models, text_models, refinement_models = await service.get_models_for_provider_split(provider_id)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to fetch models from models.dev: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch models from models.dev: {sanitize_error_message(str(e))}")
 
         # Use appropriate model list based on filter
         include_all = include_nontext or fetch_all
@@ -327,7 +327,7 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error_message(str(e)))
 
 
 @router.post("/providers/cache/refresh")
@@ -492,4 +492,4 @@ async def select_model(selection: ModelSelection, request: Request):
             },
             exc_info=True
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error_message(str(e)))

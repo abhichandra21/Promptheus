@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from promptheus.config import Config
 from promptheus.history import get_history
-from promptheus.utils import get_user_email, get_device_category
+from promptheus.utils import get_user_email, get_device_category, sanitize_error_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ async def get_history_entries(limit: int = 50, offset: int = 0):
             total=total_entries
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error_message(str(e)))
 
 
 @router.delete("/history/{timestamp}")
@@ -103,7 +103,7 @@ async def delete_history_entry(timestamp: str, request: Request):
             },
             exc_info=True
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error_message(str(e)))
 
 
 @router.delete("/history")
@@ -137,4 +137,4 @@ async def clear_history(request: Request):
             },
             exc_info=True
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=sanitize_error_message(str(e)))

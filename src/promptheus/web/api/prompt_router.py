@@ -518,7 +518,7 @@ async def submit_prompt(prompt_request: PromptRequest, request: Request):
             model="",
             questions=[],
             follow_up_questions=[],
-            error=str(e)
+            error=sanitize_error_message(str(e))
         )
 
 
@@ -626,7 +626,7 @@ async def tweak_prompt(tweak_request: TweakRequest, request: Request):
 
         return {
             "success": False,
-            "error": str(e)
+            "error": sanitize_error_message(str(e))
         }
 
 

@@ -40,33 +40,13 @@ def get_available_providers() -> list[str]:
 
 def update_env_file(env_var: str, value: str) -> None:
     """Update or add the environment variable to the .env file."""
+    from dotenv import set_key
+
     env_path = Path(".env")
     if not env_path.exists():
         env_path.touch()
 
-    # Read current .env content
-    with open(env_path, "r") as f:
-        content = f.read()
-
-    # Update or add the environment variable
-    lines = content.splitlines()
-    env_line = f"{env_var}={value}"
-    found = False
-    new_lines = []
-
-    for line in lines:
-        if line.startswith(f"{env_var}="):
-            new_lines.append(env_line)
-            found = True
-        else:
-            new_lines.append(line)
-
-    if not found:
-        new_lines.append(env_line)
-
-    # Write back to .env
-    with open(env_path, "w") as f:
-        f.write("\n".join(new_lines) + "\n")
+    set_key(str(env_path), env_var, value)
 
 def test_api_key(provider: str, api_key: str) -> bool:
     """Test if an API key is valid by making a simple test call."""
