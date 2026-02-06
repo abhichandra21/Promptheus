@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, cast
 
@@ -518,7 +519,7 @@ class OpenAICompatibleProvider(LLMProvider):
     """Base provider for APIs that implement the OpenAI chat/completions surface."""
 
     PROVIDER_LABEL = "OpenAI"
-    RESPONSES_ONLY_PREFIXES = ("gpt-5", "o1-", "o3-")
+    # Endpoint preference is learned per model at runtime; no hardcoded prefixes.
 
     def __init__(
         self,
@@ -530,6 +531,8 @@ class OpenAICompatibleProvider(LLMProvider):
         project: Optional[str] = None,
         timeout: int = DEFAULT_PROVIDER_TIMEOUT,
         provider_label: Optional[str] = None,
+        responses_only_patterns: Optional[List[str]] = None,
+        endpoint_cache_path: Optional[Path] = None,
         **client_kwargs: Any,
     ) -> None:
         from openai import OpenAI
@@ -548,6 +551,9 @@ class OpenAICompatibleProvider(LLMProvider):
         self.client = OpenAI(**client_kwargs)
         self.model_name = model_name
         self._provider_label = provider_label or self.PROVIDER_LABEL
+        self._responses_only_patterns = responses_only_patterns or []
+        self._endpoint_cache_path = endpoint_cache_path or (Path.home() / ".promptheus" / "openai_endpoint_cache.json")
+        self._endpoint_cache: Dict[str, str] = self._load_endpoint_cache()
 
     def _generate_text(
         self,
@@ -571,6 +577,11 @@ class OpenAICompatibleProvider(LLMProvider):
 
         response_mode = "chat"
 
+        preferred_mode = self._endpoint_cache.get(self.model_name)
+        if not preferred_mode and self._responses_only_patterns:
+            if any(self.model_name.startswith(p) for p in self._responses_only_patterns):
+                preferred_mode = "responses"
+
         def _call_chat() -> Any:
             params: Dict[str, Any] = {
                 "model": self.model_name,
@@ -581,22 +592,19 @@ class OpenAICompatibleProvider(LLMProvider):
                 params["response_format"] = {"type": "json_object"}
             return self.client.chat.completions.create(**params)
 
-        use_responses_only = any(self.model_name.startswith(p) for p in self.RESPONSES_ONLY_PREFIXES)
-
         def _call_responses() -> Any:
             params: Dict[str, Any] = {
                 "model": self.model_name,
                 "input": messages,
-                "max_output_tokens": limit,
+                "max_output_tokens": max(limit, DEFAULT_REFINEMENT_MAX_TOKENS),
             }
             if json_mode:
-                params["response_format"] = {"type": "json_object"}
-            if use_responses_only:
-                params["timeout"] = RESPONSES_API_TIMEOUT
+                # Responses API uses text.format, not response_format
+                params["text"] = {"format": {"type": "json_object"}}
+            params["timeout"] = RESPONSES_API_TIMEOUT
 
             current_params = params
-            dropped_max = False
-            dropped_response_format = False
+            dropped_keys: set = set()
             last_exc: Optional[BaseException] = None
 
             for _ in range(3):
@@ -605,18 +613,15 @@ class OpenAICompatibleProvider(LLMProvider):
                 except TypeError as te:
                     last_exc = te
                     te_msg = str(te)
-                    if "max_output_tokens" in te_msg and not dropped_max:
-                        current_params = {k: v for k, v in current_params.items() if k != "max_output_tokens"}
-                        dropped_max = True
-                        continue
-                    if "response_format" in te_msg and not dropped_response_format:
-                        current_params = {k: v for k, v in current_params.items() if k != "response_format"}
-                        dropped_response_format = True
-                        continue
-                    if "timeout" in te_msg:
-                        current_params = {k: v for k, v in current_params.items() if k != "timeout"}
-                        continue
-                    raise
+                    # Drop unsupported params one at a time and retry
+                    for key in ("max_output_tokens", "text", "timeout"):
+                        if key in te_msg and key not in dropped_keys:
+                            current_params = {k: v for k, v in current_params.items() if k != key}
+                            dropped_keys.add(key)
+                            break
+                    else:
+                        raise
+                    continue
                 except Exception as exc:  # pragma: no cover - network failures
                     last_exc = exc
                     break
@@ -625,42 +630,52 @@ class OpenAICompatibleProvider(LLMProvider):
                 raise last_exc
             raise RuntimeError("Failed to invoke Responses API with provided parameters")
 
-        if use_responses_only:
-            logger.info("%s model %s is Responses-only; skipping Chat Completions API", self._provider_label, self.model_name)
-            try:
-                response = _call_responses()
+        def _prefer_responses_first() -> bool:
+            if preferred_mode == "responses":
+                return True
+            if preferred_mode == "chat":
+                return False
+            # Default to responses first to support models that only live there.
+            return True
+
+        try:
+            if _prefer_responses_first():
                 response_mode = "responses"
-            except Exception as exc_responses:
-                sanitized = sanitize_error_message(str(exc_responses))
-                logger.warning("%s Responses API call failed: %s", self._provider_label, sanitized)
-                raise ProviderAPIError(f"API call failed: {sanitized}") from exc_responses
-        else:
-            try:
+                response = _call_responses()
+                self._record_endpoint_choice("responses")
+            else:
+                response_mode = "chat"
                 response = _call_chat()
-            except Exception as exc:  # pragma: no cover - network failures
-                sanitized_first = sanitize_error_message(str(exc))
-                lower_msg = sanitized_first.lower()
-                fallback_triggers = (
-                    "responses api",
-                    "max_output_tokens",
-                    "max_tokens",
-                    "unexpected keyword argument",
-                    "use the responses api",
-                    "unrecognized request argument",
-                    "unsupported parameter",
-                )
-                if any(trigger in lower_msg for trigger in fallback_triggers):
-                    logger.info("%s chat API rejected parameters; retrying via Responses API", self._provider_label)
-                    try:
+                self._record_endpoint_choice("chat")
+        except Exception as first_exc:  # pragma: no cover - network failures
+            sanitized_first = sanitize_error_message(str(first_exc))
+            lower_msg = sanitized_first.lower()
+            fallback_triggers = (
+                "responses api",
+                "max_output_tokens",
+                "max_tokens",
+                "unexpected keyword argument",
+                "use the responses api",
+                "unrecognized request argument",
+                "unsupported parameter",
+            )
+            if response_mode == "responses" or any(trigger in lower_msg for trigger in fallback_triggers):
+                logger.info("%s API rejected initial endpoint; retrying via alternate endpoint", self._provider_label)
+                try:
+                    if response_mode == "responses":
+                        response = _call_chat()
+                        response_mode = "chat"
+                    else:
                         response = _call_responses()
                         response_mode = "responses"
-                    except Exception as exc_responses:
-                        sanitized_second = sanitize_error_message(str(exc_responses))
-                        logger.warning("%s Responses API call failed after chat fallback: %s", self._provider_label, sanitized_second)
-                        raise ProviderAPIError(f"API call failed: {sanitized_second}") from exc_responses
-                else:
-                    logger.warning("%s API call failed: %s", self._provider_label, sanitized_first)
-                    raise ProviderAPIError(f"API call failed: {sanitized_first}") from exc
+                    self._record_endpoint_choice(response_mode)
+                except Exception as second_exc:
+                    sanitized_second = sanitize_error_message(str(second_exc))
+                    logger.warning("%s API call failed after endpoint retry: %s", self._provider_label, sanitized_second)
+                    raise ProviderAPIError(f"API call failed: {sanitized_second}") from second_exc
+            else:
+                logger.warning("%s API call failed: %s", self._provider_label, sanitized_first)
+                raise ProviderAPIError(f"API call failed: {sanitized_first}") from first_exc
 
         # Capture token usage when available
         try:
@@ -712,6 +727,36 @@ class OpenAICompatibleProvider(LLMProvider):
         )
         return _parse_question_payload(self._provider_label, response_text)
 
+    # --------------------------- endpoint cache helpers --------------------------- #
+    def _load_endpoint_cache(self) -> Dict[str, str]:
+        try:
+            if self._endpoint_cache_path.exists():
+                with open(self._endpoint_cache_path, "r") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        return {k: v for k, v in data.items() if v in {"chat", "responses"}}
+        except Exception:
+            pass
+        return {}
+
+    def _persist_endpoint_cache(self) -> None:
+        try:
+            self._endpoint_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._endpoint_cache_path, "w") as f:
+                json.dump(self._endpoint_cache, f)
+        except Exception:
+            # Cache persistence is best-effort; ignore errors
+            pass
+
+    def _record_endpoint_choice(self, endpoint: str) -> None:
+        if endpoint not in {"chat", "responses"}:
+            return
+        existing = self._endpoint_cache.get(self.model_name)
+        if existing == endpoint:
+            return
+        self._endpoint_cache[self.model_name] = endpoint
+        self._persist_endpoint_cache()
+
     def get_available_models(self) -> List[str]:
         """Get available models from the OpenAI-compatible API."""
         try:
@@ -734,6 +779,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
         base_url: Optional[str] = None,
         organization: Optional[str] = None,
         project: Optional[str] = None,
+        responses_only_patterns: Optional[List[str]] = None,
     ) -> None:
         super().__init__(
             api_key=api_key,
@@ -742,6 +788,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
             organization=organization,
             project=project,
             provider_label="OpenAI",
+            responses_only_patterns=responses_only_patterns,
         )
 
 
@@ -952,6 +999,7 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
     """Factory function to get the appropriate provider."""
     provider_config = config.get_provider_config()
     model_to_use = model_name or config.get_model()
+    responses_only_patterns = provider_config.get("responses_only_patterns", [])
 
     # OpenRouter should always rely on its auto-routing model to avoid per-model permission errors
     if provider_name == "openrouter":
@@ -975,6 +1023,7 @@ def get_provider(provider_name: str, config: Config, model_name: Optional[str] =
             base_url=provider_config.get("base_url"),
             organization=provider_config.get("organization"),
             project=provider_config.get("project"),
+            responses_only_patterns=responses_only_patterns,
         )
     if provider_name == "groq":
         return GroqProvider(

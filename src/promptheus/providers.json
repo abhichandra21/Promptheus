@@ -39,6 +39,7 @@
       "project_env": "OPENAI_PROJECT",
       "api_key_prefixes": ["sk-"],
       "api_key_url": "https://platform.openai.com/api-keys",
+      "responses_only_patterns": ["gpt-5", "o1-", "o3-"],
       "capabilities": {
         "supports_json": true,
         "supports_tools": true,

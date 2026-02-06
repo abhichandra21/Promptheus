@@ -47,8 +47,12 @@ class ModelsDevService:
     def __init__(self):
         self._cache: Optional[Dict] = None
         self._cache_timestamp: Optional[float] = None
-        # Try loading disk cache eagerly to avoid unnecessary network fetches
-        asyncio.get_event_loop().create_task(self._load_cache_from_disk()) if asyncio.get_event_loop().is_running() else None
+        # Try loading disk cache eagerly if an event loop is already running
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._load_cache_from_disk())
+        except RuntimeError:
+            pass
 
     async def _ensure_cache_loaded(self) -> None:
         """Ensure cache is loaded and fresh."""
@@ -120,12 +124,15 @@ class ModelsDevService:
     async def get_models_for_provider(self, provider_id: str, filter_text_only: bool = True) -> List[str]:
         """
         Get list of models for a specific provider.
-        """
-        all_models, text_models = await self.get_models_for_provider_split(provider_id)
-        return text_models if filter_text_only else all_models
 
-    async def get_models_for_provider_split(self, provider_id: str) -> tuple[List[str], List[str]]:
-        """Return (all_models, text_models) for a provider using a single cache load."""
+        When filter_text_only is True (default), returns only models suitable
+        for prompt refinement (sufficient output tokens, text input support).
+        """
+        all_models, _text_models, refinement_models = await self.get_models_for_provider_split(provider_id)
+        return refinement_models if filter_text_only else all_models
+
+    async def get_models_for_provider_split(self, provider_id: str) -> tuple[List[str], List[str], List[str]]:
+        """Return (all_models, text_models, refinement_models) for a provider."""
         if provider_id not in MODELS_DEV_IDS:
             raise ValueError(f"Unsupported provider ID: {provider_id}. Supported: {sorted(MODELS_DEV_IDS)}")
 
@@ -138,9 +145,25 @@ class ModelsDevService:
         provider_data = self._cache.get(models_dev_id, {})
         models_data = provider_data.get("models", {})
 
-        all_models = list(models_data.keys())
-        text_models = [model_id for model_id, model_info in models_data.items() if self._is_text_generation_model(model_info)]
-        return all_models, text_models
+        # Apply a consistent sort across all model lists so the dropdown/CLI
+        # surfaces the most useful options first instead of depending on
+        # dictionary ordering from the models.dev payload.
+        sorted_pairs = sorted(
+            models_data.items(),
+            key=lambda pair: self._model_sort_key(pair[1]),
+        )
+
+        all_models = [model_id for model_id, _ in sorted_pairs]
+        text_models = [
+            model_id for model_id, model_info in sorted_pairs
+            if self._is_text_generation_model(model_info)
+        ]
+        refinement_models = [
+            model_id for model_id, model_info in sorted_pairs
+            if self._is_text_generation_model(model_info)
+            and self._is_suitable_for_refinement(model_info)
+        ]
+        return all_models, text_models, refinement_models
 
     def get_cache_timestamp(self) -> Optional[float]:
         """Return the epoch timestamp of the last successful cache refresh (if any)."""
@@ -165,6 +188,7 @@ class ModelsDevService:
 
         # Exclude models that only do embeddings, audio generation, image generation, etc.
         model_id = model_info.get("id", "").lower()
+        family = (model_info.get("family") or "").lower()
 
         # Common patterns for non-text-generation models
         exclude_patterns = [
@@ -176,11 +200,87 @@ class ModelsDevService:
 
         # Check if model ID contains excluded patterns
         for pattern in exclude_patterns:
-            if pattern in model_id:
+            if pattern in model_id or pattern in family:
                 # Allow vision models if they also support text input/output
                 if pattern in ["image", "vision"] and "text" in modalities.get("input", []):
                     continue
                 return False
+
+        return True
+
+    # Patterns in model IDs that indicate specialized/non-general-purpose variants.
+    # These get pushed down in the refinement dropdown.
+    _DEPRIORITIZED_PATTERNS = ("codex", "nano", "research", "preview", "realtime")
+
+    @staticmethod
+    def _model_sort_key(model_info: Dict[str, Any]) -> tuple:
+        """Sort key ranking refinement models by practical usefulness.
+
+        Order of importance:
+        1. Must produce text and accept text (penalize otherwise)
+        2. General-purpose before specialized variants
+        3. Higher output limit (guards against tiny-output models)
+        4. Larger context window
+        5. Newer release date
+        6. Reasoning/structured-output/tool-call support (tie-breakers)
+        Models with missing metadata sort last.
+        """
+        model_id = (model_info.get("id") or "").lower()
+        is_specialized = any(p in model_id for p in ModelsDevService._DEPRIORITIZED_PATTERNS)
+
+        modalities = model_info.get("modalities", {}) if isinstance(model_info, dict) else {}
+        output_modalities = modalities.get("output", []) if isinstance(modalities, dict) else []
+        input_modalities = modalities.get("input", []) if isinstance(modalities, dict) else []
+
+        has_text_output = "text" in output_modalities
+        has_text_input = (not input_modalities) or ("text" in input_modalities)
+
+        limits = model_info.get("limit", {})
+        context = limits.get("context") or 0
+        output = limits.get("output") or 0
+        raw_release = (model_info.get("release_date") or "").replace("-", "")
+        release_num = int(raw_release) if raw_release.isdigit() else 0
+        reasoning = bool(model_info.get("reasoning"))
+        structured = bool(model_info.get("structured_output"))
+        tools = bool(model_info.get("tool_call"))
+
+        # Non-text outputs and non-text inputs are pushed down so the most
+        # immediately usable text models appear first even when include_nontext=True.
+        text_output_penalty = 0 if has_text_output else 1
+        text_input_penalty = 0 if has_text_input else 1
+
+        return (
+            text_output_penalty,
+            text_input_penalty,
+            is_specialized,
+            -output,
+            -context,
+            -release_num,
+            -int(reasoning),
+            -int(structured),
+            -int(tools),
+            model_id,
+        )
+
+    def _is_suitable_for_refinement(self, model_info: Dict[str, Any]) -> bool:
+        """
+        Check whether a text-generation model is suitable for prompt refinement.
+
+        Applies on top of _is_text_generation_model(). Uses models.dev metadata
+        (output token limit, input modalities) instead of hardcoded model names.
+        Models with missing metadata pass by default to avoid false exclusions.
+        """
+        from promptheus.constants import MIN_REFINEMENT_OUTPUT_TOKENS
+
+        limits = model_info.get("limit", {})
+        output_limit = limits.get("output")
+        if isinstance(output_limit, (int, float)) and output_limit < MIN_REFINEMENT_OUTPUT_TOKENS:
+            return False
+
+        modalities = model_info.get("modalities", {})
+        input_modalities = modalities.get("input", [])
+        if input_modalities and "text" not in input_modalities:
+            return False
 
         return True
 
