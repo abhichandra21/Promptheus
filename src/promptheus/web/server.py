@@ -23,14 +23,21 @@ from promptheus.web.api.providers_router import router as providers_router
 from promptheus.web.api.settings_router import router as settings_router
 from promptheus.web.api.questions_router import router as questions_router
 
-# Create FastAPI app
-app = FastAPI(title="Promptheus Web API", version="1.0.0")
+# Create FastAPI app with docs disabled (local tool, no need to expose schema)
+app = FastAPI(
+    title="Promptheus Web API",
+    version="1.0.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
-# Add CORS middleware (only allow localhost origins)
+# Add CORS middleware restricted to loopback origins on any port
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:*", "http://localhost:*"],
-    allow_credentials=True,
+    allow_origins=[],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\\d+)?$",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -105,6 +112,14 @@ async def get_version():
 spa_dir = Path(__file__).parent / "static"
 assets_dir = Path(__file__).parent.parent.parent.parent / "assets"
 
+
+def _safe_resolve(base: Path, untrusted: str) -> Optional[Path]:
+    """Resolve untrusted path under base, returning None if it escapes."""
+    resolved = (base / untrusted).resolve()
+    if not str(resolved).startswith(str(base.resolve())):
+        return None
+    return resolved
+
 # Serve index.html for root
 NO_CACHE_HEADERS = {
     "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -124,23 +139,10 @@ async def read_root():
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
     """Serve assets from the assets directory."""
-    asset_file = assets_dir / file_path
-    if asset_file.exists() and asset_file.is_file():
+    asset_file = _safe_resolve(assets_dir, file_path)
+    if asset_file and asset_file.exists() and asset_file.is_file():
         return FileResponse(asset_file)
     return JSONResponse(status_code=404, content={"detail": "Asset not found"})
-
-# Debug endpoint to list all routes
-@app.get("/api/debug/routes")
-async def list_routes():
-    routes = []
-    for route in app.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
-            routes.append({
-                "path": route.path,
-                "methods": list(route.methods),
-                "name": route.name
-            })
-    return {"routes": routes}
 
 # Serve static files - mount after API routes to avoid conflicts
 if spa_dir.exists():
@@ -159,16 +161,16 @@ if spa_dir.exists():
         path = request.url.path.lstrip("/")
         if path:
             # Try static directory first
-            file_path = spa_dir / path
-            if file_path.exists() and file_path.is_file():
+            file_path = _safe_resolve(spa_dir, path)
+            if file_path and file_path.exists() and file_path.is_file():
                 # Add no-cache headers for JS, CSS, and HTML files during development
                 headers = NO_CACHE_HEADERS if path.endswith(('.js', '.css', '.html')) else {}
                 return FileResponse(file_path, headers=headers)
 
             # Try assets directory
             if path.startswith("assets/"):
-                asset_path = assets_dir / path.replace("assets/", "", 1)
-                if asset_path.exists() and asset_path.is_file():
+                asset_path = _safe_resolve(assets_dir, path.replace("assets/", "", 1))
+                if asset_path and asset_path.exists() and asset_path.is_file():
                     return FileResponse(asset_path)
 
         # Fallback to index.html for client-side routing
