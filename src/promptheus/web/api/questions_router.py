@@ -76,7 +76,7 @@ async def generate_questions(questions_request: QuestionsRequest, request: Reque
                 success=False,
                 task_type="",
                 questions=[],
-                error="Failed to generate questions"
+                error="Prompt processing failed before question generation"
             )
 
         task_type = result.get("task_type", "generation")

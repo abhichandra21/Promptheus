@@ -31,6 +31,7 @@ class ModelsResponseWithFilter(BaseModel):
     current_model: str
     text_generation_models: List[str]
     all_models: List[str]
+    refinement_models: List[str] = []
     cache_last_updated: Optional[str] = None
 
 
@@ -284,6 +285,7 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
                     current_model=current_model,
                     text_generation_models=models,
                     all_models=models,
+                    refinement_models=models,
                     cache_last_updated=None
                 )
             except Exception as e:
@@ -295,13 +297,13 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
 
         # Get models from models.dev with single fetch and local filtering
         try:
-            all_models, text_models = await service.get_models_for_provider_split(provider_id)
+            all_models, text_models, refinement_models = await service.get_models_for_provider_split(provider_id)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to fetch models from models.dev: {str(e)}")
 
         # Use appropriate model list based on filter
         include_all = include_nontext or fetch_all
-        models = all_models if include_all else text_models
+        models = all_models if include_all else refinement_models
 
         # Get current model for this provider
         current_model = provider_config.get('default_model', models[0] if models else 'default')
@@ -319,6 +321,7 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
             current_model=current_model,
             text_generation_models=text_models,
             all_models=all_models,
+            refinement_models=refinement_models,
             cache_last_updated=cache_last_updated
         )
     except HTTPException:

@@ -102,7 +102,7 @@ def list_models(config: Config, console: Console, providers: Optional[List[str]]
             if not include_nontext:
                 provider_table.add_row(
                     "-",
-                    f"[dim]Showing text-generation models only (use --include-nontext to see all models)[/dim]",
+                    "[dim]Showing refinement-suitable models (use --include-nontext for all)[/dim]",
                 )
 
             # Add special note for OpenRouter
