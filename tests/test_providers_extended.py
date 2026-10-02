@@ -506,3 +506,227 @@ def test_openrouter_available_models_auto_only():
     models = provider.get_available_models()
 
     assert models == ["openrouter/auto"]
+
+
+# --------------------------------------------------------------------------- #
+# Structured question output and current-model response shapes
+# --------------------------------------------------------------------------- #
+from types import SimpleNamespace
+
+from promptheus.exceptions import ProviderAPIError
+from promptheus.providers import QUESTION_SCHEMA
+
+_QUESTION_JSON = '{"task_type": "generation", "questions": []}'
+
+
+class _BadRequest(Exception):
+    """Stand-in for an SDK 400 error."""
+
+    status_code = 400
+
+
+def _anthropic_response(content, stop_reason="end_turn"):
+    return SimpleNamespace(
+        content=content,
+        stop_reason=stop_reason,
+        usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+    )
+
+
+def _mock_anthropic_stream(provider, *results):
+    """Point provider.client.messages.stream at canned results (responses or exceptions)."""
+    provider.client = Mock()
+    outcomes = list(results)
+
+    def fake_stream(**kwargs):
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        manager = MagicMock()
+        manager.__enter__.return_value.get_final_message.return_value = outcome
+        return manager
+
+    provider.client.messages.stream.side_effect = fake_stream
+    return provider.client.messages.stream
+
+
+def test_anthropic_skips_thinking_blocks():
+    """Text is collected from text blocks even when a thinking block comes first."""
+    provider = AnthropicProvider(api_key="test-key")
+    _mock_anthropic_stream(
+        provider,
+        _anthropic_response(
+            [
+                SimpleNamespace(type="thinking", thinking=""),
+                SimpleNamespace(type="text", text="refined "),
+                SimpleNamespace(type="text", text="prompt"),
+            ]
+        ),
+    )
+
+    assert provider._generate_text("prompt", "system") == "refined prompt"
+
+
+def test_anthropic_refusal_raises_provider_error():
+    provider = AnthropicProvider(api_key="test-key")
+    _mock_anthropic_stream(provider, _anthropic_response([], stop_reason="refusal"))
+
+    with pytest.raises(ProviderAPIError, match="refusal"):
+        provider._generate_text("prompt", "system")
+
+
+def test_anthropic_questions_use_output_config_schema():
+    provider = AnthropicProvider(api_key="test-key")
+    stream = _mock_anthropic_stream(provider, _anthropic_response([SimpleNamespace(type="text", text=_QUESTION_JSON)]))
+
+    result = provider.generate_questions("Write a post", "system")
+
+    assert result == {"task_type": "generation", "questions": []}
+    kwargs = stream.call_args.kwargs
+    assert kwargs["output_config"] == {"format": {"type": "json_schema", "schema": QUESTION_SCHEMA}}
+
+
+def test_anthropic_questions_retry_without_schema_on_400():
+    """Models or proxies that reject output_config fall back to prompt-only JSON."""
+    provider = AnthropicProvider(api_key="test-key")
+    stream = _mock_anthropic_stream(
+        provider,
+        _BadRequest("output_config not supported"),
+        _anthropic_response([SimpleNamespace(type="text", text=f"```json\n{_QUESTION_JSON}\n```")]),
+    )
+
+    result = provider.generate_questions("Write a post", "system")
+
+    assert result == {"task_type": "generation", "questions": []}
+    second_call = stream.call_args_list[1].kwargs
+    assert "output_config" not in second_call
+    assert provider._question_schema_enabled is False
+
+
+def test_anthropic_questions_do_not_retry_on_non_400():
+    provider = AnthropicProvider(api_key="test-key")
+    error = _BadRequest("schema server error")
+    error.status_code = 500
+    stream = _mock_anthropic_stream(provider, error)
+
+    with pytest.raises(ProviderAPIError):
+        provider.generate_questions("Write a post", "system")
+    assert stream.call_count == 1
+
+
+def test_anthropic_questions_do_not_retry_on_unrelated_400():
+    """A 400 that is not about the schema (e.g. low credit balance) must not disable it."""
+    provider = AnthropicProvider(api_key="test-key")
+    stream = _mock_anthropic_stream(provider, _BadRequest("Your credit balance is too low"))
+
+    with pytest.raises(ProviderAPIError):
+        provider.generate_questions("Write a post", "system")
+    assert stream.call_count == 1
+    assert provider._question_schema_enabled is True
+
+
+def test_anthropic_truncated_reply_raises():
+    """Hitting max_tokens with partial text must not be returned as a finished prompt."""
+    provider = AnthropicProvider(api_key="test-key")
+    _mock_anthropic_stream(
+        provider,
+        _anthropic_response([SimpleNamespace(type="text", text="half a prom")], stop_reason="max_tokens"),
+    )
+
+    with pytest.raises(ProviderAPIError, match="truncated"):
+        provider._generate_text("prompt", "system")
+
+
+def test_anthropic_raises_low_max_tokens_to_floor():
+    from promptheus.constants import ANTHROPIC_MIN_MAX_TOKENS
+
+    provider = AnthropicProvider(api_key="test-key")
+    stream = _mock_anthropic_stream(provider, _anthropic_response([SimpleNamespace(type="text", text="ok")]))
+
+    provider._generate_text("prompt", "system", max_tokens=4000)
+    assert stream.call_args.kwargs["max_tokens"] == ANTHROPIC_MIN_MAX_TOKENS
+
+
+def _chat_provider(cls, tmp_path, **kwargs):
+    provider = cls(api_key="test-key", **kwargs)
+    provider._endpoint_cache_path = tmp_path / "endpoint_cache.json"
+    provider._endpoint_cache = {provider.model_name: "chat"}
+    provider.client = Mock()
+    provider.client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=_QUESTION_JSON))],
+        usage=None,
+    )
+    return provider
+
+
+def test_openai_chat_questions_use_strict_json_schema(tmp_path):
+    provider = _chat_provider(OpenAIProvider, tmp_path)
+
+    assert provider.generate_questions("Write a post", "system") == {"task_type": "generation", "questions": []}
+    response_format = provider.client.chat.completions.create.call_args.kwargs["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    assert response_format["json_schema"]["schema"] == QUESTION_SCHEMA
+
+
+def test_openai_chat_questions_fall_back_to_json_object_on_400(tmp_path):
+    provider = _chat_provider(QwenProvider, tmp_path)
+    ok = provider.client.chat.completions.create.return_value
+    provider.client.chat.completions.create.side_effect = [_BadRequest("schema not available for model"), ok]
+
+    assert provider.generate_questions("Write a post", "system") == {"task_type": "generation", "questions": []}
+    second_call = provider.client.chat.completions.create.call_args_list[1].kwargs
+    assert second_call["response_format"] == {"type": "json_object"}
+
+
+def test_openai_responses_questions_use_text_format_schema(tmp_path):
+    provider = OpenAIProvider(api_key="test-key")
+    provider._endpoint_cache_path = tmp_path / "endpoint_cache.json"
+    provider._endpoint_cache = {provider.model_name: "responses"}
+    provider.client = Mock()
+    provider.client.responses.create.return_value = SimpleNamespace(output_text=_QUESTION_JSON, usage=None)
+
+    assert provider.generate_questions("Write a post", "system") == {"task_type": "generation", "questions": []}
+    text_format = provider.client.responses.create.call_args.kwargs["text"]["format"]
+    assert text_format["type"] == "json_schema"
+    assert text_format["schema"] == QUESTION_SCHEMA
+
+
+def test_glm_questions_use_json_object(tmp_path):
+    """Z.ai only documents json_object, so GLM never sends a schema."""
+    provider = _chat_provider(GLMProvider, tmp_path)
+
+    provider.generate_questions("Write a post", "system")
+    response_format = provider.client.chat.completions.create.call_args.kwargs["response_format"]
+    assert response_format == {"type": "json_object"}
+
+
+def test_gemini_questions_use_response_json_schema():
+    provider = GeminiProvider(api_key="AIza-test")
+    provider.client = Mock()
+    provider.client.models.generate_content.return_value = SimpleNamespace(text=_QUESTION_JSON, usage_metadata=None)
+
+    assert provider.generate_questions("Write a post", "system") == {"task_type": "generation", "questions": []}
+    config = provider.client.models.generate_content.call_args.kwargs["config"]
+    assert config.response_mime_type == "application/json"
+    assert config.response_json_schema == QUESTION_SCHEMA
+
+
+def test_provider_defaults_match_providers_json():
+    """Constructor defaults should not drift from the curated providers.json defaults."""
+    from pathlib import Path
+    import inspect
+
+    data = json.loads((Path(__file__).parent.parent / "src" / "promptheus" / "providers.json").read_text())
+    defaults = {name: info["default_model"] for name, info in data["providers"].items()}
+    classes = {
+        "anthropic": AnthropicProvider,
+        "google": GeminiProvider,
+        "openai": OpenAIProvider,
+        "groq": GroqProvider,
+        "qwen": QwenProvider,
+        "glm": GLMProvider,
+        "openrouter": OpenRouterProvider,
+    }
+    for name, cls in classes.items():
+        assert inspect.signature(cls.__init__).parameters["model_name"].default == defaults[name], name

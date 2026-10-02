@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, cast
 
 from promptheus.constants import (
+    ANTHROPIC_MIN_MAX_TOKENS,
     DEFAULT_CLARIFICATION_MAX_TOKENS,
     DEFAULT_PROVIDER_TIMEOUT,
     DEFAULT_REFINEMENT_MAX_TOKENS,
@@ -38,6 +39,10 @@ if TYPE_CHECKING:  # pragma: no cover - typing support only
 
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
+
+    # Whether json_mode requests send QUESTION_SCHEMA for constrained decoding.
+    # Flipped off per instance the first time a model rejects the schema.
+    _question_schema_enabled: bool = True
 
     @abstractmethod
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
@@ -125,6 +130,22 @@ class LLMProvider(ABC):
             max_tokens=DEFAULT_REFINEMENT_MAX_TOKENS,
         )
 
+    def _generate_question_json(
+        self,
+        prompt: str,
+        system_instruction: str,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        """Run a json_mode call, retrying without the schema if the model rejects it."""
+        try:
+            return self._generate_text(prompt, system_instruction, json_mode=True, max_tokens=max_tokens)
+        except ProviderAPIError as exc:
+            if not self._question_schema_enabled or not _is_schema_rejection(exc):
+                raise
+            logger.info("%s rejected the question schema; retrying with plain JSON mode", type(self).__name__)
+            self._question_schema_enabled = False
+            return self._generate_text(prompt, system_instruction, json_mode=True, max_tokens=max_tokens)
+
     # ------------------------------------------------------------------ #
     # Formatting helpers shared across providers
     # ------------------------------------------------------------------ #
@@ -175,6 +196,50 @@ class LLMProvider(ABC):
         )
 
 
+
+
+QUESTION_SCHEMA_NAME = "clarifying_questions"
+
+# Mirrors the question format described in prompts.py. Strict-mode compatible:
+# every property is required and additionalProperties is false at every level.
+QUESTION_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "task_type": {"type": "string", "enum": ["analysis", "generation"]},
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "type": {"type": "string", "enum": ["text", "radio", "checkbox"]},
+                    "options": {"type": "array", "items": {"type": "string"}},
+                    "required": {"type": "boolean"},
+                },
+                "required": ["question", "type", "options", "required"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["task_type", "questions"],
+    "additionalProperties": False,
+}
+
+
+_SCHEMA_ERROR_MARKERS = ("schema", "output_config", "response_format", "text.format")
+
+
+def _is_schema_rejection(exc: BaseException) -> bool:
+    """True when a ProviderAPIError is an HTTP 400 that complains about the output schema.
+
+    Providers also return 400 for unrelated problems (e.g. Anthropic's low credit
+    balance), which must not disable the schema.
+    """
+    cause = exc.__cause__
+    status = getattr(cause, "status_code", None) or getattr(cause, "code", None)
+    # Match against the raw SDK error: sanitize_error_message masks tokens such as
+    # "output_config". The raw text is only inspected here, never logged.
+    return status == 400 and any(marker in str(cause).lower() for marker in _SCHEMA_ERROR_MARKERS)
 
 
 _JSON_ONLY_SUFFIX = (
@@ -243,7 +308,7 @@ class AnthropicProvider(LLMProvider):
     def __init__(
         self,
         api_key: str,
-        model_name: str = "claude-3-5-sonnet-20240620",
+        model_name: str = "claude-sonnet-5-5",
         base_url: Optional[str] = None,
     ) -> None:
         import anthropic
@@ -255,25 +320,31 @@ class AnthropicProvider(LLMProvider):
         self.client = anthropic.Anthropic(**client_args)
 
         self.model_name = model_name
+
     def _generate_text(
         self,
         prompt: str,
         system_instruction: str,
         *,
-        json_mode: bool = False,  # noqa: ARG002 - unused for Anthropic
+        json_mode: bool = False,
         max_tokens: Optional[int] = None,
     ) -> str:
         # Reset token usage for this call
         self.last_input_tokens = None  # type: ignore[attr-defined]
         self.last_output_tokens = None  # type: ignore[attr-defined]
         self.last_total_tokens = None  # type: ignore[attr-defined]
+        params: Dict[str, Any] = {
+            "model": self.model_name,
+            "max_tokens": max(max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS, ANTHROPIC_MIN_MAX_TOKENS),
+            "system": system_instruction,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if json_mode and self._question_schema_enabled:
+            params["output_config"] = {"format": {"type": "json_schema", "schema": QUESTION_SCHEMA}}
         try:
-            response = self.client.messages.create(
-                model=self.model_name,
-                max_tokens=max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS,
-                system=system_instruction,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            # Streaming keeps bytes flowing, so long replies don't trip the client's read timeout.
+            with self.client.messages.stream(**params) as stream:
+                response = stream.get_final_message()
         except Exception as exc:  # pragma: no cover - network failures
             sanitized = sanitize_error_message(str(exc))
             logger.warning("Anthropic API call failed: %s", sanitized)
@@ -297,16 +368,24 @@ class AnthropicProvider(LLMProvider):
             self.last_output_tokens = None  # type: ignore[attr-defined]
             self.last_total_tokens = None  # type: ignore[attr-defined]
 
-        if not response.content:
-            raise RuntimeError("Anthropic API returned no content")
+        stop_reason = getattr(response, "stop_reason", None)
+        if stop_reason == "refusal":
+            raise ProviderAPIError("Anthropic declined to answer this request (stop_reason: refusal)")
 
-        first_block = response.content[0]
-        text = getattr(first_block, "text", None)
-        if text is None:
-            text = getattr(first_block, "value", None)
-        if text is None:
-            text = str(first_block)
-        return str(text)
+        # Current models return thinking blocks ahead of the answer, so collect
+        # every text block instead of reading content[0].
+        text = "".join(
+            block.text for block in (response.content or []) if getattr(block, "type", None) == "text"
+        )
+        if stop_reason == "max_tokens":
+            # A partial prompt looks valid but is cut off mid-sentence; fail loudly instead.
+            raise ProviderAPIError(
+                f"Anthropic response was truncated at max_tokens={params['max_tokens']}; "
+                "try a shorter prompt"
+            )
+        if not text:
+            raise RuntimeError("Anthropic API returned no text content")
+        return text
 
     @staticmethod
     def _extract_json_block(text: str) -> str:
@@ -322,7 +401,7 @@ class AnthropicProvider(LLMProvider):
 
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
         """Generate clarifying questions using Claude."""
-        response_text = self._generate_text(
+        response_text = self._generate_question_json(
             initial_prompt,
             system_instruction,
             max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
@@ -372,7 +451,7 @@ class GeminiProvider(LLMProvider):
     def __init__(
         self,
         api_key: str,
-        model_name: str = "gemini-1.5-flash",
+        model_name: str = "gemini-3.8-flash",
     ) -> None:
         from google import genai
 
@@ -410,6 +489,8 @@ class GeminiProvider(LLMProvider):
                 config_params["max_output_tokens"] = max_tokens
             if json_mode:
                 config_params["response_mime_type"] = "application/json"
+                if self._question_schema_enabled:
+                    config_params["response_json_schema"] = QUESTION_SCHEMA
 
             config = types.GenerateContentConfig(**config_params)
 
@@ -473,11 +554,7 @@ class GeminiProvider(LLMProvider):
 
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
         """Generate clarifying questions using Gemini."""
-        response_text = self._generate_text(
-            initial_prompt,
-            system_instruction,
-            json_mode=True,
-        )
+        response_text = self._generate_question_json(initial_prompt, system_instruction)
 
         try:
             result = json.loads(response_text)
@@ -588,7 +665,12 @@ class OpenAICompatibleProvider(LLMProvider):
                 "messages": messages,
                 "max_tokens": limit,
             }
-            if json_mode:
+            if json_mode and self._question_schema_enabled:
+                params["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": QUESTION_SCHEMA_NAME, "schema": QUESTION_SCHEMA, "strict": True},
+                }
+            elif json_mode:
                 params["response_format"] = {"type": "json_object"}
             return self.client.chat.completions.create(**params)
 
@@ -598,8 +680,17 @@ class OpenAICompatibleProvider(LLMProvider):
                 "input": messages,
                 "max_output_tokens": max(limit, DEFAULT_REFINEMENT_MAX_TOKENS),
             }
-            if json_mode:
-                # Responses API uses text.format, not response_format
+            # Responses API uses text.format, not response_format
+            if json_mode and self._question_schema_enabled:
+                params["text"] = {
+                    "format": {
+                        "type": "json_schema",
+                        "name": QUESTION_SCHEMA_NAME,
+                        "schema": QUESTION_SCHEMA,
+                        "strict": True,
+                    }
+                }
+            elif json_mode:
                 params["text"] = {"format": {"type": "json_object"}}
             params["timeout"] = RESPONSES_API_TIMEOUT
 
@@ -719,10 +810,9 @@ class OpenAICompatibleProvider(LLMProvider):
         return str(text)
 
     def generate_questions(self, initial_prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-        response_text = self._generate_text(
+        response_text = self._generate_question_json(
             initial_prompt,
             system_instruction,
-            json_mode=True,
             max_tokens=DEFAULT_CLARIFICATION_MAX_TOKENS,
         )
         return _parse_question_payload(self._provider_label, response_text)
@@ -774,7 +864,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
     def __init__(
         self,
         api_key: str,
-        model_name: str = "gpt-4o",
+        model_name: str = "gpt-6.1-sol",
         *,
         base_url: Optional[str] = None,
         organization: Optional[str] = None,
@@ -797,7 +887,7 @@ class GroqProvider(OpenAICompatibleProvider):
 
     DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 
-    def __init__(self, api_key: str, model_name: str = "llama3-70b-8192", base_url: Optional[str] = None) -> None:
+    def __init__(self, api_key: str, model_name: str = "qwen/qwen3.8-27b", base_url: Optional[str] = None) -> None:
         super().__init__(
             api_key=api_key,
             model_name=model_name,
@@ -811,7 +901,7 @@ class QwenProvider(OpenAICompatibleProvider):
 
     DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 
-    def __init__(self, api_key: str, model_name: str = "qwen-turbo") -> None:
+    def __init__(self, api_key: str, model_name: str = "qwen3.8-flash") -> None:
         base_url = os.getenv("DASHSCOPE_HTTP_BASE_URL", self.DEFAULT_BASE_URL)
         super().__init__(
             api_key=api_key,
@@ -825,8 +915,10 @@ class GLMProvider(OpenAICompatibleProvider):
     """Zhipu GLM provider using the OpenAI-compatible API surface."""
 
     DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
+    # Z.ai documents only json_object for response_format.
+    _question_schema_enabled = False
 
-    def __init__(self, api_key: str, model_name: str = "glm-4", base_url: Optional[str] = None) -> None:
+    def __init__(self, api_key: str, model_name: str = "glm-5.3-flash", base_url: Optional[str] = None) -> None:
         super().__init__(
             api_key=api_key,
             model_name=model_name,
@@ -849,6 +941,8 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     """
 
     DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+    # _generate_text below relies on an embedded JSON instruction, not response_format.
+    _question_schema_enabled = False
 
     def __init__(self, api_key: str, model_name: str = "openrouter/auto", base_url: Optional[str] = None) -> None:
         # For OpenRouter, the OpenAI-compatible client created by the base class is kept for

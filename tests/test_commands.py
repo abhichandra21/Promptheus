@@ -23,7 +23,7 @@ def test_select_test_model_falls_back_to_default(monkeypatch):
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
     monkeypatch.delenv("PROMPTHEUS_MODEL", raising=False)
 
-    assert _select_test_model("openai", config) == "gpt-4o"
+    assert _select_test_model("openai", config) == "gpt-6.1-sol"
 
 
 def test_test_provider_connection_uses_selected_model(monkeypatch):

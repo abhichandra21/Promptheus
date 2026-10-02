@@ -11,6 +11,9 @@ RESPONSES_API_TIMEOUT = 180  # seconds -- Responses-only models (e.g. gpt-5) are
 DEFAULT_CLARIFICATION_MAX_TOKENS = 2000
 DEFAULT_REFINEMENT_MAX_TOKENS = 4000
 DEFAULT_TWEAK_MAX_TOKENS = 2000
+# Claude 5.x refinements of long prompts run close to 4000 tokens, and adaptive
+# thinking shares the same budget. Anthropic calls stream, so a higher cap is safe.
+ANTHROPIC_MIN_MAX_TOKENS = 16000
 
 MIN_REFINEMENT_OUTPUT_TOKENS = 4096  # models below this cannot produce refinement output
 

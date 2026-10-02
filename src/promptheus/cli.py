@@ -61,7 +61,7 @@ Interactive Mode Commands (available when running without arguments):
     )
     main_group.add_argument(
         "--model",
-        help="Specific model to use (e.g., gemini-pro, claude-3-5-sonnet-20240620)",
+        help="Specific model to use (e.g., gemini-3.8-flash, claude-sonnet-5-5)",
     )
 
     # Behavior modification arguments
