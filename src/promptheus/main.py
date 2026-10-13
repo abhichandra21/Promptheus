@@ -501,19 +501,8 @@ def process_single_prompt(
                 is_refined = True
             except KeyboardInterrupt as exc:
                 raise PromptCancelled("Light refinement cancelled") from exc
-            except Exception as exc:
-                # Record provider error for telemetry
-                record_provider_error(
-                    provider=provider.name if hasattr(provider, 'name') else app_config.provider,
-                    model=app_config.get_model(),
-                    session_id=SESSION_ID,
-                    run_id=run_id,
-                    error_message=str(exc),
-                )
-                logger.warning("Light refinement failed: %s", sanitize_error_message(str(exc)))
-                io.notify("[yellow]Warning: Light refinement failed. Using original prompt.[/yellow]")
-                final_prompt = initial_prompt
-                is_refined = False
+            # Other errors propagate to the handler below, which reports the reason and
+            # fails the run; echoing the original prompt would look like a success.
         else:
             # The standard flow: ask questions if needed, then generate
             answers = ask_clarifying_questions(plan, io)

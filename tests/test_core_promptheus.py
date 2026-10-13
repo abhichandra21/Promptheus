@@ -319,8 +319,11 @@ def test_process_single_prompt_runs_full_generation_flow(monkeypatch):
     assert saved_entry["task_type"] == "generation"
 
 
-def test_process_single_prompt_light_refine_failure_keeps_original(monkeypatch):
-    """Integration: provider failure during light refinement falls back to input."""
+def test_process_single_prompt_light_refine_failure_fails_run(monkeypatch):
+    """Integration: provider failure during light refinement fails the run with the reason.
+
+    Echoing the original prompt would look like a success to pipes and scripts.
+    """
 
     io_ctx, notifications = _build_io_context(quiet_output=True, stdin_is_tty=True, stdout_is_tty=False)
     provider = FailingLightRefineProvider()
@@ -341,11 +344,11 @@ def test_process_single_prompt_light_refine_failure_keeps_original(monkeypatch):
     monkeypatch.setattr("promptheus.main.get_history", lambda cfg: DummyHistory())
     monkeypatch.setattr("promptheus.main.display_output", lambda prompt, io, is_refined=True: None)
 
-    result = process_single_prompt(provider, "Need graceful fallback", args, False, False, io_ctx, config)
+    result = process_single_prompt(provider, "Need a refinement", args, False, False, io_ctx, config)
 
-    assert result == ("Need graceful fallback", "analysis")
-    assert any("Light refinement failed" in msg for msg in notifications)
-    assert saved_entry["refined_prompt"] == "Need graceful fallback"
+    assert result is None
+    assert any("Simulated provider outage" in msg for msg in notifications)
+    assert saved_entry == {}
 
 
 def test_determine_question_plan_declined_questions_use_light_refinement(monkeypatch):
