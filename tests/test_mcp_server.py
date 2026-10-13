@@ -734,6 +734,21 @@ def test_refine_prompt_falls_back_when_ask_user_returns_invalid_type():
 # ============================================================================
 
 
+def test_real_mcp_package_imports():
+    """mcp is a required dependency; a version clash must fail here, not silently disable MCP.
+
+    Runs in a subprocess because this module installs a stub when the real import fails.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, "-c", "from mcp.server.fastmcp import FastMCP"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr[-500:]
+
+
 def test_fastmcp_integration_with_real_package():
     """Smoke test that uses the real FastMCP when available."""
     fastmcp_module = pytest.importorskip("mcp.server.fastmcp")

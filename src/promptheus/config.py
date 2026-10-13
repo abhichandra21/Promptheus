@@ -20,6 +20,18 @@ logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT_MARKERS = (".git", "pyproject.toml", "setup.py")
 
+# Plain-language model choices; providers.json maps each one to a real model ID.
+MODEL_TIERS = ("fast", "balanced", "best")
+
+
+def resolve_model_tier(provider_info: Dict[str, Any], model: Optional[str]) -> Optional[str]:
+    """Return the model ID for a tier name, or the model unchanged if it is not a tier."""
+    if not model or model.lower() not in MODEL_TIERS:
+        return model
+    tiers = provider_info.get("tiers") or {}
+    # A provider without this tier falls back to its default model.
+    return tiers.get(model.lower()) or provider_info.get("default_model") or model
+
 
 def _is_project_root(directory: Path) -> bool:
     """Return True when the directory looks like the project root."""
@@ -220,14 +232,17 @@ class Config:
         """
         Get the model to use, following a specific override hierarchy.
         Hierarchy: CLI flag > (Provider env var if not manual provider) > (Global env var if not manual provider) > Default
+        Tier names (fast, balanced, best) resolve to the provider's model ID.
         """
-        # 1. CLI flag (--model)
-        if self.model:
-            return self.model
-
         config_data = self._ensure_provider_config()
         provider_id = self.provider or next(iter(config_data.get("providers", {}) or ["google"]))
         provider_info = config_data.get("providers", {}).get(provider_id, {})
+        return resolve_model_tier(provider_info, self._get_model_setting(provider_info))
+
+    def _get_model_setting(self, provider_info: Dict[str, Any]) -> str:
+        # 1. CLI flag (--model)
+        if self.model:
+            return self.model
 
         # For manually set providers, skip environment variables and use defaults
         # This allows explicit provider switches to take effect without environment interference

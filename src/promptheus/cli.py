@@ -61,7 +61,7 @@ Interactive Mode Commands (available when running without arguments):
     )
     main_group.add_argument(
         "--model",
-        help="Specific model to use (e.g., gemini-3.8-flash, claude-sonnet-5-5)",
+        help="Model to use: fast, balanced, best, or an exact model ID (e.g., claude-sonnet-5-5)",
     )
 
     # Behavior modification arguments
@@ -160,6 +160,11 @@ Interactive Mode Commands (available when running without arguments):
             "--providers",
             type=str,
             help="Optional: Comma-separated list of providers to query",
+        )
+        list_models_parser.add_argument(
+            "--all",
+            action="store_true",
+            help="List every model instead of the fast/balanced/best picks",
         )
         list_models_parser.add_argument(
             "--limit",

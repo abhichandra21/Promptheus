@@ -1,0 +1,62 @@
+name: Update Model Tiers
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'  # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-tiers:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Move tiers to the newest models
+        run: python scripts/update_model_tiers.py --summary-file "$RUNNER_TEMP/changes.md"
+
+      - name: Run tests
+        run: |
+          if git diff --quiet; then
+            echo "No tier changes"
+            exit 0
+          fi
+          pip install -e . "pytest~=8.4.0"
+          # The telemetry end-to-end tests run the real CLI and need provider API keys.
+          pytest -q tests --ignore=tests/test_telemetry_e2e.py
+
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          branch=bot/update-model-tiers
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git commit -am "Move model tiers to the newest models"
+          git push --force origin "$branch"
+          {
+            echo "models.dev lists newer models for these tiers:"
+            echo
+            cat "$RUNNER_TEMP/changes.md"
+            echo
+            echo "Tests passed in the workflow run. Try the new models before merging."
+          } > "$RUNNER_TEMP/body.md"
+          if gh pr view "$branch" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$branch" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --head "$branch" --base main --title "Update model tiers" --body-file "$RUNNER_TEMP/body.md"
+          fi
