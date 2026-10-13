@@ -990,7 +990,7 @@ if mcp:
             {
                 "type": "success",
                 "providers": {
-                    "google": {"configured": true, "model": "gemini-2.0-flash-exp"},
+                    "google": {"configured": true, "model": "gemini-3.8-flash"},
                     "openai": {"configured": false, "error": "No API key found"},
                     ...
                 }

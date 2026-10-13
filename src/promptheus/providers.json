@@ -2,7 +2,7 @@
   "providers": {
     "google": {
       "display_name": "Google",
-      "default_model": "gemini-2.5-flash",
+      "default_model": "gemini-3.8-flash",
       "api_key_env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
       "model_env": "GOOGLE_MODEL",
       "api_key_prefixes": ["AIza", "AQ."],
@@ -16,7 +16,7 @@
     },
     "anthropic": {
       "display_name": "Anthropic",
-      "default_model": "claude-sonnet-4-5-20250929",
+      "default_model": "claude-sonnet-5-5",
       "api_key_env": "ANTHROPIC_API_KEY",
       "model_env": "ANTHROPIC_MODEL",
       "base_url_env": "ANTHROPIC_BASE_URL",
@@ -31,7 +31,7 @@
     },
     "openai": {
       "display_name": "OpenAI",
-      "default_model": "gpt-4o",
+      "default_model": "gpt-6.1-sol",
       "api_key_env": "OPENAI_API_KEY",
       "model_env": "OPENAI_MODEL",
       "base_url_env": "OPENAI_BASE_URL",
@@ -39,7 +39,7 @@
       "project_env": "OPENAI_PROJECT",
       "api_key_prefixes": ["sk-"],
       "api_key_url": "https://platform.openai.com/api-keys",
-      "responses_only_patterns": ["gpt-5", "o1-", "o3-"],
+      "responses_only_patterns": ["gpt-5", "gpt-6", "o1-", "o3-"],
       "capabilities": {
         "supports_json": true,
         "supports_tools": true,
@@ -49,7 +49,7 @@
     },
     "groq": {
       "display_name": "Groq",
-      "default_model": "llama-3.3-70b-versatile",
+      "default_model": "qwen/qwen3.8-27b",
       "api_key_env": "GROQ_API_KEY",
       "model_env": "GROQ_MODEL",
       "base_url_env": "GROQ_BASE_URL",
@@ -64,7 +64,7 @@
     },
     "qwen": {
       "display_name": "Qwen",
-      "default_model": "qwen-turbo",
+      "default_model": "qwen3.8-flash",
       "api_key_env": "DASHSCOPE_API_KEY",
       "model_env": "QWEN_MODEL",
       "base_url_env": "DASHSCOPE_HTTP_BASE_URL",
@@ -79,7 +79,7 @@
     },
     "glm": {
       "display_name": "GLM",
-      "default_model": "glm-4.5-air",
+      "default_model": "glm-5.3-flash",
       "api_key_env": "ZHIPUAI_API_KEY",
       "model_env": "GLM_MODEL",
       "base_url_env": "ZHIPUAI_BASE_URL",
