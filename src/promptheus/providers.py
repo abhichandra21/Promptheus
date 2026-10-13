@@ -12,6 +12,7 @@ import os
 import sys
 from pathlib import Path
 from abc import ABC, abstractmethod
+from urllib.parse import urlparse
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, cast
 
 from promptheus.constants import (
@@ -329,7 +330,7 @@ class AnthropicProvider(LLMProvider):
         # Every model the first-party API serves allows 64k+ output tokens. Gateways
         # (Z.ai, proxies) may serve smaller models, so keep the caller's limit there.
         # The SDK also honors ANTHROPIC_BASE_URL, so check the resolved URL.
-        is_first_party = str(self.client.base_url).startswith("https://api.anthropic.com")
+        is_first_party = urlparse(str(self.client.base_url)).hostname == "api.anthropic.com"
         self._min_max_tokens = ANTHROPIC_MIN_MAX_TOKENS if is_first_party else 0
 
     def _generate_text(

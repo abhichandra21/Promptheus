@@ -768,3 +768,10 @@ def test_schema_retry_survives_endpoint_switch(tmp_path):
     assert provider.generate_questions("Write a post", "system") == {"task_type": "generation", "questions": []}
     last_call = provider.client.chat.completions.create.call_args.kwargs
     assert last_call["response_format"] == {"type": "json_object"}
+
+
+def test_anthropic_lookalike_gateway_host_is_not_first_party():
+    """Only the exact api.anthropic.com host gets the 16k floor."""
+    provider = AnthropicProvider(api_key="test-key", base_url="https://api.anthropic.com.gateway.example")
+    assert provider._min_max_tokens == 0
+    assert AnthropicProvider(api_key="test-key")._min_max_tokens == 16000
