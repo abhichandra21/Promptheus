@@ -23,7 +23,7 @@ from promptheus.constants import (
     DEFAULT_TWEAK_MAX_TOKENS,
     RESPONSES_API_TIMEOUT,
 )
-from promptheus.config import SUPPORTED_PROVIDER_IDS
+from promptheus.config import SUPPORTED_PROVIDER_IDS, resolve_model_tier
 from promptheus.utils import sanitize_error_message
 from promptheus.exceptions import ProviderAPIError
 
@@ -913,7 +913,7 @@ class QwenProvider(OpenAICompatibleProvider):
 
     DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 
-    def __init__(self, api_key: str, model_name: str = "qwen3.8-flash") -> None:
+    def __init__(self, api_key: str, model_name: str = "qwen3.7-plus") -> None:
         base_url = os.getenv("DASHSCOPE_HTTP_BASE_URL", self.DEFAULT_BASE_URL)
         super().__init__(
             api_key=api_key,
@@ -930,7 +930,7 @@ class GLMProvider(OpenAICompatibleProvider):
     # Z.ai documents only json_object for response_format.
     _question_schema_enabled = False
 
-    def __init__(self, api_key: str, model_name: str = "glm-5.3-flash", base_url: Optional[str] = None) -> None:
+    def __init__(self, api_key: str, model_name: str = "glm-5.3", base_url: Optional[str] = None) -> None:
         super().__init__(
             api_key=api_key,
             model_name=model_name,
@@ -1104,7 +1104,8 @@ class OpenRouterProvider(OpenAICompatibleProvider):
 def get_provider(provider_name: str, config: Config, model_name: Optional[str] = None) -> LLMProvider:
     """Factory function to get the appropriate provider."""
     provider_config = config.get_provider_config()
-    model_to_use = model_name or config.get_model()
+    provider_info = config._ensure_provider_config().get("providers", {}).get(provider_name, {})
+    model_to_use = resolve_model_tier(provider_info, model_name) or config.get_model()
     responses_only_patterns = provider_config.get("responses_only_patterns", [])
 
     # OpenRouter should always rely on its auto-routing model to avoid per-model permission errors

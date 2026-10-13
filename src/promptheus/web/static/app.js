@@ -12,6 +12,7 @@ class PromptheusApp {
         this.currentOptimizedPrompt = ''; // Store current prompt
         this.tweakHistory = []; // Keep short undo stack for tweaks
         this.cachedModels = {}; // Store fetched models by provider ID
+        this.providerTiers = {}; // Fast/balanced/best model IDs by provider ID
         this.providerCapabilities = {}; // Store provider capability hints
         this.hasResults = false; // Track if we have results displayed
         this.init();
@@ -1119,6 +1120,7 @@ class PromptheusApp {
             this.providerCapabilities = {};
             data.available_providers.forEach(p => {
                 this.providerCapabilities[p.id] = p.capabilities || {};
+                this.providerTiers[p.id] = p.tiers || {};
                 // Cache models for all providers from the initial load
                 if (p.models && p.models.length > 0) {
                     this.cachedModels[p.id] = {
@@ -1549,6 +1551,7 @@ class PromptheusApp {
 
             this.updateModelCacheInfo(data.cache_last_updated || data.cacheLastUpdated);
             this.updateCapabilitiesInfo(providerId);
+            if (data.tiers) this.providerTiers[providerId] = data.tiers;
 
             // Cache the models for this provider
             if (fetchAll && data.models && data.models.length > 0) {
@@ -1598,7 +1601,7 @@ class PromptheusApp {
                 if (isOpenRouter && model === 'openrouter/auto') {
                     option.textContent = 'Auto';
                 } else {
-                    option.textContent = model;
+                    option.textContent = this.modelOptionLabel(model);
                 }
 
                 // Select current model if set, otherwise select first model
@@ -1620,6 +1623,16 @@ class PromptheusApp {
         }
     }
 
+    // Label tier models by their plain-language name, e.g. "Balanced (claude-sonnet-5-5)"
+    modelOptionLabel(model) {
+        const providerId = document.getElementById('provider-select')?.value;
+        const tiers = this.providerTiers[providerId] || {};
+        const names = Object.keys(tiers)
+            .filter(tier => tiers[tier] === model)
+            .map(tier => tier.charAt(0).toUpperCase() + tier.slice(1));
+        return names.length ? `${names.join(' / ')} (${model})` : model;
+    }
+
     populateModelSelect(modelSelect, models, currentModel, fetchedAll) {
         modelSelect.innerHTML = '';
 
@@ -1637,7 +1650,7 @@ class PromptheusApp {
                 if (isOpenRouter && model === 'openrouter/auto') {
                     option.textContent = 'Auto';
                 } else {
-                    option.textContent = model;
+                    option.textContent = this.modelOptionLabel(model);
                 }
 
                 // Select current model if set, otherwise select first model

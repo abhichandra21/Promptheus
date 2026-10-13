@@ -712,7 +712,8 @@ def main() -> None:
             utility_console,
             providers=providers_to_list,
             limit=args.limit,
-            include_nontext=args.include_nontext
+            include_nontext=args.include_nontext,
+            show_all=args.all,
         )
         sys.exit(0)
 

@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from promptheus.config import Config
+from promptheus.config import Config, MODEL_TIERS
 from promptheus.providers import get_available_providers, validate_provider, get_provider
 from promptheus.models_dev_service import get_service
 from promptheus.utils import sanitize_error_message, get_user_email, get_device_category
@@ -23,6 +23,7 @@ class ProviderInfo(BaseModel):
     available: bool
     default_model: str
     models: List[str] = []
+    tiers: Dict[str, str] = {}
     capabilities: Optional[Dict[str, Any]] = None
 
 class ModelsResponseWithFilter(BaseModel):
@@ -32,6 +33,7 @@ class ModelsResponseWithFilter(BaseModel):
     text_generation_models: List[str]
     all_models: List[str]
     refinement_models: List[str] = []
+    tiers: Dict[str, str] = {}
     cache_last_updated: Optional[str] = None
 
 
@@ -65,6 +67,15 @@ class ModelsResponse(BaseModel):
     provider_id: str
     models: List[str]
     current_model: str
+
+
+def _recommended_models(provider_config: Dict[str, Any], current_model: Optional[str] = None) -> List[str]:
+    """Return the fast/balanced/best model IDs, plus the current model if it is something else."""
+    models = list(dict.fromkeys(provider_config.get("tiers", {}).get(tier) for tier in MODEL_TIERS))
+    models = [model for model in models if model]
+    if current_model and current_model not in models:
+        models.append(current_model)
+    return models
 
 
 def load_providers_config() -> Dict[str, Any]:
@@ -106,6 +117,9 @@ async def get_providers():
             # separately since models.dev does not track its aggregated catalog.
             if provider_id == "openrouter":
                 models = provider_config.get("example_models") or ["openrouter/auto"]
+            elif provider_config.get("tiers"):
+                current = app_config.get_model() if app_config.provider == provider_id else None
+                models = _recommended_models(provider_config, current)
             else:
                 try:
                     models = await service.get_models_for_provider(provider_id)
@@ -119,6 +133,7 @@ async def get_providers():
                 available=provider_data.get('available', False),
                 default_model=provider_data.get('default_model', 'default'),
                 models=models,
+                tiers=provider_config.get("tiers", {}),
                 capabilities=provider_config.get('capabilities')
             ))
 
@@ -301,16 +316,21 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to fetch models from models.dev: {sanitize_error_message(str(e))}")
 
-        # Use appropriate model list based on filter
-        include_all = include_nontext or fetch_all
-        models = all_models if include_all else refinement_models
-
         # Get current model for this provider
-        current_model = provider_config.get('default_model', models[0] if models else 'default')
+        current_model = provider_config.get('default_model', refinement_models[0] if refinement_models else 'default')
 
         # If this is the current provider, get the configured model
         if app_config.provider == provider_id:
             current_model = app_config.get_model()
+
+        # Without a filter, show only the recommended picks; "Load All Models" asks for the rest.
+        include_all = include_nontext or fetch_all
+        if include_all:
+            models = all_models
+        elif provider_config.get("tiers"):
+            models = _recommended_models(provider_config, current_model)
+        else:
+            models = refinement_models
 
         cache_ts = service.get_cache_timestamp()
         cache_last_updated = datetime.fromtimestamp(cache_ts).isoformat() if cache_ts else None
@@ -322,6 +342,7 @@ async def get_provider_models(provider_id: str, include_nontext: bool = False, f
             text_generation_models=text_models,
             all_models=all_models,
             refinement_models=refinement_models,
+            tiers=provider_config.get("tiers", {}),
             cache_last_updated=cache_last_updated
         )
     except HTTPException:

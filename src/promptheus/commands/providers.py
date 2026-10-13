@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
-from promptheus.config import Config
+from promptheus.config import Config, MODEL_TIERS
 from promptheus.providers import get_provider, LLMProvider
 from promptheus.utils import sanitize_error_message
 from promptheus._provider_data import _select_test_model, _test_provider_connection
@@ -49,11 +49,35 @@ def get_provider_models(provider_name: str, config: Config, filter_text_only: bo
         return [], f"Error fetching models from models.dev: {error_msg}"
 
 
-def list_models(config: Config, console: Console, providers: Optional[List[str]] = None, include_nontext: bool = False, limit: int = 20) -> None:
+def _print_model_tiers(config: Config, console: Console, provider_names: List[str]) -> None:
+    """Show the fast/balanced/best choices for each provider."""
+    providers_data = config._ensure_provider_config().get("providers", {})
+    table = Table(title="Recommended Models", box=box.ROUNDED, show_header=True, header_style="bold magenta")
+    table.add_column("Provider", style="cyan")
+    for tier in MODEL_TIERS:
+        table.add_column(tier.title(), style="green", overflow="fold")
+
+    for provider_name in provider_names:
+        info = providers_data.get(provider_name, {})
+        # Providers without tiers (e.g. OpenRouter auto-routing) show their default as Balanced.
+        tiers = info.get("tiers") or {"balanced": info.get("default_model", "-")}
+        table.add_row(config.get_display_name(provider_name, info), *(tiers.get(tier, "-") for tier in MODEL_TIERS))
+
+    console.print(table)
+    console.print("[dim]Pick one with --model fast, --model balanced (the default) or --model best.[/dim]")
+    console.print("[dim]Run 'promptheus list-models --all' to see every model.[/dim]")
+    console.print()
+
+
+def list_models(config: Config, console: Console, providers: Optional[List[str]] = None, include_nontext: bool = False, limit: int = 20, show_all: bool = False) -> None:
     """Fetch and display available models for each configured LLM provider."""
     provider_config = config._ensure_provider_config()
     all_providers = providers or sorted(provider_config.get("providers", {}).keys())
     logger.debug("Listing models for providers: %s", all_providers)
+
+    if not show_all and not include_nontext:
+        _print_model_tiers(config, console, all_providers)
+        return
 
     results = {}
     console.print(f"[dim]Querying {len(all_providers)} provider(s)...[/dim]")
@@ -149,6 +173,7 @@ def get_models_data(config: Config, providers: Optional[List[str]] = None, inclu
             display_models = models if limit <= 0 else models[:limit]
             results[provider_name] = {
                 "available": True,
+                "tiers": provider_config.get("providers", {}).get(provider_name, {}).get("tiers", {}),
                 "models": [{"id": m, "name": m} for m in display_models],
                 "total_count": len(models),
                 "showing": len(display_models)

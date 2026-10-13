@@ -119,7 +119,7 @@ class CommandCompleter(Completer):
                 # Completing /set with 'provider' or 'model'
                 subcommands = {
                     'provider': 'Change the AI provider',
-                    'model': 'Change the model',
+                    'model': 'Change the model (fast, balanced, best, or a model ID)',
                 }
                 for subcmd, desc in subcommands.items():
                     if subcmd.startswith(search_term):

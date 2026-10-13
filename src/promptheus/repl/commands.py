@@ -95,7 +95,7 @@ def show_help(console) -> None:
     console.print()
     console.print("[bold cyan]Session Commands:[/bold cyan]")
     console.print()
-    console.print("  [bold]/set model <name>[/bold]     Change model (e.g., /set model gpt-4)")
+    console.print("  [bold]/set model <name>[/bold]     Change model: fast, balanced, best, or a model ID")
     console.print("  [bold]/set provider <name>[/bold]  Change AI provider (e.g., /set provider claude)")
     console.print("  [bold]/status[/bold]               Show current session settings")
     console.print("  [bold]/toggle skip-questions[/bold] Toggle skip-questions mode on/off")
