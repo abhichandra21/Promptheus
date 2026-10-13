@@ -730,3 +730,41 @@ def test_provider_defaults_match_providers_json():
     }
     for name, cls in classes.items():
         assert inspect.signature(cls.__init__).parameters["model_name"].default == defaults[name], name
+
+
+def test_anthropic_gateway_keeps_caller_max_tokens():
+    """Gateways may serve models with small output caps, so the 16k floor is first-party only."""
+    provider = AnthropicProvider(api_key="test-key", base_url="https://api.z.ai/api/anthropic")
+    stream = _mock_anthropic_stream(provider, _anthropic_response([SimpleNamespace(type="text", text="ok")]))
+
+    provider._generate_text("prompt", "system", max_tokens=4000)
+    assert stream.call_args.kwargs["max_tokens"] == 4000
+
+
+def test_anthropic_gateway_from_env_keeps_caller_max_tokens(monkeypatch):
+    """The SDK reads ANTHROPIC_BASE_URL itself, so the env var must also disable the floor."""
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://gateway.example.com")
+    provider = AnthropicProvider(api_key="test-key")
+    stream = _mock_anthropic_stream(provider, _anthropic_response([SimpleNamespace(type="text", text="ok")]))
+
+    provider._generate_text("prompt", "system", max_tokens=4000)
+    assert stream.call_args.kwargs["max_tokens"] == 4000
+
+
+def test_schema_retry_survives_endpoint_switch(tmp_path):
+    """A schema 400 on Chat makes the provider try Responses; a 404 there must not hide the 400."""
+
+    class _NotFound(Exception):
+        status_code = 404
+
+    provider = _chat_provider(OpenAIProvider, tmp_path, base_url="https://llm.internal.example/v1")
+    ok = provider.client.chat.completions.create.return_value
+    provider.client.chat.completions.create.side_effect = [
+        _BadRequest("Unsupported parameter: response_format.json_schema"),
+        ok,
+    ]
+    provider.client.responses.create.side_effect = _NotFound("404 page not found")
+
+    assert provider.generate_questions("Write a post", "system") == {"task_type": "generation", "questions": []}
+    last_call = provider.client.chat.completions.create.call_args.kwargs
+    assert last_call["response_format"] == {"type": "json_object"}

@@ -235,11 +235,17 @@ def _is_schema_rejection(exc: BaseException) -> bool:
     Providers also return 400 for unrelated problems (e.g. Anthropic's low credit
     balance), which must not disable the schema.
     """
+    # When the OpenAI-compatible path switches endpoints after the schema error, the
+    # error that surfaces is the second endpoint's (e.g. a 404); the schema 400 is
+    # its __context__.
     cause = exc.__cause__
-    status = getattr(cause, "status_code", None) or getattr(cause, "code", None)
-    # Match against the raw SDK error: sanitize_error_message masks tokens such as
-    # "output_config". The raw text is only inspected here, never logged.
-    return status == 400 and any(marker in str(cause).lower() for marker in _SCHEMA_ERROR_MARKERS)
+    for error in (cause, getattr(cause, "__context__", None)):
+        status = getattr(error, "status_code", None) or getattr(error, "code", None)
+        # Match against the raw SDK error: sanitize_error_message masks tokens such as
+        # "output_config". The raw text is only inspected here, never logged.
+        if status == 400 and any(marker in str(error).lower() for marker in _SCHEMA_ERROR_MARKERS):
+            return True
+    return False
 
 
 _JSON_ONLY_SUFFIX = (
@@ -320,6 +326,11 @@ class AnthropicProvider(LLMProvider):
         self.client = anthropic.Anthropic(**client_args)
 
         self.model_name = model_name
+        # Every model the first-party API serves allows 64k+ output tokens. Gateways
+        # (Z.ai, proxies) may serve smaller models, so keep the caller's limit there.
+        # The SDK also honors ANTHROPIC_BASE_URL, so check the resolved URL.
+        is_first_party = str(self.client.base_url).startswith("https://api.anthropic.com")
+        self._min_max_tokens = ANTHROPIC_MIN_MAX_TOKENS if is_first_party else 0
 
     def _generate_text(
         self,
@@ -335,7 +346,7 @@ class AnthropicProvider(LLMProvider):
         self.last_total_tokens = None  # type: ignore[attr-defined]
         params: Dict[str, Any] = {
             "model": self.model_name,
-            "max_tokens": max(max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS, ANTHROPIC_MIN_MAX_TOKENS),
+            "max_tokens": max(max_tokens or DEFAULT_REFINEMENT_MAX_TOKENS, self._min_max_tokens),
             "system": system_instruction,
             "messages": [{"role": "user", "content": prompt}],
         }
