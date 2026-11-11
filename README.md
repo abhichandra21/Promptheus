@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="120" alt="Promptheus">
+</p>
+
 # Promptheus
 
 **Refine and optimize prompts for LLMs**
