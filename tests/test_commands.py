@@ -1,7 +1,12 @@
 """Tests for utility commands (validate, list models, etc.)."""
 
+import json
+from pathlib import Path
+
 from promptheus._provider_data import _select_test_model, _test_provider_connection
 from promptheus.config import Config
+
+PROVIDERS_JSON = Path(__file__).parent.parent / "src" / "promptheus" / "providers.json"
 
 
 def test_select_test_model_prefers_provider_env(monkeypatch):
@@ -23,7 +28,9 @@ def test_select_test_model_falls_back_to_default(monkeypatch):
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
     monkeypatch.delenv("PROMPTHEUS_MODEL", raising=False)
 
-    assert _select_test_model("openai", config) == "gpt-6.1-sol"
+    # Read the default from providers.json: the weekly tier updater moves it.
+    expected = json.loads(PROVIDERS_JSON.read_text())["providers"]["openai"]["default_model"]
+    assert _select_test_model("openai", config) == expected
 
 
 def test_test_provider_connection_uses_selected_model(monkeypatch):
